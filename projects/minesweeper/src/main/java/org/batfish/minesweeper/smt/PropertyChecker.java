@@ -151,6 +151,26 @@ public class PropertyChecker {
     failChoices.removeAll(notFailChoices2);
     return failChoices;
   }
+// lin
+//  private Set<GraphEdge> forceLinkDownSet(Graph g, HeaderLocationQuestion q) {
+//      Pattern p1 = Pattern.compile(q._forceFailNode1Regex());
+//           Pattern p2 = Pattern.compile(q._forceFailNode2Regex());
+//      Set<GraphEdge> choices = PatternUtils.findMatchingEdges(g, p1, p2);
+//      Set<GraphEdge> choices2 = PatternUtils.findMatchingEdges(g, p2, p1);
+//      choices.addAll(choices2);
+//      return choices;
+//  }
+  // lin
+//  private void addForcedLinkDownConstraints(Encoder enc,Set<GraphEdge> forceDown){
+//      for (GraphEdge ge:forceDown){
+//          if (ge.isAbstract()){
+//              continue;
+//          }
+//          ArithExpr f = enc.getSymbolicFailures().getFailedVariable(ge);
+//          assert f != null;
+//          enc.add(enc.mkEq(f,enc.mkInt(1)));
+//      }
+//  }
 
   private Set<String> failNodeSet(Graph g, HeaderLocationQuestion q) {
     Pattern p1 = Pattern.compile(q.getFailNodeRegex());
@@ -542,8 +562,20 @@ public class PropertyChecker {
                   writer.close();
                 }
 
-                addLinkFailureConstraints(enc, destPorts, failOptions);
-                addNodeFailureConstraints(enc, failNodeOptions);
+                // addLinkFailureConstraints(enc, destPorts, failOptions);  //lin
+
+                //Set<GraphEdge> forceDown = forceLinkDownSet(g,question);
+                //if (!forceDown.isEmpty()&&question.getFailures() < forceDown.size()){
+                //    throw new BatfishException(
+                //            String.format(
+                //                    "failures (%d) must be >= number of forced-failed links (%d)",
+                //                    question.getFailures(),forceDown.size()));
+                //}
+                //Set<GraphEdge> mergeFailOptions = new HashSet<>(failOptions);
+                //mergeFailOptions.addAll(forceDown);
+                //addLinkFailureConstraints(enc,destPorts,mergeFailOptions);
+                addNodeFailureConstraints(enc,failNodeOptions);  // lin
+                //addForcedLinkDownConstraints(enc,forceDown);
 
                 // Call Solver.check to verify and print relevant information.
                 Tuple<VerificationResult, Model> tup = enc.verify();

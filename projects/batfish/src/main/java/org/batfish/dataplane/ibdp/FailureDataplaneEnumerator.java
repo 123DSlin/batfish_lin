@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,8 +38,10 @@ import org.batfish.datamodel.AbstractRoute;
 import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.BgpAdvertisement;
 import org.batfish.datamodel.Configuration;
+import org.batfish.datamodel.ConcreteInterfaceAddress;
 import org.batfish.datamodel.DataPlane;
 import org.batfish.datamodel.Edge;
+import org.batfish.datamodel.Interface;
 import org.batfish.datamodel.GenericRib;
 import org.batfish.datamodel.NetworkConfigurations;
 import org.batfish.datamodel.Prefix;
@@ -285,16 +288,88 @@ public final class FailureDataplaneEnumerator {
   private static Optional<Layer1Topology> inferRawLayer1PhysicalTopologyFromConfigs(
       Map<String, Configuration> configs) {
     Topology l3 = TopologyUtil.synthesizeL3Topology(configs);
-    if (l3.getEdges().isEmpty()) {
-      return Optional.empty();
-    }
+    Set<String> presentStableIds = new HashSet<>();
     ImmutableSet.Builder<Layer1Edge> edges = ImmutableSet.builder();
     for (Edge e : l3.getEdges()) {
       Layer1Edge l1 = new Layer1Edge(e.getNode1(), e.getInt1(), e.getNode2(), e.getInt2());
       edges.add(l1);
       edges.add(l1.reverse());
+        presentStableIds.add(PhysicalLink.of(l1.getNode1(), l1.getNode2()).stableId());
     }
-    return Optional.of(new Layer1Topology(edges.build()));
+    for (Layer1Edge extra : computeSupplementPtToPtLayer1Edges(configs, presentStableIds)) {
+        edges.add(extra);
+        edges.add(extra.reverse());
+    }
+    ImmutableSet<Layer1Edge> built = edges.build();
+    if (built.isEmpty()) {
+        return Optional.empty();
+    }
+      return Optional.of(new Layer1Topology(built));
+  }
+    /**   * Point-to-point links on {@code /30} or {@code /31} subnets: exactly one interface per end,<br/>   * distinct nodes, no shared IP. Skips links already recorded in {@code presentStableIds} and<br/>   * adds new stable ids there.<br/>   */
+    private static List<Layer1Edge> computeSupplementPtToPtLayer1Edges(
+            Map<String, Configuration> configs, Set<String> presentStableIds) {
+        Map<Prefix, List<Interface>> byExactPrefix = new HashMap<>();
+        for (Configuration c : configs.values()) {
+            for (Interface iface : c.getAllInterfaces().values()) {
+        if (!iface.getActive() || iface.isLoopback()) {
+            continue;
+        }
+        if (Interface.TUNNEL_INTERFACE_TYPES.contains(iface.getInterfaceType())) {
+            continue;
+        }
+        for (ConcreteInterfaceAddress addr : iface.getAllConcreteAddresses()) {
+            Prefix p = addr.getPrefix();
+            int len = p.getPrefixLength();
+            if (len != Prefix.MAX_PREFIX_LENGTH - 2 && len != Prefix.MAX_PREFIX_LENGTH - 1) {
+                continue;
+            }
+            byExactPrefix.computeIfAbsent(p, k -> new ArrayList<>()).add(iface);
+        }
+    }
+    }
+    List<Layer1Edge> out = new ArrayList<>();
+        for (List<Interface> group : byExactPrefix.values()) {
+            Map<String, Interface> unique = new LinkedHashMap<>();
+            for (Interface iface : group) {
+            String k = iface.getOwner().getHostname() + "\0" + iface.getName();
+            unique.putIfAbsent(k, iface);
+            }
+            List<Interface> ifaces = new ArrayList<>(unique.values());
+            if (ifaces.size() != 2) {
+                continue;
+            }
+            Interface a = ifaces.get(0);
+            Interface b = ifaces.get(1);
+            if (a.getOwner() == b.getOwner()) {
+                continue;
+            }
+            if (interfacesShareAnIpAddress(a, b)) {
+                continue;
+            }
+            Layer1Edge forward =
+            new Layer1Edge(
+            a.getOwner().getHostname(), a.getName(), b.getOwner().getHostname(), b.getName());
+            PhysicalLink pl = PhysicalLink.of(forward.getNode1(), forward.getNode2());
+            if (presentStableIds.contains(pl.stableId())) {
+                continue;
+            }
+            presentStableIds.add(pl.stableId());
+            out.add(forward);
+        }
+        return out;
+    }
+    private static boolean interfacesShareAnIpAddress(Interface a, Interface b) {    for (ConcreteInterfaceAddress ia : a.getAllConcreteAddresses()) {
+        for (ConcreteInterfaceAddress ib : b.getAllConcreteAddresses()) {
+            if (ia.getIp().equals(ib.getIp())) {
+                return true;
+            }
+        }
+    }
+        return false;
+
+
+
   }
 
   private static ScenarioResult computeOneScenario(
@@ -362,10 +437,8 @@ public final class FailureDataplaneEnumerator {
               .build();
 
       DataPlane dp = engine.computeDataPlane(configs, tc, externalAdverts)._dataPlane;
-      @SuppressWarnings("unchecked")
       SortedMap<String, SortedMap<String, GenericRib<AnnotatedRoute<AbstractRoute>>>> ribs =
-          (SortedMap<String, SortedMap<String, GenericRib<AnnotatedRoute<AbstractRoute>>>>)
-              (SortedMap<?, ?>) dp.getRibs();
+              dp.getRibs();
 
       ScenarioResult result = new ScenarioResult(mode, k, failedLinks, ribs);
       dumpMainRibs(result, outputDir);
@@ -407,6 +480,40 @@ public final class FailureDataplaneEnumerator {
 
     SortedMap<String, SortedMap<String, GenericRib<AnnotatedRoute<AbstractRoute>>>> ribs =
         new TreeMap<>(result.getMainRibs());
+      // Build a best-effort map from interface IP (/32 local routes) to node name, so we can display
+      // the BGP next-hop "node" in a compact way.
+      // the BGP next-hop "node" in a compact way.
+      Map<String, String> ipToNode = new HashMap<>();
+      for (Map.Entry<String, SortedMap<String, GenericRib<AnnotatedRoute<AbstractRoute>>>> nodeEntry :
+              ribs.entrySet()) {
+          String node = nodeEntry.getKey();
+          for (GenericRib<AnnotatedRoute<AbstractRoute>> rib : nodeEntry.getValue().values()) {
+              for (AnnotatedRoute<AbstractRoute> ar : rib.getTypedRoutes()) {
+                  AbstractRoute r = ar.getAbstractRoute();
+                  if (r.getProtocol().protocolName().equalsIgnoreCase("local")
+                          && r.getNetwork() != null
+                          && r.getNetwork().getPrefixLength() == Prefix.MAX_PREFIX_LENGTH) {
+                      ipToNode.put(r.getNetwork().getStartIp().toString(), node);
+                  }
+              }
+          }
+      }
+
+        w.write(
+                String.format(
+                        "%-12s %-8s %-20s %-10s %-16s %-26s %-8s %-8s %-8s %-8s%n",
+                        "Node",
+                        "VRF",
+                        "Network",
+                        "Protocol",
+                        "NextHopIP",
+                        "NextHopInterface",
+                        "NextHop",
+                        "Metric",
+                        "AD",
+                        "Tag"));
+      w.write(String.format("%s%n", repeatChar('=', 126)));
+
     for (Map.Entry<String, SortedMap<String, GenericRib<AnnotatedRoute<AbstractRoute>>>> nodeEntry :
         ribs.entrySet()) {
       String node = nodeEntry.getKey();
@@ -415,43 +522,58 @@ public final class FailureDataplaneEnumerator {
       for (Map.Entry<String, GenericRib<AnnotatedRoute<AbstractRoute>>> vrfEntry : vrfs.entrySet()) {
         String vrf = vrfEntry.getKey();
         GenericRib<AnnotatedRoute<AbstractRoute>> rib = vrfEntry.getValue();
-        w.write(String.format("### Node=%s VRF=%s routes=%d%n", node, vrf, rib.getRoutes().size()));
-        w.write(
-            String.format(
-                "%-20s %-10s %-16s %-22s %-5s %-8s %-8s%n",
-                "Network", "Protocol", "NextHopIP", "NextHopInterface", "AD", "Metric", "Tag"));
-        w.write(String.format("%s%n", repeatChar('-', 100)));
-
-        List<AnnotatedRoute<AbstractRoute>> routes =
-            rib.getRoutes().stream()
-                .sorted(
-                    Comparator.comparing(r -> r.getNetwork())
-                        .thenComparing(r -> r.getAbstractRoute().getProtocol().protocolName())
-                        .thenComparing(r -> String.valueOf(r.getAbstractRoute().getNextHopIp()))
-                        .thenComparing(r -> String.valueOf(r.getAbstractRoute().getNextHopInterface())))
-                .collect(Collectors.toList());
+          List<AnnotatedRoute<AbstractRoute>> routes = new ArrayList<>(rib.getTypedRoutes());
+          routes.sort(FailureDataplaneEnumerator::compareAnnotatedRoutesForDump);
         for (AnnotatedRoute<AbstractRoute> ar : routes) {
           AbstractRoute r = ar.getAbstractRoute();
           Prefix p = r.getNetwork();
           String proto = r.getProtocol().protocolName();
-          String nhIp = r.getNextHopIp() == null ? "-" : r.getNextHopIp().toString();
-          String nhIf = r.getNextHopInterface() == null ? "-" : r.getNextHopInterface();
-          String ad = String.valueOf(r.getAdministrativeCost());
+          String nhIp = r.getNextHopIp() == null ? "null" : r.getNextHopIp().toString();
+          String nhIf = r.getNextHopInterface() == null ? "null" : r.getNextHopInterface();
+          String nhNode;
+          if (r.getNextHopIp() == null) {
+              nhNode = "null";
+          } else {
+              String candidate = ipToNode.get(r.getNextHopIp().toString());
+              nhNode = candidate == null ? "null" : candidate;
+          }
           String metric = String.valueOf(r.getMetric());
+          String ad = String.valueOf(r.getAdministrativeCost());
           String tag =
               r.getTag() == org.batfish.datamodel.Route.UNSET_ROUTE_TAG
                   ? "-"
                   : String.valueOf(r.getTag());
           w.write(
               String.format(
-                  "%-20s %-10s %-16s %-22s %-5s %-8s %-8s%n",
-                  p, proto, nhIp, nhIf, ad, metric, tag));
+                     " %-12s %-8s %-20s %-10s %-16s %-26s %-8s %-8s %-8s %-8s%n",
+                      node, vrf, p, proto, nhIp, nhIf, nhNode, metric, ad, tag));
         }
-        w.write(System.lineSeparator());
       }
     }
   }
 
+  /** Stable sort order for dumping main RIB rows (Java-8-friendly, no Comparator.comparing). */
+  private static int compareAnnotatedRoutesForDump(
+    AnnotatedRoute<AbstractRoute> a, AnnotatedRoute<AbstractRoute> b) {
+      int c = a.getNetwork().compareTo(b.getNetwork());
+      if (c != 0) {
+          return c;
+      }
+      c = a.getAbstractRoute()
+          .getProtocol()
+          .protocolName()
+          .compareTo(b.getAbstractRoute().getProtocol().protocolName());
+      if (c != 0) {
+          return c;
+      }
+      c = String.valueOf(a.getAbstractRoute().getNextHopIp())
+          .compareTo(String.valueOf(b.getAbstractRoute().getNextHopIp()));
+      if (c != 0) {
+          return c;
+      }
+        return String.valueOf(a.getAbstractRoute().getNextHopInterface())
+            .compareTo(String.valueOf(b.getAbstractRoute().getNextHopInterface()));
+    }
   private static String repeatChar(char c, int count) {
     StringBuilder sb = new StringBuilder(count);
     for (int i = 0; i < count; i++) {

@@ -9,6 +9,7 @@
       <writeAnnotation name="javax.ws.rs.core.Context" />
     </writeAnnotations>
   </component>
+  <component name="ExternalStorageConfigurationManager" enabled="true" />
   <component name="MavenProjectsManager">
     <option name="originalFiles">
       <list>

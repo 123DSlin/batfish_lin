@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+// lin260328
+// import javax.annotation.Nullable;
 import org.batfish.common.BatfishException;
 import org.batfish.datamodel.FlowDisposition;
 import org.batfish.datamodel.HeaderSpace;
@@ -53,6 +55,7 @@ public class HeaderQuestion extends Question {
   private static final String PROP_MODEL_OVERFLOW = "modelOverflow";
   private static final String PROP_USE_ABSTRACTION = "useAbstraction";
   private static final String PROP_BENCHMARK = "benchmark";
+ //  private static final String PROP_LINK_FAILURE_ENUMERATION_EXACT_K = "linkFailureEnumerationExactK";//lin260328
 
   private Set<FlowDisposition> _actions;
 
@@ -86,6 +89,7 @@ public class HeaderQuestion extends Question {
 
   private boolean _benchmark;
 
+  // @Nullable private Integer _linkFailureEnumerationExactK;  // lin260328
   public HeaderQuestion() {
     _actions = EnumSet.of(FlowDisposition.ACCEPTED);
     _headerSpace = new HeaderSpace();
@@ -103,6 +107,7 @@ public class HeaderQuestion extends Question {
     _useAbstraction = false;
     _stats = false;
     _benchmark = false;
+   // _linkFailureEnumerationExactK= null;  // lin260328
     _bgpRanking.add(BgpDecisionVariable.LOCALPREF);
     _bgpRanking.add(BgpDecisionVariable.PATHLEN);
     _bgpRanking.add(BgpDecisionVariable.MED);
@@ -127,6 +132,7 @@ public class HeaderQuestion extends Question {
     _useAbstraction = q._useAbstraction;
     _stats = q._stats;
     _benchmark = q._benchmark;
+    // _linkFailureEnumerationExactK = q._linkFailureEnumerationExactK;
   }
 
   @Override
@@ -263,6 +269,12 @@ public class HeaderQuestion extends Question {
   public DiffType getDiffType() {
     return _diffType;
   }
+
+  // @JsonProperty(PROP_LINK_FAILURE_ENUMERATION_EXACT_K)
+  // @Nullable
+  // public Integer getLinkFailureEnumerationExactK() {
+  //   return _linkFailureEnumerationExactK;
+  // }
 
   /**
    * Represents the list of criteria according to which BGP best path selection occurs. Criteria are
