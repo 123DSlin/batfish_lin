@@ -45,3 +45,8 @@ __pycache__
 
 # pyenv files
 /.python-version
+
+# Local SMT outputs and Bazel module artifacts
+/smts/
+/MODULE.bazel
+/MODULE.bazel.lock

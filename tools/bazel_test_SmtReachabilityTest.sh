@@ -22,5 +22,8 @@ BAZEL_FLAGS=(
     "--test_filter=org.batfish.minesweeper.smt.SmtReachabilityTest#"
     "--cache_test_results=no"
     "--test_timeout=999999"
+    "--strategy=TestRunner=standalone"
+    "--spawn_strategy=local"
+    "--test_env=JAVA_TOOL_OPTIONS=-Djava.library.path=${HOME}/Library/Java/Extensions"
 )
 ${BAZEL} ${BAZEL_COMMAND} ${TARGET_EXPRESSION} "${BAZEL_FLAGS[@]}"
