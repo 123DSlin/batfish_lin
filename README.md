@@ -7,10 +7,16 @@ Batfish/Minesweeper require the following software dependencies:
 * Z3
 
 To install these dependencies, simply run the following command.
-> This script has been tested on Ubuntu 22.04 and Ubuntu 24.04.
+> This script has been tested on Ubuntu 22.04, Ubuntu 24.04, and macOS (Apple Silicon).
 
 ```bash
 $ ./install.sh
+```
+
+On macOS, if Z3 JNI fails to load (`UnsatisfiedLinkError: libz3java`), run:
+
+```bash
+$ ./tools/fix_z3_macos_gatekeeper.sh
 ```
 
 ---

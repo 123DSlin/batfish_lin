@@ -23,4 +23,14 @@ BAZEL_FLAGS=(
     "--cache_test_results=no"
     "--test_timeout=999999"
 )
+
+# macOS: load Z3 JNI outside Bazel sandbox
+if [ "Darwin" = "$(uname -s)" ]; then
+    BAZEL_FLAGS+=(
+        "--strategy=TestRunner=standalone"
+        "--spawn_strategy=local"
+        "--test_env=JAVA_TOOL_OPTIONS=-Djava.library.path=${HOME}/Library/Java/Extensions"
+    )
+fi
+
 ${BAZEL} ${BAZEL_COMMAND} ${TARGET_EXPRESSION} "${BAZEL_FLAGS[@]}"
