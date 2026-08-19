@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="icu4j-63.1_65416cd2">
+    <CLASSES>
+      <root url="jar:///private/var/tmp/_bazel_linyaxuan/767e92e3dfab22808bf5de7f5aae8cf0/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/external/maven/v1/https/repo1.maven.org/maven2/com/ibm/icu/icu4j/63.1/icu4j-63.1.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

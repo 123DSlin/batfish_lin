@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="jersey-test-framework-core-2.27_f33afd7a">
+    <CLASSES>
+      <root url="jar:///private/var/tmp/_bazel_linyaxuan/767e92e3dfab22808bf5de7f5aae8cf0/execroot/_main/bazel-out/darwin_arm64-fastbuild/bin/external/maven/v1/https/repo1.maven.org/maven2/org/glassfish/jersey/test-framework/jersey-test-framework-core/2.27/jersey-test-framework-core-2.27.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

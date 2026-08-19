@@ -1131,8 +1131,8 @@ public class Encoder {
 
     long start = System.currentTimeMillis();
     // NOTE: Temporarily set status to UNSATISFIABLE for generating SMT file only
-    // Status status = Status.UNSATISFIABLE;
-    Status status = _solver.check();
+    Status status = Status.UNSATISFIABLE;
+    // Status status = _solver.check();
     long time = System.currentTimeMillis() - start;
 
     VerificationStats stats = null;

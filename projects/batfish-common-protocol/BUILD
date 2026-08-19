@@ -152,6 +152,7 @@ junit_tests(
         "//projects/batfish-common-protocol/src/test/java/org/batfish/common/matchers",
         "//projects/batfish-common-protocol/src/test/java/org/batfish/datamodel/matchers",
         "//projects/bdd",
+        "//projects/lib/z3",
         "@maven//:com_fasterxml_jackson_core_jackson_annotations",
         "@maven//:com_fasterxml_jackson_core_jackson_core",
         "@maven//:com_fasterxml_jackson_core_jackson_databind",

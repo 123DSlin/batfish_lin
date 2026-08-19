@@ -1,4 +1,9 @@
-# Test targets are required to depend on our junit rather than using the one provided by Bazel
-build --sandbox_writable_path=/home/deza/codes/batfish/smts/ \
-      --action_env=SMT_DIRECTORY_PREFIX=/home/deza/codes/batfish/smts/ \
+# Automatically generated for local macOS
+build --sandbox_writable_path=/Users/linyaxuan/codes/Traffic/batfish_read/batfish/smts/ \
+      --action_env=SMT_DIRECTORY_PREFIX=/Users/linyaxuan/codes/Traffic/batfish_read/batfish/smts/ \
       --explicit_java_test_deps
+
+# Z3 JNI: run outside sandbox; load libs from user Java Extensions (@loader_path fixed)
+test --strategy=TestRunner=standalone
+test --spawn_strategy=local
+test --test_env=JAVA_TOOL_OPTIONS=-Djava.library.path=/Users/linyaxuan/Library/Java/Extensions

@@ -81,8 +81,8 @@ public class SmtReachabilityTest {
         Runfiles runfiles = Runfiles.create();
 
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network");
-        String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_hard");
-        // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_accessment");
+        // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_hard");
+         String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_accessment");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_accessment_intro");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_coursera");
 
