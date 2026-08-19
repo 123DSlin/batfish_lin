@@ -36,19 +36,24 @@ public class SymbolicUtil {
     return formatedStr;
   }
   
-  public static String incrementLineSuffix(String routingPolicyLineName) {
+  public static String incrementConfigLineSuffix(String routingPolicyPrefixName) {
     // match end with "_LineN" (N is integer number)
     String pattern = "(.+)__Line(\\d+)__$";
     Pattern r = Pattern.compile(pattern);
-    Matcher m = r.matcher(routingPolicyLineName);
+    Matcher m = r.matcher(routingPolicyPrefixName);
   
     if (m.matches()) {
       String prefix = m.group(1);
       int number = Integer.parseInt(m.group(2));
       return prefix + "__Line" + (number + 1) + "__";
     } else {
-      return routingPolicyLineName + "_Line1__";
+      return routingPolicyPrefixName + "_Line1__";
     }
+  }
+
+  public static String configLineSuffix(
+      String routingPolicyPrefixName, Integer seqNumber, Integer lineNumber) {
+    return routingPolicyPrefixName + "_Seq" + seqNumber + "__Line" + lineNumber + "__";
   }
   
   public static String longToIpString(long ip) {

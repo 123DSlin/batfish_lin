@@ -914,7 +914,6 @@ class TransferSSA {
         return result.setReturnAssignedValue(_enc.mkTrue());
       }
 
-      // TODO: implement me
     } else if (expr instanceof MatchPrefix6Set) {
       pCur.debug("MatchPrefix6Set");
       return fromExpr(_enc.mkFalse());
@@ -1298,6 +1297,45 @@ class TransferSSA {
         .addChangedVariable("FALLTHROUGH", newFallthrough);
   }
 
+  private void collectMatchLineEnables(BooleanExpr expr, List<BoolExpr> enables) {
+    if (expr instanceof MatchPrefixSet) {
+      MatchPrefixSet mps = (MatchPrefixSet) expr;
+      if (mps.getEnableSmtVariable() && mps.getConfigLineEnable() != null) {
+        enables.add(mps.getConfigLineEnable());
+      }
+    } else if (expr instanceof MatchCommunitySet) {
+      MatchCommunitySet mcs = (MatchCommunitySet) expr;
+      if (mcs.getEnableSmtVariable() && mcs.getConfigLineEnable() != null) {
+        enables.add(mcs.getConfigLineEnable());
+      }
+    } else if (expr instanceof Conjunction) {
+      for (BooleanExpr conjunct : ((Conjunction) expr).getConjuncts()) {
+        collectMatchLineEnables(conjunct, enables);
+      }
+    } else if (expr instanceof Disjunction) {
+      for (BooleanExpr disjunct : ((Disjunction) expr).getDisjuncts()) {
+        collectMatchLineEnables(disjunct, enables);
+      }
+    } else if (expr instanceof Not) {
+      collectMatchLineEnables(((Not) expr).getExpr(), enables);
+    } else if (expr instanceof WithEnvironmentExpr) {
+      collectMatchLineEnables(((WithEnvironmentExpr) expr).getExpr(), enables);
+    }
+  }
+
+  private BoolExpr applyEntryEnable(BooleanExpr guardExpr, BoolExpr guard) {
+    List<BoolExpr> matchEnables = new ArrayList<>();
+    collectMatchLineEnables(guardExpr, matchEnables);
+    if (matchEnables.isEmpty()) {
+      return guard;
+    }
+    BoolExpr anyEnabled = _enc.mkFalse();
+    for (BoolExpr enable : matchEnables) {
+      anyEnabled = _enc.mkOr(anyEnabled, enable);
+    }
+    return _enc.mkAnd(guard, anyEnabled);
+  }
+
   private void updateSingleValue(TransferParam<SymbolicRouteBV> p, String variableName, Expr expr) {
     switch (variableName) {
       case "METRIC":
@@ -1557,10 +1595,9 @@ class TransferSSA {
         If i = (If) stmt;
         TransferResult<BoolExpr, BoolExpr> r = compute(i.getGuard(), curP);
         curResult = curResult.addChangedVariables(r);
-        // NOTE: simplify guard, and lose branches constraints that are impossible
-        //       annotated by yongzheng2024 on 20251021
-        // BoolExpr guard = (BoolExpr) r.getReturnValue();  // temporarily disable simplification
         BoolExpr guard = (BoolExpr) r.getReturnValue();
+        // entryEnable: all match lineEnables false -> skip entry (else branch)
+        guard = applyEntryEnable(i.getGuard(), guard);
         guard = (BoolExpr) guard.simplify();
         String str = guard.toString();
 
