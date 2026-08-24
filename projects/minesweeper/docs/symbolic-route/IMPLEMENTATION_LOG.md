@@ -286,6 +286,39 @@ transfer 和 search-policy test 文件，并引入整文件格式化噪声。这
 `GuardedRibTest` 与 `SymbolicRouteModelTest`，结果通过。全局 PMD 和原 search-policy
 非确定性测试重新归为分支基线问题，不再通过修改无关核心代码来规避。
 
+### Baseline test reproduction (2026-08-24 16:10 CST)
+
+在独立临时 worktree 中 checkout 最早基线提交
+`1708bbda7cb6000105896a47a0bc1fc46f49f772`，执行未过滤的
+`//projects/minesweeper:minesweeper_tests`。基线共运行 169 个测试，并在
+`SearchRoutePoliciesAnswererTest.testMatchGeneralRegexCommunity` 第 393 行出现同一失败。
+因此该失败在 Stage 1 提交之前已存在，不是 Stage 1 或 Stage 2 引入。临时 worktree 已在
+验证后删除，当前功能分支工作区保持干净。
+
+随后检查更早的祖先提交 `a0f78dba38ddf8ecf4f68840cde456babd5d452e`。该版本在当前
+macOS 环境中因 Bazel sandbox 引用不存在的 `/System/Volumes/Data/home/deza` 而无法完成
+构建，因此没有声称在该提交上直接复现 JUnit 失败。但 Git 验证显示：
+
+- `a0f78dba38` 是 `1708bbda7c` 的祖先；
+- 两个提交中的 `SearchRoutePoliciesAnswererTest.java` blob hash 均为
+  `73bb28c84f66c275ea5f4831d6b4da39c75e79c1`；
+- 对应的 `question/searchroutepolicies` 主源码目录在两个提交之间无差异。
+
+因此，直接证据已经证明失败存在于 Stage 1 基线 `1708bbda7c`；更早提交的代码身份也
+表明该测试及被测实现不是在 `1708bbda7c` 中引入或修改的，但由于旧版本构建环境问题，
+不把它表述为已在 `a0f78dba38` 上直接运行复现。
+
+继续检查更早祖先 `17569485af4064ed08e8ace12d7910aa9c38457b`（2026-08-24
+16:29 CST）。该版本同样因旧 Bazel sandbox 的 `/System/Volumes/Data/home/deza` 路径而
+无法构建。其 `SearchRoutePoliciesAnswererTest.java` blob 仍为相同的 `73bb28c...`，且
+对应实现到 `a0f78dba38` 无差异。
+
+根因是测试使用 community regex `^.*$`，却固定断言无约束 Z3 model 必须选择 `0:0`。
+最小修复仅修改该测试，为输入 route 增加 `0:0` community constraint；不修改 Graph、
+Encoder、policy answerer 或 symbolic-route 实现。修改范围为 1 个测试文件，8 行新增、
+1 行替换。修复后未过滤的完整 Minesweeper 测试通过。该测试修复作为独立变更留在工作区
+等待审查，不混入 Stage 2 guarded RIB 实现提交。
+
 ### 当前边界
 
 - comparator 仍由调用者注入；BGP/OSPF adapter 尚未接入 Batfish 的真实协议比较逻辑。
