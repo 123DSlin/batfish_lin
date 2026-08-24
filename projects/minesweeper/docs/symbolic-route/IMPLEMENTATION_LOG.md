@@ -152,3 +152,73 @@ record for this stage is completed after the audit commit is created and publish
 Future stages should append a section containing at least: objective, affected files, invariants,
 tests, baseline failures, limitations, implementation and audit commit hashes, and rollback
 guidance.
+
+## 阶段 2：Guard Algebra 与 Guarded RIB（2026-08-24）
+
+### 目标
+
+按照 Hoyan Algorithm 1 和论文第 5.4 节实现符号 guard 运算及协议无关的 guarded RIB，
+并明确区分：
+
+- `availabilityGuard`：路由规则在 RIB 中存在的拓扑条件，即论文中的 `R(r)`；
+- `selectionGuard`：该候选能被 route selector 选中并送往 egress 的条件。
+
+对于候选 `r_i`，guarded RIB 动态计算：
+
+```text
+selectionGuard(r_i) = availabilityGuard(r_i)
+                      AND NOT availabilityGuard(r_1)
+                      ...
+                      AND NOT availabilityGuard(r_(i-1))
+```
+
+这里只排除严格更优候选；同优先级候选互不抑制，以保留后续 ECMP/traffic execution 所需
+的 next-hop 分支。
+
+### 实现内容
+
+- `Z3RouteGuard` 和 `Z3RouteGuardFactory`：Z3 Boolean guard 的构造、逻辑运算、化简、
+  可满足性和语义等价判断。
+- `GuardedRib`：注入协议 adapter 提供的 route comparator，保存 availability guard，
+  每次新增、替换或删除候选后重新推导 selection guard。
+- `GuardedRibEntry`：同时暴露候选的 availability guard 与派生 selection guard，但不把
+  selection guard 写回 `SymbolicRoute`。
+- `GuardedRibDelta`、`GuardedRibUpdate`：显式区分新增、删除和 guards 变化，供后续
+  Algorithm 1 propagation tree/withdraw 逻辑消费。
+- `SymbolicRoute` 的主要术语由 presence guard 改为 availability guard；旧 getter/setter
+  暂时保留为 deprecated 兼容入口。
+
+### 已验证的不变量
+
+1. `availabilityGuard` 不会因为更优候选到达而改变。
+2. 更优候选晚到会缩小低优先级候选的 `selectionGuard` 并产生 change delta。
+3. 删除更优候选会恢复低优先级候选的 `selectionGuard`。
+4. 更新更优候选的 availability guard 会重新计算所有受影响的低优先级候选。
+5. 同优先级候选互不抑制。
+6. 不同到达顺序得到语义等价的最终 guards。
+7. guard 的等价性使用 Z3 语义判断，不依赖表达式字符串或 AST 排列顺序。
+
+定向测试命令：
+
+```bash
+bazel test //projects/minesweeper:minesweeper_tests \
+  --test_filter='org.batfish.minesweeper.symbolicroute.(GuardedRibTest|SymbolicRouteModelTest)'
+```
+
+结果：通过。`//projects/minesweeper:minesweeper_tests_pmd` 也通过。主源码
+`//projects/minesweeper:pmd` 仍因 Stage 1 已记录的旧 `Graph`、`Encoder`、
+`SymbolicRouteBase` 等文件违规而失败，本阶段新增的 `symbolicroute` 文件未出现在违规列表。
+
+### 当前边界
+
+- comparator 仍由调用者注入；BGP/OSPF adapter 尚未接入 Batfish 的真实协议比较逻辑。
+- 当前实现重算同一 router/prefix 范围内的候选，尚未实现增量依赖索引优化。
+- 尚未实现 egress policy、链路 `alive(l)` 条件、消息队列、propagation tree 和递归
+  withdraw；这些属于下一阶段。
+- 实现代码当前位于工作区，等待代码审查后创建独立实现提交；审计文档由助手单独提交。
+
+### 论文依据
+
+Hoyan Algorithm 1 第 20 行更新传播条件，第 21 行建立 propagation tree，第 24-32 行执行
+withdraw。论文第 5.4 节明确说明，RIB rule 的 topology condition 是 `R(r)`，从 RIB 到
+egress 的 route update condition 才排除所有高优先级规则。

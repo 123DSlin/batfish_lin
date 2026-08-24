@@ -44,8 +44,8 @@ I(message, receiver) = E(message, sender) AND alive(l)
 
 ### 当前进度
 
-Stage 1 已完成协议无关的不可变数据模型和单元测试，但尚未实现 guard、guarded RIB、
-路由排序、传播收敛、BGP/OSPF adapter 或 tolerance 绑定。详细记录见
+Stage 1 已完成协议无关的不可变数据模型；Stage 2 已实现 Z3 guard algebra 和协议无关的
+guarded RIB 核心。传播收敛、BGP/OSPF adapter 或 tolerance 绑定尚未实现。详细记录见
 [`IMPLEMENTATION_LOG.md`](IMPLEMENTATION_LOG.md)，代码审查要点见
 [`REVIEW_GUIDE.md`](REVIEW_GUIDE.md)。
 
