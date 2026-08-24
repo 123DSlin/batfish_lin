@@ -198,6 +198,13 @@ selectionGuard(r_i) = availabilityGuard(r_i)
 6. 不同到达顺序得到语义等价的最终 guards。
 7. guard 的等价性使用 Z3 语义判断，不依赖表达式字符串或 AST 排列顺序。
 
+多层优先级测试补充（2026-08-24）：
+
+- 三级候选验证最低层的 selection guard 同时排除最高层与中间层 availability guard；
+- 最高优先级候选晚到时，两个已有下层候选都产生 `GUARDS_CHANGED`；
+- 删除中间优先级候选时，只恢复其下层候选，上层 selection guard 保持不变；
+- 四级候选以非优先级顺序到达时，最低层仍累计排除全部三个严格更优候选。
+
 定向测试命令：
 
 ```bash
