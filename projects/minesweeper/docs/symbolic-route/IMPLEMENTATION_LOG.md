@@ -205,9 +205,41 @@ bazel test //projects/minesweeper:minesweeper_tests \
   --test_filter='org.batfish.minesweeper.symbolicroute.(GuardedRibTest|SymbolicRouteModelTest)'
 ```
 
-结果：通过。`//projects/minesweeper:minesweeper_tests_pmd` 也通过。主源码
-`//projects/minesweeper:pmd` 仍因 Stage 1 已记录的旧 `Graph`、`Encoder`、
-`SymbolicRouteBase` 等文件违规而失败，本阶段新增的 `symbolicroute` 文件未出现在违规列表。
+结果：通过。`//projects/minesweeper:minesweeper_tests_pmd` 和主源码
+`//projects/minesweeper:pmd` 均通过。
+
+### PMD compatibility cleanup amendment (2026-08-24)
+
+首次运行全量主源码 PMD 时，当前分支中旧的 Minesweeper/tolerance 代码暴露出未使用
+import/局部变量、具体集合类型、参数重赋值、空代码块和循环末尾分支等违规。虽然新增
+`symbolicroute` 包没有出现在违规列表中，但为了让本阶段的完整质量门禁真正通过，已对
+以下既有文件做语义保持的清理：
+
+- `Graph.java`
+- `smt/Encoder.java`
+- `smt/EncoderSlice.java`
+- `smt/PropertyChecker.java`
+- `smt/SymbolicRoute.java`
+- `smt/SymbolicRouteBV.java`
+- `smt/SymbolicRouteBase.java`
+- `smt/TransferSSA.java`
+
+清理方式包括删除未使用项、使用 `List` 接口、以局部变量替代参数重赋值、将明确的
+no-op 分支改为等价控制流，以及将输出目录查找重构为无提前跳出的有界循环。最终使用
+`--nocache_test_results` 验证：主源码 PMD、测试源码 PMD 和 symbolic-route 定向测试
+全部通过。Java 8 source/target 的“已过时”信息来自 JDK 工具链，是编译警告而非测试失败。
+
+完整 Minesweeper 测试最初还暴露出
+`SearchRoutePoliciesAnswererTest.testMatchGeneralRegexCommunity` 的非确定性断言：策略正则
+`^.*$` 允许任意 community，但测试固定期待 Z3 选择 `0:0`。测试现已给输入增加明确的
+`0:0` constraint，既保留“通用正则接受该 community”的测试目标，又消除对 solver model
+取值顺序的依赖。最终完整验收结果：
+
+```text
+//projects/minesweeper:minesweeper_tests      PASSED (182 tests)
+//projects/minesweeper:pmd                    PASSED
+//projects/minesweeper:minesweeper_tests_pmd  PASSED
+```
 
 ### 当前边界
 
