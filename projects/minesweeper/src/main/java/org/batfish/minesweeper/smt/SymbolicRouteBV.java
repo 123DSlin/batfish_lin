@@ -7,18 +7,15 @@ import com.microsoft.z3.BitVecNum;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
-import com.microsoft.z3.Model;
 import java.math.BigInteger;
 import java.util.Map;
-import java.util.Set;
 import javax.annotation.Nullable;
+import org.batfish.common.BatfishException;
 import org.batfish.minesweeper.CommunityVar;
 import org.batfish.minesweeper.IDeepCopy;
 import org.batfish.minesweeper.Protocol;
-import org.batfish.common.BatfishException;
 
-public final class SymbolicRouteBV extends SymbolicRouteBase
-    implements IDeepCopy<SymbolicRouteBV> {
+public final class SymbolicRouteBV extends SymbolicRouteBase implements IDeepCopy<SymbolicRouteBV> {
 
   private BitVecExpr _communitiesBitVec;
   private int _width;

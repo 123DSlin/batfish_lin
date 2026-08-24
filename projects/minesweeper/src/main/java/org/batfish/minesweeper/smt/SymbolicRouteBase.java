@@ -1,7 +1,6 @@
 package org.batfish.minesweeper.smt;
 
 import com.microsoft.z3.ArithExpr;
-import com.microsoft.z3.BitVecExpr;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;

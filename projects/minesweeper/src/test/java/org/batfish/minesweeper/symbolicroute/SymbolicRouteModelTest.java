@@ -194,7 +194,7 @@ public final class SymbolicRouteModelTest {
     SymbolicRoute<StaticRoute> newRoute = oldRoute.withPresenceGuard(new TestRouteGuard("G2"));
     SymbolicRibUpdate<StaticRoute> added = SymbolicRibUpdate.added(oldRoute);
     SymbolicRibUpdate<StaticRoute> changed =
-        SymbolicRibUpdate.presenceGuardChanged(oldRoute, newRoute);
+        SymbolicRibUpdate.availabilityGuardChanged(oldRoute, newRoute);
     SymbolicRibUpdate<StaticRoute> removed = SymbolicRibUpdate.removed(newRoute);
     SymbolicRibDelta<StaticRoute> delta =
         new SymbolicRibDelta<>(ImmutableList.of(added, changed, removed));
@@ -204,7 +204,7 @@ public final class SymbolicRouteModelTest {
     assertThat(added.getType(), equalTo(SymbolicRibUpdateType.ADDED));
     assertThat(added.getOldRoute(), nullValue());
     assertThat(added.getNewRoute(), equalTo(oldRoute));
-    assertThat(changed.getType(), equalTo(SymbolicRibUpdateType.PRESENCE_GUARD_CHANGED));
+    assertThat(changed.getType(), equalTo(SymbolicRibUpdateType.AVAILABILITY_GUARD_CHANGED));
     assertThat(changed.getOldRoute(), equalTo(oldRoute));
     assertThat(changed.getNewRoute(), equalTo(newRoute));
     assertThat(removed.getType(), equalTo(SymbolicRibUpdateType.REMOVED));
@@ -225,6 +225,6 @@ public final class SymbolicRouteModelTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> SymbolicRibUpdate.presenceGuardChanged(oldRoute, differentRoute));
+        () -> SymbolicRibUpdate.availabilityGuardChanged(oldRoute, differentRoute));
   }
 }

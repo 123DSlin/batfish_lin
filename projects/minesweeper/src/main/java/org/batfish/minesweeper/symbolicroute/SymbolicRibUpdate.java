@@ -33,10 +33,10 @@ public final class SymbolicRibUpdate<R extends AbstractRouteDecorator> {
     return new SymbolicRibUpdate<>(SymbolicRibUpdateType.REMOVED, route, null);
   }
 
-  public static <R extends AbstractRouteDecorator> SymbolicRibUpdate<R> presenceGuardChanged(
+  public static <R extends AbstractRouteDecorator> SymbolicRibUpdate<R> availabilityGuardChanged(
       SymbolicRoute<R> oldRoute, SymbolicRoute<R> newRoute) {
     return new SymbolicRibUpdate<>(
-        SymbolicRibUpdateType.PRESENCE_GUARD_CHANGED, oldRoute, newRoute);
+        SymbolicRibUpdateType.AVAILABILITY_GUARD_CHANGED, oldRoute, newRoute);
   }
 
   private void validate() {
@@ -51,7 +51,7 @@ public final class SymbolicRibUpdate<R extends AbstractRouteDecorator> {
           throw new IllegalArgumentException("REMOVED update requires only an old route");
         }
         break;
-      case PRESENCE_GUARD_CHANGED:
+      case AVAILABILITY_GUARD_CHANGED:
         if (_oldRoute == null || _newRoute == null) {
           throw new IllegalArgumentException("guard change requires old and new routes");
         }

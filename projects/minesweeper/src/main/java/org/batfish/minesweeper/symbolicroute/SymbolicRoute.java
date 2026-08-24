@@ -11,14 +11,17 @@ public final class SymbolicRoute<R extends AbstractRouteDecorator> {
 
   @Nonnull private final SymbolicRouteKey _key;
   @Nonnull private final R _route;
-  @Nonnull private final RouteGuard _presenceGuard;
+  @Nonnull private final RouteGuard _availabilityGuard;
   @Nonnull private final SymbolicRouteProvenance _provenance;
 
   public SymbolicRoute(
-      SymbolicRouteKey key, R route, RouteGuard presenceGuard, SymbolicRouteProvenance provenance) {
+      SymbolicRouteKey key,
+      R route,
+      RouteGuard availabilityGuard,
+      SymbolicRouteProvenance provenance) {
     _key = requireNonNull(key, "key must be provided");
     _route = requireNonNull(route, "route must be provided");
-    _presenceGuard = requireNonNull(presenceGuard, "presenceGuard must be provided");
+    _availabilityGuard = requireNonNull(availabilityGuard, "availabilityGuard must be provided");
     _provenance = requireNonNull(provenance, "provenance must be provided");
   }
 
@@ -33,8 +36,8 @@ public final class SymbolicRoute<R extends AbstractRouteDecorator> {
   }
 
   @Nonnull
-  public RouteGuard getPresenceGuard() {
-    return _presenceGuard;
+  public RouteGuard getAvailabilityGuard() {
+    return _availabilityGuard;
   }
 
   @Nonnull
@@ -42,8 +45,21 @@ public final class SymbolicRoute<R extends AbstractRouteDecorator> {
     return _provenance;
   }
 
+  public SymbolicRoute<R> withAvailabilityGuard(RouteGuard availabilityGuard) {
+    return new SymbolicRoute<>(_key, _route, availabilityGuard, _provenance);
+  }
+
+  /** @deprecated Use {@link #getAvailabilityGuard()}. */
+  @Deprecated
+  @Nonnull
+  public RouteGuard getPresenceGuard() {
+    return getAvailabilityGuard();
+  }
+
+  /** @deprecated Use {@link #withAvailabilityGuard(RouteGuard)}. */
+  @Deprecated
   public SymbolicRoute<R> withPresenceGuard(RouteGuard presenceGuard) {
-    return new SymbolicRoute<>(_key, _route, presenceGuard, _provenance);
+    return withAvailabilityGuard(presenceGuard);
   }
 
   @Override
@@ -57,12 +73,12 @@ public final class SymbolicRoute<R extends AbstractRouteDecorator> {
     SymbolicRoute<?> that = (SymbolicRoute<?>) o;
     return _key.equals(that._key)
         && _route.equals(that._route)
-        && _presenceGuard.equals(that._presenceGuard)
+        && _availabilityGuard.equals(that._availabilityGuard)
         && _provenance.equals(that._provenance);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(_key, _route, _presenceGuard, _provenance);
+    return Objects.hash(_key, _route, _availabilityGuard, _provenance);
   }
 }

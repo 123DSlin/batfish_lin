@@ -4,5 +4,5 @@ package org.batfish.minesweeper.symbolicroute;
 public enum SymbolicRibUpdateType {
   ADDED,
   REMOVED,
-  PRESENCE_GUARD_CHANGED
+  AVAILABILITY_GUARD_CHANGED
 }
