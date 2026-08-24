@@ -205,6 +205,18 @@ selectionGuard(r_i) = availabilityGuard(r_i)
 - 删除中间优先级候选时，只恢复其下层候选，上层 selection guard 保持不变；
 - 四级候选以非优先级顺序到达时，最低层仍累计排除全部三个严格更优候选。
 
+Guarded RIB 边界语义补充（2026-08-24）：
+
+- 重复插入相同候选不产生 update；相同 key 且 availability guard 语义等价（即使 Z3
+  AST 顺序不同）的替换也不产生 update。
+- priority group 按“严格更优”关系处理：同一组 ECMP 候选互不抑制，但组内每个候选都
+  同时受全部更高优先级组候选抑制。测试覆盖两个高优先级 ECMP 候选和两个低优先级
+  ECMP 候选，并采用交错到达顺序。
+- 不可满足的 availability guard 等价于候选不存在：新候选不进入 RIB 且不产生 delta；
+  若同 key 候选已存在，则按删除处理，并重新计算所有受影响的低优先级 selection guard。
+- 不可满足性测试使用 `a AND NOT a`，确保策略依赖语义 SAT 判断而非仅识别语法上的
+  `false` 常量。
+
 定向测试命令：
 
 ```bash
