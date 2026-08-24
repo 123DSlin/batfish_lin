@@ -260,6 +260,32 @@ no-op 分支改为等价控制流，以及将输出目录查找重构为无提�
 //projects/minesweeper:minesweeper_tests_pmd  PASSED
 ```
 
+### Stage 2 scope correction (2026-08-24 16:04 CST)
+
+- Correction commit: `0d2ac98068`
+- Original implementation commit: `241ba44b21`
+
+Stage 2 实现提交曾为消除仓库既有 PMD 违规而修改 `Graph`、SMT encoder、property checker、
+transfer 和 search-policy test 文件，并引入整文件格式化噪声。这些改动与 guarded RIB
+无关，审计和合并风险过高，现已通过纠正提交撤回。
+
+以下 9 个文件已使用 Git blob hash 逐个验证，与 `241ba44b21^`（Stage 2 实现提交前）
+字节级一致：
+
+- `Graph.java`
+- `smt/Encoder.java`
+- `smt/EncoderSlice.java`
+- `smt/PropertyChecker.java`
+- `smt/SymbolicRoute.java`
+- `smt/SymbolicRouteBV.java`
+- `smt/SymbolicRouteBase.java`
+- `smt/TransferSSA.java`
+- `SearchRoutePoliciesAnswererTest.java`
+
+纠正后 Stage 2 只保留 `symbolicroute` 包和对应 focused tests 的修改。恢复后重新运行
+`GuardedRibTest` 与 `SymbolicRouteModelTest`，结果通过。全局 PMD 和原 search-policy
+非确定性测试重新归为分支基线问题，不再通过修改无关核心代码来规避。
+
 ### 当前边界
 
 - comparator 仍由调用者注入；BGP/OSPF adapter 尚未接入 Batfish 的真实协议比较逻辑。
