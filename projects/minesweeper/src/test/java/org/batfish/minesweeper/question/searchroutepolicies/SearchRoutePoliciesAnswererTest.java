@@ -374,14 +374,7 @@ public class SearchRoutePoliciesAnswererTest {
 
     SearchRoutePoliciesQuestion question =
         new SearchRoutePoliciesQuestion(
-            BgpRouteConstraints.builder()
-                .setCommunities(
-                    new RegexConstraints(ImmutableList.of(RegexConstraint.parse("0:0"))))
-                .build(),
-            EMPTY_CONSTRAINTS,
-            HOSTNAME,
-            policy.getName(),
-            Action.PERMIT);
+            EMPTY_CONSTRAINTS, EMPTY_CONSTRAINTS, HOSTNAME, policy.getName(), Action.PERMIT);
     SearchRoutePoliciesAnswerer answerer = new SearchRoutePoliciesAnswerer(question, _batfish);
 
     TableAnswerElement answer = (TableAnswerElement) answerer.answer(_batfish.getSnapshot());

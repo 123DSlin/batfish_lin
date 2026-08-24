@@ -112,13 +112,13 @@ class EncoderSlice {
     enc.getAllVariables().put(_symbolicPacket.getDstIp().toString(), _symbolicPacket.getDstIp());
     enc.getAllVariables().put(_symbolicPacket.getSrcIp().toString(), _symbolicPacket.getSrcIp());
     enc.getAllVariables()
-        .put(_symbolicPacket.getDstPort().toString(), _symbolicPacket.getDstPort());
+            .put(_symbolicPacket.getDstPort().toString(), _symbolicPacket.getDstPort());
     enc.getAllVariables()
-        .put(_symbolicPacket.getSrcPort().toString(), _symbolicPacket.getSrcPort());
+            .put(_symbolicPacket.getSrcPort().toString(), _symbolicPacket.getSrcPort());
     enc.getAllVariables()
-        .put(_symbolicPacket.getIcmpCode().toString(), _symbolicPacket.getIcmpCode());
+            .put(_symbolicPacket.getIcmpCode().toString(), _symbolicPacket.getIcmpCode());
     enc.getAllVariables()
-        .put(_symbolicPacket.getIcmpType().toString(), _symbolicPacket.getIcmpType());
+            .put(_symbolicPacket.getIcmpType().toString(), _symbolicPacket.getIcmpType());
     enc.getAllVariables().put(_symbolicPacket.getTcpAck().toString(), _symbolicPacket.getTcpAck());
     enc.getAllVariables().put(_symbolicPacket.getTcpCwr().toString(), _symbolicPacket.getTcpCwr());
     enc.getAllVariables().put(_symbolicPacket.getTcpEce().toString(), _symbolicPacket.getTcpEce());
@@ -128,7 +128,8 @@ class EncoderSlice {
     enc.getAllVariables().put(_symbolicPacket.getTcpSyn().toString(), _symbolicPacket.getTcpSyn());
     enc.getAllVariables().put(_symbolicPacket.getTcpUrg().toString(), _symbolicPacket.getTcpUrg());
     enc.getAllVariables()
-        .put(_symbolicPacket.getIpProtocol().toString(), _symbolicPacket.getIpProtocol());
+            .put(_symbolicPacket.getIpProtocol().toString(), _symbolicPacket.getIpProtocol());
+
 
     _inboundAcls = new HashMap<>();
     _outboundAcls = new HashMap<>();
@@ -144,7 +145,7 @@ class EncoderSlice {
     initRedistributionProtocols();
 
     // TODO: annotated by yongzheng on 20250324
-    // initialize LogicalGraph
+    // initialize LogicalGraph 
     //   * _logicalEdges, (protocol-centric) that involving
     //     Table2<String, Protocol, List<ArrayList<LogicalEdge>>>
     //     all importEdgeList and exportEdgeList (per Protocol and GraphEdge)
@@ -168,13 +169,8 @@ class EncoderSlice {
     initForwardingAcross();
   }
 
-  EncoderSlice(
-      Encoder enc,
-      HeaderSpace h,
-      Graph graph,
-      String sliceName,
-      PrintWriter unusedCfwdWriter,
-      PrintWriter historyEnumWriter) {
+  EncoderSlice(Encoder enc, HeaderSpace h, Graph graph, String sliceName,
+               PrintWriter unusedCfwdWriter, PrintWriter historyEnumWriter) {
     this(enc, h, graph, sliceName);
     _unusedCfwdWriter = unusedCfwdWriter;
     _historyEnumWriter = historyEnumWriter;
@@ -315,13 +311,8 @@ class EncoderSlice {
         if (outbound != null) {
           String outName =
               String.format(
-                  "%d_%s_%s_%s_%s_%s",
-                  _encoder.getId(),
-                  _sliceName,
-                  router,
-                  i.getName(),
-                  "OUTBOUND",
-                  outbound.getName());
+                  "%d_%s_%s_%s_%s_%s", _encoder.getId(), _sliceName, router, i.getName(), 
+                  "OUTBOUND", outbound.getName());
           BoolExpr outAcl = getCtx().mkBoolConst(outName);
           BoolExpr outAclFunc = computeACL(outbound);
           add(mkEq(outAcl, outAclFunc));
@@ -332,8 +323,8 @@ class EncoderSlice {
         if (inbound != null) {
           String inName =
               String.format(
-                  "%d_%s_%s_%s_%s_%s",
-                  _encoder.getId(), _sliceName, router, i.getName(), "INBOUND", inbound.getName());
+                  "%d_%s_%s_%s_%s_%s", _encoder.getId(), _sliceName, router, i.getName(), 
+                  "INBOUND", inbound.getName());
           BoolExpr inAcl = getCtx().mkBoolConst(inName);
           BoolExpr inAclFunc = computeACL(inbound);
           // NOTE: Here is an intermediate variable's definition.
@@ -481,7 +472,8 @@ class EncoderSlice {
 
     // both or neither enable SMT variable
     if (p.getEnableSmtVariable() != r.getEnableSmtVariable()) {
-      throw new BatfishException("Inconsistent enableSmtVariable flags in Prefix and PrefixRange");
+      throw new BatfishException(
+          "Inconsistent enableSmtVariable flags in Prefix and PrefixRange");
     }
 
     // well formed prefix
@@ -499,8 +491,8 @@ class EncoderSlice {
     } else {
       BitVecExpr configVarIp = p.getConfigVarIp();
       BitVecExpr configVarMask = p.getConfigVarMask();
-      BoolExpr lowerBitsMatch =
-          firstBitsEqual(_symbolicPacket.getDstIp(), configVarIp, configVarMask, len);
+      BoolExpr lowerBitsMatch = firstBitsEqual(
+              _symbolicPacket.getDstIp(), configVarIp, configVarMask, pfx, len);
       if (lower == upper) {
         ArithExpr configVarRangeStart = r.getConfigVarStart();
         ArithExpr configVarRangeEnd = r.getConfigVarEnd();
@@ -533,7 +525,7 @@ class EncoderSlice {
   }
 
   private BoolExpr firstBitsEqual(
-      BitVecExpr x, BitVecExpr configVarIp, BitVecExpr configVarMask, int n) {
+      BitVecExpr x, BitVecExpr configVarIp, BitVecExpr configVarMask, long y, int n) {
     assert (n >= 0 && n <= 32);
 
     // FIXME: check here and implement it when needed
@@ -552,7 +544,7 @@ class EncoderSlice {
     if (p.getEnableSmtVariable()) {
       BitVecExpr configVarIp = p.getConfigVarIp();
       BitVecExpr configVarMask = p.getConfigVarMask();
-      return firstBitsEqual(be, configVarIp, configVarMask, len);
+      return firstBitsEqual(be, configVarIp, configVarMask, pfx, len);
     } else {
       return firstBitsEqual(be, pfx, len);
     }
@@ -653,7 +645,7 @@ class EncoderSlice {
         _symbolicDecisions.getBestNeighbor().put(router, evBest);
         // record history enum firstly, then write all records together
         // _historyEnumWriter.println("|" + historyName + "|");
-        _historyEnumRecords += "|" + historyName + "| (" + h._numBits + ") \n";
+        _historyEnumRecords += "|"+ historyName + "| (" + h._numBits + ") \n";
         Map<Protocol, BitVecExpr> historyMap = h.getValueMap();
         for (Protocol p : allProtos) {
           BitVecExpr bve = historyMap.get(p);
@@ -687,10 +679,8 @@ class EncoderSlice {
    * Also maps each logical graph edge to its opposite edge.
    */
   private void addSymbolicRecords() {
-    Map<String, Map<Protocol, Map<GraphEdge, ArrayList<LogicalEdge>>>> importInverseMap =
-        new HashMap<>();
-    Map<String, Map<Protocol, Map<GraphEdge, ArrayList<LogicalEdge>>>> exportInverseMap =
-        new HashMap<>();
+    Map<String, Map<Protocol, Map<GraphEdge, ArrayList<LogicalEdge>>>> importInverseMap = new HashMap<>();
+    Map<String, Map<Protocol, Map<GraphEdge, ArrayList<LogicalEdge>>>> exportInverseMap = new HashMap<>();
     Map<String, Map<Protocol, SymbolicRouteBV>> singleExportMap = new HashMap<>();
 
     // add edge EXPORT and IMPORT state variables
@@ -712,8 +702,7 @@ class EncoderSlice {
         // Set<Protocol> r = _logicalGraph.getRedistributedProtocols().get(router, proto);
         // assert (r != null);
 
-        Boolean useSingleExport =
-            _optimizations.getSliceCanKeepSingleExportVar().get(router, proto);
+        Boolean useSingleExport = _optimizations.getSliceCanKeepSingleExportVar().get(router, proto);
         assert (useSingleExport != null);
 
         Map<GraphEdge, ArrayList<LogicalEdge>> importGraphEdgeMap = new HashMap<>();
@@ -742,12 +731,7 @@ class EncoderSlice {
                     String name =
                         String.format(
                             "%d_%s%s_%s_%s_%s",
-                            _encoder.getId(),
-                            _sliceName,
-                            router,
-                            proto.name(),
-                            "SINGLE-EXPORT",
-                            "");
+                            _encoder.getId(), _sliceName, router, proto.name(), "SINGLE-EXPORT", "");
                     ev1 =
                         new SymbolicRouteBV(
                             this, name, router, proto, _optimizations, null, e.isAbstract());
@@ -956,12 +940,7 @@ class EncoderSlice {
                     String name =
                         String.format(
                             "%d_%s%s_%s_%s_%s",
-                            _encoder.getId(),
-                            _sliceName,
-                            router,
-                            proto.name(),
-                            "EXPORT",
-                            ifaceName);
+                            _encoder.getId(), _sliceName, router, proto.name(), "EXPORT", ifaceName);
                     SymbolicRouteBV vars =
                         new SymbolicRouteBV(
                             this, name, router, proto, _optimizations, null, ge.isAbstract());
@@ -987,7 +966,7 @@ class EncoderSlice {
     buildEdgeMap();
 
     // initialize SymbolicDecisions _controlForwarding
-    //                              ^^^^^^^^^^^^^^^^^^ Table2<String, GraphEdge, BoolExpr>
+    //                              ^^^^^^^^^^^^^^^^^^ Table2<String, GraphEdge, BoolExpr> 
     // initialize SymbolicDecisions _dataForwarding
     //                              ^^^^^^^^^^^^^^^ Table2<String, GraphEdge, BoolExpr>
     //   don't add data forwarding variables for abstract edge
@@ -1997,12 +1976,8 @@ class EncoderSlice {
    * heavily on the protocol.
    */
   private void addImportConstraint(
-      LogicalEdge e,
-      SymbolicRouteBV varsOther,
-      Configuration conf,
-      Protocol proto,
-      GraphEdge ge,
-      String router) {
+      LogicalEdge e, SymbolicRouteBV varsOther, Configuration conf, Protocol proto,
+      GraphEdge ge, String router) {
 
     // this router's LogicalEdge       e          the otherEnd's LogicalEdge   xxx
     // this router's SymbolicRoute     vars       the otherEnd's SymbolicRoute varsOther
@@ -2058,7 +2033,9 @@ class EncoderSlice {
         BoolExpr met = safeEq(vars.getMetric(), mkInt(0));
         BoolExpr values = mkAnd(per, len, ad, lp, met);
         add(mkIf(relevant, values, mkNot(vars.getPermitted())));
-      } else if (proto.isStatic()) {
+      }
+
+      else if (proto.isStatic()) {
         List<StaticRoute> srs = getGraph().getStaticRoutes().get(router, iface.getName());
         assert (srs != null);
 
@@ -2100,7 +2077,9 @@ class EncoderSlice {
           acc = mkIf(relevant, values, acc);
         }
         add(acc);
-      } else if (proto.isOspf() || proto.isBgp()) {
+      }
+
+      else if (proto.isOspf() || proto.isBgp()) {
         BoolExpr val = mkNot(vars.getPermitted());
 
         if (varsOther != null) {
@@ -2226,18 +2205,9 @@ class EncoderSlice {
           // call TransferSSA compute method
           System.out.println();
           System.out.println("IMPORT FUNCTION: " + router + " " + varsOther.getName());
-          TransferSSA f =
-              new TransferSSA(
-                  this,
-                  conf,
-                  varsOther,
-                  vars,
-                  proto,
-                  statements,
-                  cost,
-                  ge,
-                  false,
-                  _logicalGraph.getGraph().getAllCommunitiesIndex());
+          TransferSSA f = new TransferSSA(
+              this, conf, varsOther, vars, proto, statements, cost, ge, false,
+              _logicalGraph.getGraph().getAllCommunitiesIndex());
           importFunction = f.compute();
 
           // IF
@@ -2393,18 +2363,9 @@ class EncoderSlice {
           System.out.println(stmt.toString());
         }
 
-        TransferSSA f =
-            new TransferSSA(
-                this,
-                conf,
-                varsOther,
-                vars,
-                proto,
-                statements,
-                cost,
-                ge,
-                true,
-                _logicalGraph.getGraph().getAllCommunitiesIndex());
+        TransferSSA f = new TransferSSA(
+            this, conf, varsOther, vars, proto, statements, cost, ge, true,
+            _logicalGraph.getGraph().getAllCommunitiesIndex());
         acc = f.compute(isEbgp);
 
         BoolExpr usable =
@@ -2417,18 +2378,9 @@ class EncoderSlice {
         // will maintain the same preference when adding to the cost.
         if (ospfRedistribVars != null) {
           assert overallBest != null;
-          f =
-              new TransferSSA(
-                  this,
-                  conf,
-                  overallBest,
-                  ospfRedistribVars,
-                  proto,
-                  statements,
-                  cost,
-                  ge,
-                  true,
-                  _logicalGraph.getGraph().getAllCommunitiesIndex());
+          f = new TransferSSA(
+              this, conf, overallBest, ospfRedistribVars, proto, statements, cost, ge, true,
+              _logicalGraph.getGraph().getAllCommunitiesIndex());
           BoolExpr acc2 = f.compute();
           // System.out.println("ADDING: \n" + acc2.simplify());
           add(acc2);
@@ -2472,9 +2424,7 @@ class EncoderSlice {
             // NOTE: modified the empty community encoding (BoolExpr -> BitVecExpr communities)
             BoolExpr comms =
                 SymbolicRouteBV.communitiesEmpty(
-                    _encoder.getCtx(),
-                    vars.getCommunitiesBitVec(),
-                    getGraph().getAllCommunitiesIndex().size());
+                    _encoder.getCtx(), vars.getCommunitiesBitVec(), getGraph().getAllCommunitiesIndex().size());
             BoolExpr values =
                 mkAnd(per, lp, ad, met, med, len, type, area, internal, igpMet, comms);
 
@@ -2568,16 +2518,8 @@ class EncoderSlice {
                 assert originations != null;
 
                 addExportConstraint(
-                    e,
-                    varsOther,
-                    ospfRedistribVars,
-                    overallBest,
-                    conf,
-                    proto,
-                    ge,
-                    router,
-                    usedExport,
-                    originations);
+                    e, varsOther, ospfRedistribVars, overallBest, conf, proto,
+                    ge, router, usedExport, originations);
 
                 usedExport = true;
                 break;
@@ -2668,13 +2610,9 @@ class EncoderSlice {
       // vars.getCommunities().forEach((cvar, e) -> add(mkImplies(notPermitted, mkNot(e))));
       // NOTE: modified the invalid community encoding (BoolExpr -> BitVecExpr communities)
       if (vars.getCommunitiesBitVec() != null) {
-        add(
-            mkImplies(
-                notPermitted,
-                SymbolicRouteBV.communitiesEmpty(
-                    _encoder.getCtx(),
-                    vars.getCommunitiesBitVec(),
-                    getGraph().getAllCommunitiesIndex().size())));
+        add(mkImplies(notPermitted,
+            SymbolicRouteBV.communitiesEmpty(
+                _encoder.getCtx(), vars.getCommunitiesBitVec(), getGraph().getAllCommunitiesIndex().size())));
       }
     }
   }

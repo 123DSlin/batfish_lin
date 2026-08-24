@@ -3,9 +3,9 @@ package org.batfish.minesweeper.smt;
 import com.microsoft.z3.ArithExpr;
 import com.microsoft.z3.BitVecExpr;
 import com.microsoft.z3.BoolExpr;
+import com.microsoft.z3.IntNum;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
-import com.microsoft.z3.IntNum;
 import com.microsoft.z3.Model;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -44,6 +44,7 @@ import org.batfish.datamodel.Prefix;
 import org.batfish.datamodel.StaticRoute;
 import org.batfish.datamodel.answers.AnswerElement;
 import org.batfish.datamodel.questions.smt.EnvironmentType;
+import org.batfish.minesweeper.CommunityVar;
 import org.batfish.minesweeper.Graph;
 import org.batfish.minesweeper.GraphEdge;
 import org.batfish.minesweeper.Protocol;
@@ -714,18 +715,19 @@ public class PropertyChecker {
             BoolExpr loadExprs = enc.mkTrue();
             String router = loadEntry1.getKey();
 
-            for (Map.Entry<String, ArithExpr> loadEntry2 : loads.entrySet()) {
+            for (Map.Entry<String, ArithExpr> loadEntry2: loads.entrySet()) {
               String other = loadEntry2.getKey();
 
-              if (router.equals(other)) continue;
+              if (router.equals(other))  continue;
 
               ArithExpr loadRouter1 = loadEntry1.getValue();
               ArithExpr loadRouter2 = loadEntry2.getValue();
 
-              BoolExpr loadExpr = addLoadBalancing(enc, loadRouter1, loadRouter2, kExpr, negkExpr);
+              BoolExpr loadExpr = 
+                  addLoadBalancing(enc, loadRouter1, loadRouter2, kExpr, negkExpr);
               loadExprs = enc.mkAnd(loadExprs, loadExpr);
             }
-
+            
             prop.put(router, loadExprs);
           }
 
@@ -1056,6 +1058,9 @@ public class PropertyChecker {
       Configuration conf1 = g1.getConfigurations().get(r1);
       Configuration conf2 = g2.getConfigurations().get(r2);
 
+      // Set environments equal
+      Set<String> communities = new HashSet<>();
+
       Set<SymbolicRouteBV> envRecords = new HashSet<>();
 
       for (Protocol proto1 : slice1.getProtocols().get(r1)) {
@@ -1092,8 +1097,7 @@ public class PropertyChecker {
 
                 // Set communities equal
                 // BoolExpr equalComms = e1.mkTrue();
-                // for (Map.Entry<CommunityVar, BoolExpr> entry : vars1.getCommunities().entrySet())
-                // {
+                // for (Map.Entry<CommunityVar, BoolExpr> entry : vars1.getCommunities().entrySet()) {
                 //   CommunityVar cvar = entry.getKey();
                 //   BoolExpr ce1 = entry.getValue();
                 //   BoolExpr ce2 = vars2.getCommunities().get(cvar);
@@ -1118,8 +1122,7 @@ public class PropertyChecker {
                 // off, but give a warning of the difference
                 // BoolExpr unsetComms = e1.mkTrue();
 
-                // for (Map.Entry<CommunityVar, BoolExpr> entry : vars1.getCommunities().entrySet())
-                // {
+                // for (Map.Entry<CommunityVar, BoolExpr> entry : vars1.getCommunities().entrySet()) {
                 //   CommunityVar cvar = entry.getKey();
                 //   BoolExpr ce1 = entry.getValue();
                 //   BoolExpr ce2 = vars2.getCommunities().get(cvar);
@@ -1137,8 +1140,7 @@ public class PropertyChecker {
                 // }
 
                 // Do the same thing for communities missing from the other side
-                // for (Map.Entry<CommunityVar, BoolExpr> entry : vars2.getCommunities().entrySet())
-                // {
+                // for (Map.Entry<CommunityVar, BoolExpr> entry : vars2.getCommunities().entrySet()) {
                 //   CommunityVar cvar = entry.getKey();
                 //   BoolExpr ce2 = entry.getValue();
                 //   BoolExpr ce1 = vars1.getCommunities().get(cvar);
@@ -1158,9 +1160,7 @@ public class PropertyChecker {
                 // NOTE: modified unset communities checking (BoolExpr -> BitVecExpr communities)
                 BoolExpr unsetComms =
                     SymbolicRouteBV.communitiesEmpty(
-                        ctx,
-                        ctx.mkBVXOR(vars1Comms, vars2Comms),
-                        graph.getAllCommunitiesIndex().size());
+                        ctx, ctx.mkBVXOR(vars1Comms, vars2Comms), graph.getAllCommunitiesIndex().size());
 
                 envRecords.add(vars1);
                 BoolExpr equalVars = slice1.equal(conf1, proto1, vars1, vars2, lge1, true);
