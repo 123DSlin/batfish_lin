@@ -332,3 +332,53 @@ Encoder、policy answerer 或 symbolic-route 实现。修改范围为 1 个测�
 Hoyan Algorithm 1 第 20 行更新传播条件，第 21 行建立 propagation tree，第 24-32 行执行
 withdraw。论文第 5.4 节明确说明，RIB rule 的 topology condition 是 `R(r)`，从 RIB 到
 egress 的 route update condition 才排除所有高优先级规则。
+
+## Stage 2.1：稳定候选 Key 与传播贡献（2026-08-25 15:23 CST）
+
+### 目标与论文对应
+
+本次修改落实对 Hoyan Algorithm 1 与 YU §4.1/Figure 6 的复核结果：RIB route guard 表示
+候选存在条件；多个等价传播来源可对同一候选作出独立贡献，候选 availability guard 是各
+贡献 guard 的逻辑析取；withdraw 只移除指定消息贡献，最后一个贡献消失后才删除候选。
+
+### Key 与贡献身份
+
+- `SymbolicRouteKey` 不再接收自由字符串 `sourceId` 和 `attributeFingerprint`。
+- candidate key 由 router、VRF 和 Batfish concrete route 构成；protocol 和 prefix 从 route
+  派生，避免调用者构造互相矛盾的字段。
+- `SymbolicRoute` 构造时验证 key 内的 concrete route 与 payload 相同，禁止同 key 静默
+  替换成不同 route。
+- 新增 `SymbolicRouteContributionId(messageId, sender, receiver)`，明确区分传播消息身份与
+  route candidate 身份，为后续 propagation tree 和 recursive withdrawal 提供键。
+- `GuardedRib.putContribution` 聚合同一候选的 contributions；
+  `removeContribution` 只撤回指定 contribution。
+- route selection 的 RIB scope 新增 VRF 隔离，避免不同 VRF 的同 prefix route 相互抑制。
+
+### 新增测试
+
+1. 两个消息来源的 guard 被 OR 合并，分别撤回时不会提前删除候选。
+2. 同一 contribution 使用逻辑等价 guard 重放不产生无效 update。
+3. 不同 VRF 的候选互不参与优先级抑制。
+4. key equality 使用 RIB scope 与 concrete route identity。
+5. key route 与 `SymbolicRoute` payload 不一致时拒绝构造。
+6. contribution identity 包含 message ID 及有向 sender/receiver。
+
+### 验证结果与边界
+
+- `GuardedRibTest`、`SymbolicRouteModelTest`：通过。
+- 未过滤的完整 `//projects/minesweeper:minesweeper_tests`：通过。
+- `minesweeper_tests_pmd`：通过。
+- `git diff --check`：通过。
+- 主源码 `//projects/minesweeper:pmd` 仍只报告 Stage 2 scope correction 已记录的旧
+  `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker` 和 SMT 文件违规；本次
+  `symbolicroute` 文件没有违规，且未修改这些核心旧文件。
+- 当前 contribution API 尚未连接 work queue/propagation tree；这是 Stage 3 的职责。
+- 当前 key 覆盖 IPv4 `Prefix` 模型；IPv6/address-family 扩展将在协议 adapter 接入前增加。
+
+### Git 记录
+
+- 实现提交：`d6f913850f6e2efb41e9d41bb1b6fcb5c43f0556`
+- 实现提交时间：2026-08-25 15:23 CST（提交信息精确到分钟）
+- 审计文档更新时间：2026-08-25 15:25 CST
+- 回退实现：`git revert d6f913850f`
+- 审计提交和远端 push 状态由紧随其后的审计提交记录。
