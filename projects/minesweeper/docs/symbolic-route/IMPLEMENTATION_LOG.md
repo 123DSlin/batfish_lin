@@ -825,3 +825,22 @@ route 的 route”分开：
 - 实现提交：`1c4a7e8191`
 - 实现/审计更新时间：2026-08-25 22:10 CST
 - 回退：`git revert 1c4a7e8191`
+
+## Stage 4.3 测试补强与 BGP 边界澄清（2026-08-25 22:21 CST）
+
+- 增加“policy 先修改 output builder、随后 reject”：结果必须为 DENIED、不得返回 transformed
+  route，原始 `AnnotatedRoute<StaticRoute>` 及 metric 必须保持不变。
+- 增加 `Direction.IN` 差分测试，processor 输出与直接调用 Batfish `RoutingPolicy.process`
+  完全相等；原有 OUT 测试继续保留。
+- 增加 static policy → `BatfishRedistributionReconciler` → guarded main RIB 的端到端测试，
+  验证 transformed metric 和 symbolic availability guard 同时进入稳定 candidate。
+- 明确不加入 BGP policy 测试：当前只完成 connected/static 与公共 policy/redistribution
+  boundary，尚未实现 BGP session adapter、pre-export/post-export transformations、BGP
+  propagation 和 BGP RIB。单独调用 `processBgpRoute` 只能测试 Batfish 自身，不能证明论文
+  symbolic ingress/export 环节，故复杂 BGP policy 测试推迟到 BGP adapter 阶段。
+- 当前 Stage 4.3 覆盖的是 static/connected 可合法使用的 policy execution 和 symbolic
+  lifecycle；不宣称已经支持 BGP、OSPF 或 IS-IS。
+- 完整 Minesweeper tests 与 test PMD：通过。
+- 测试补强提交：`aab08cc93e`
+- 更新时间：2026-08-25 22:21 CST
+- 回退：`git revert aab08cc93e`
