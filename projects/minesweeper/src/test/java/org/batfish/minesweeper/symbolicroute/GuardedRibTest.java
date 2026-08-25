@@ -11,7 +11,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.batfish.datamodel.Prefix;
-import org.batfish.datamodel.RoutingProtocol;
 import org.batfish.datamodel.StaticRoute;
 import org.batfish.datamodel.route.nh.NextHopDiscard;
 import org.junit.Test;
@@ -28,20 +27,21 @@ public final class GuardedRibTest {
   private static final Comparator<StaticRoute> PREFERENCE =
       Comparator.comparingInt(StaticRoute::getAdministrativeCost);
 
-  private static StaticRoute route(int administrativeCost) {
+  private static StaticRoute route(String source, int administrativeCost) {
     return StaticRoute.builder()
         .setNetwork(NETWORK)
         .setNextHop(NextHopDiscard.instance())
         .setAdministrativeCost(administrativeCost)
+        .setTag(Integer.toUnsignedLong(source.hashCode()))
         .build();
   }
 
   private static SymbolicRoute<StaticRoute> symbolicRoute(
       String source, int administrativeCost, RouteGuard availabilityGuard) {
+    StaticRoute route = route(source, administrativeCost);
     return new SymbolicRoute<>(
-        new SymbolicRouteKey(
-            "r2", RoutingProtocol.STATIC, NETWORK, source, "ad=" + administrativeCost),
-        route(administrativeCost),
+        new SymbolicRouteKey("r2", "default", route),
+        route,
         availabilityGuard,
         new SymbolicRouteProvenance(
             source, "r2", source, "Ethernet0", ImmutableList.of(source, "r2"), null));
@@ -358,5 +358,82 @@ public final class GuardedRibTest {
         updateTypes(delta),
         equalTo(
             ImmutableList.of(GuardedRibUpdateType.GUARDS_CHANGED, GuardedRibUpdateType.REMOVED)));
+  }
+
+  @Test
+  public void testContributionsAreOrMergedAndWithdrawnIndependently() {
+    RouteGuard left = GUARDS.variable("contribution_left");
+    RouteGuard right = GUARDS.variable("contribution_right");
+    SymbolicRoute<StaticRoute> candidate = symbolicRoute("shared-candidate", 10, left);
+    SymbolicRouteContributionId leftId = new SymbolicRouteContributionId("m-left", "left", "r2");
+    SymbolicRouteContributionId rightId = new SymbolicRouteContributionId("m-right", "right", "r2");
+    GuardedRib<StaticRoute> rib = new GuardedRib<>(PREFERENCE);
+
+    rib.putContribution(leftId, candidate);
+    GuardedRibDelta<StaticRoute> merged =
+        rib.putContribution(rightId, candidate.withAvailabilityGuard(right));
+
+    assertThat(merged.getUpdates(), hasSize(1));
+    assertThat(
+        rib.get(candidate.getKey()).getAvailabilityGuard().isEquivalentTo(left.or(right)),
+        equalTo(true));
+
+    GuardedRibDelta<StaticRoute> partialWithdrawal =
+        rib.removeContribution(candidate.getKey(), leftId);
+    assertThat(partialWithdrawal.getUpdates(), hasSize(1));
+    assertThat(
+        rib.get(candidate.getKey()).getAvailabilityGuard().isEquivalentTo(right), equalTo(true));
+
+    GuardedRibDelta<StaticRoute> finalWithdrawal =
+        rib.removeContribution(candidate.getKey(), rightId);
+    assertThat(
+        updateTypes(finalWithdrawal), equalTo(ImmutableList.of(GuardedRibUpdateType.REMOVED)));
+    assertThat(rib.get(candidate.getKey()), nullValue());
+  }
+
+  @Test
+  public void testEquivalentContributionReplayProducesNoUpdate() {
+    RouteGuard a = GUARDS.variable("replay_a");
+    RouteGuard b = GUARDS.variable("replay_b");
+    SymbolicRoute<StaticRoute> candidate = symbolicRoute("replay", 10, a.and(b));
+    SymbolicRouteContributionId id = new SymbolicRouteContributionId("m-replay", "r1", "r2");
+    GuardedRib<StaticRoute> rib = new GuardedRib<>(PREFERENCE);
+
+    rib.putContribution(id, candidate);
+
+    assertThat(
+        rib.putContribution(id, candidate.withAvailabilityGuard(b.and(a))).isEmpty(),
+        equalTo(true));
+    assertThat(rib.getEntries(), hasSize(1));
+  }
+
+  @Test
+  public void testCandidatesInDifferentVrfsDoNotSuppressEachOther() {
+    RouteGuard defaultGuard = GUARDS.variable("default_vrf");
+    RouteGuard tenantGuard = GUARDS.variable("tenant_vrf");
+    StaticRoute highRoute = route("vrf-high", 10);
+    StaticRoute lowRoute = route("vrf-low", 20);
+    SymbolicRoute<StaticRoute> defaultCandidate =
+        new SymbolicRoute<>(
+            new SymbolicRouteKey("r2", "default", highRoute),
+            highRoute,
+            defaultGuard,
+            new SymbolicRouteProvenance(
+                "r1", "r2", "r1", "Ethernet0", ImmutableList.of("r1", "r2"), null));
+    SymbolicRoute<StaticRoute> tenantCandidate =
+        new SymbolicRoute<>(
+            new SymbolicRouteKey("r2", "tenant", lowRoute),
+            lowRoute,
+            tenantGuard,
+            new SymbolicRouteProvenance(
+                "r3", "r2", "r3", "Ethernet1", ImmutableList.of("r3", "r2"), null));
+    GuardedRib<StaticRoute> rib = new GuardedRib<>(PREFERENCE);
+
+    rib.put(defaultCandidate);
+    rib.put(tenantCandidate);
+
+    assertThat(
+        rib.get(tenantCandidate.getKey()).getSelectionGuard().isEquivalentTo(tenantGuard),
+        equalTo(true));
   }
 }

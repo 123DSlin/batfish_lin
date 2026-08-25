@@ -107,7 +107,7 @@ public final class SymbolicRouteModelTest {
   }
 
   private static SymbolicRouteKey key() {
-    return new SymbolicRouteKey("r2", RoutingProtocol.STATIC, NETWORK, "r1", "attrs-1");
+    return new SymbolicRouteKey("r2", "default", staticRoute());
   }
 
   private static SymbolicRouteProvenance provenance() {
@@ -120,16 +120,19 @@ public final class SymbolicRouteModelTest {
   }
 
   @Test
-  public void testRouteKeyEqualityIncludesEveryIdentityField() {
+  public void testRouteKeyUsesRibScopeAndConcreteRouteIdentity() {
     SymbolicRouteKey key = key();
-    assertThat(
-        key, equalTo(new SymbolicRouteKey("r2", RoutingProtocol.STATIC, NETWORK, "r1", "attrs-1")));
-    assertThat(
-        key,
-        not(equalTo(new SymbolicRouteKey("r2", RoutingProtocol.STATIC, NETWORK, "r3", "attrs-1"))));
-    assertThat(
-        key,
-        not(equalTo(new SymbolicRouteKey("r2", RoutingProtocol.STATIC, NETWORK, "r1", "attrs-2"))));
+    assertThat(key, equalTo(new SymbolicRouteKey("r2", "default", staticRoute())));
+    assertThat(key, not(equalTo(new SymbolicRouteKey("r2", "tenant", staticRoute()))));
+    StaticRoute differentRoute =
+        StaticRoute.builder()
+            .setNetwork(NETWORK)
+            .setNextHop(NextHopDiscard.instance())
+            .setAdministrativeCost(2)
+            .build();
+    assertThat(key, not(equalTo(new SymbolicRouteKey("r2", "default", differentRoute))));
+    assertThat(key.getProtocol(), equalTo(RoutingProtocol.STATIC));
+    assertThat(key.getNetwork(), equalTo(NETWORK));
   }
 
   @Test
@@ -217,8 +220,7 @@ public final class SymbolicRouteModelTest {
     SymbolicRoute<StaticRoute> oldRoute = symbolicRoute(new TestRouteGuard("G1"));
     SymbolicRoute<StaticRoute> differentRoute =
         new SymbolicRoute<>(
-            new SymbolicRouteKey(
-                "r2", RoutingProtocol.STATIC, NETWORK, "different-source", "attrs-1"),
+            new SymbolicRouteKey("r2", "different-vrf", staticRoute()),
             staticRoute(),
             new TestRouteGuard("G2"),
             provenance());
@@ -226,5 +228,31 @@ public final class SymbolicRouteModelTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> SymbolicRibUpdate.availabilityGuardChanged(oldRoute, differentRoute));
+  }
+
+  @Test
+  public void testSymbolicRouteRejectsKeyForDifferentConcreteRoute() {
+    StaticRoute differentRoute =
+        StaticRoute.builder()
+            .setNetwork(NETWORK)
+            .setNextHop(NextHopDiscard.instance())
+            .setAdministrativeCost(2)
+            .build();
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new SymbolicRoute<>(key(), differentRoute, new TestRouteGuard("G"), provenance()));
+  }
+
+  @Test
+  public void testContributionIdentityIncludesDirectedMessageEndpoints() {
+    SymbolicRouteContributionId contribution =
+        new SymbolicRouteContributionId("message-1", "r1", "r2");
+
+    assertThat(contribution, equalTo(new SymbolicRouteContributionId("message-1", "r1", "r2")));
+    assertThat(
+        contribution, not(equalTo(new SymbolicRouteContributionId("message-1", "r3", "r2"))));
+    assertThat(
+        contribution, not(equalTo(new SymbolicRouteContributionId("message-1", "r1", "r3"))));
   }
 }

@@ -21,10 +21,15 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
   @Nonnull private final Comparator<R> _preferenceComparator;
   @Nonnull private final Map<SymbolicRouteKey, SymbolicRoute<R>> _routes;
 
+  @Nonnull
+  private final Map<SymbolicRouteKey, Map<SymbolicRouteContributionId, SymbolicRoute<R>>>
+      _contributions;
+
   public GuardedRib(Comparator<R> preferenceComparator) {
     _preferenceComparator =
         requireNonNull(preferenceComparator, "preferenceComparator must be provided");
     _routes = new LinkedHashMap<>();
+    _contributions = new LinkedHashMap<>();
   }
 
   /** Adds or replaces a candidate and returns every entry affected by the operation. */
@@ -38,12 +43,67 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
     return changedEntries(before, computeEntries());
   }
 
+  /** Adds or replaces one advertisement contribution and ORs all contributions to its candidate. */
+  public GuardedRibDelta<R> putContribution(
+      SymbolicRouteContributionId contributionId, SymbolicRoute<R> route) {
+    requireNonNull(contributionId, "contributionId must be provided");
+    requireNonNull(route, "route must be provided");
+    Map<SymbolicRouteKey, GuardedRibEntry<R>> before = computeEntries();
+    Map<SymbolicRouteContributionId, SymbolicRoute<R>> contributions =
+        _contributions.computeIfAbsent(route.getKey(), unused -> new LinkedHashMap<>());
+    if (route.getAvailabilityGuard().isSatisfiable()) {
+      contributions.put(contributionId, route);
+    } else {
+      contributions.remove(contributionId);
+    }
+    rebuildCandidate(route.getKey());
+    return changedEntries(before, computeEntries());
+  }
+
+  /** Withdraws one advertisement contribution without deleting the candidate's other sources. */
+  public GuardedRibDelta<R> removeContribution(
+      SymbolicRouteKey key, SymbolicRouteContributionId contributionId) {
+    requireNonNull(key, "key must be provided");
+    requireNonNull(contributionId, "contributionId must be provided");
+    Map<SymbolicRouteKey, GuardedRibEntry<R>> before = computeEntries();
+    Map<SymbolicRouteContributionId, SymbolicRoute<R>> contributions = _contributions.get(key);
+    if (contributions != null) {
+      contributions.remove(contributionId);
+      rebuildCandidate(key);
+    }
+    return changedEntries(before, computeEntries());
+  }
+
   /** Removes a candidate and returns every entry affected by the operation. */
   public GuardedRibDelta<R> remove(SymbolicRouteKey key) {
     requireNonNull(key, "key must be provided");
     Map<SymbolicRouteKey, GuardedRibEntry<R>> before = computeEntries();
     _routes.remove(key);
+    _contributions.remove(key);
     return changedEntries(before, computeEntries());
+  }
+
+  private void rebuildCandidate(SymbolicRouteKey key) {
+    Map<SymbolicRouteContributionId, SymbolicRoute<R>> contributions = _contributions.get(key);
+    if (contributions == null || contributions.isEmpty()) {
+      _contributions.remove(key);
+      _routes.remove(key);
+      return;
+    }
+    SymbolicRoute<R> representative = contributions.values().iterator().next();
+    RouteGuard availability = representative.getAvailabilityGuard();
+    boolean first = true;
+    for (SymbolicRoute<R> contribution : contributions.values()) {
+      if (!contribution.getRoute().equals(representative.getRoute())) {
+        throw new IllegalArgumentException("one candidate cannot contain different route payloads");
+      }
+      if (first) {
+        first = false;
+      } else {
+        availability = availability.or(contribution.getAvailabilityGuard());
+      }
+    }
+    _routes.put(key, representative.withAvailabilityGuard(availability.simplify()));
   }
 
   @Nullable
@@ -74,6 +134,7 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
 
   private static boolean sameRibScope(SymbolicRouteKey left, SymbolicRouteKey right) {
     return left.getRouter().equals(right.getRouter())
+        && left.getVrf().equals(right.getVrf())
         && left.getNetwork().equals(right.getNetwork());
   }
 

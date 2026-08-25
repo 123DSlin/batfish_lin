@@ -21,6 +21,9 @@ public final class SymbolicRoute<R extends AbstractRouteDecorator> {
       SymbolicRouteProvenance provenance) {
     _key = requireNonNull(key, "key must be provided");
     _route = requireNonNull(route, "route must be provided");
+    if (!_key.getRoute().equals(_route)) {
+      throw new IllegalArgumentException("key route must equal the symbolic route payload");
+    }
     _availabilityGuard = requireNonNull(availabilityGuard, "availabilityGuard must be provided");
     _provenance = requireNonNull(provenance, "provenance must be provided");
   }
