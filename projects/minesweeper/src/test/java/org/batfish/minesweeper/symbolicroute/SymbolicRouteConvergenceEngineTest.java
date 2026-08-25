@@ -342,4 +342,112 @@ public final class SymbolicRouteConvergenceEngineTest {
     assertThat(duplicate.getProcessedWithdrawals(), equalTo(0));
     assertThat(duplicate.getRibUpdates(), equalTo(0));
   }
+
+  @Test
+  public void testRouteReplacementWithdrawsOldAndAddsNewIdentity() {
+    StaticRoute oldRoute = route(20);
+    StaticRoute newRoute = route(10);
+    GuardedRib<StaticRoute> a = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> b = new GuardedRib<>(PREFERENCE);
+    SymbolicRouteConvergenceEngine<StaticRoute> engine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(processor("a", a), processor("b", b)),
+            ImmutableList.of(
+                exporter(
+                    "a",
+                    "b",
+                    GUARDS.variable("replacement_link"),
+                    (s, r, candidate) -> Optional.of(candidate),
+                    new SymbolicRoutePropagationDependencies())));
+    SymbolicRouteMessage<StaticRoute> oldAdvertisement =
+        initial("a", oldRoute, GUARDS.variable("replacement_old"));
+    engine.converge(ImmutableList.of(oldAdvertisement));
+    SymbolicRouteContributionId oldId =
+        new SymbolicRouteContributionId(
+            oldAdvertisement.getMessageId(),
+            oldAdvertisement.getSender(),
+            oldAdvertisement.getReceiver());
+    SymbolicRouteMessage<StaticRoute> replacement =
+        initial("a", newRoute, GUARDS.variable("replacement_new"));
+
+    SymbolicRouteConvergenceResult result = engine.replace(oldId, replacement);
+
+    assertThat(result.getProcessedWithdrawals() > 0, equalTo(true));
+    assertThat(a.get(new SymbolicRouteKey("a", "default", oldRoute)) == null, equalTo(true));
+    assertThat(b.get(new SymbolicRouteKey("b", "default", oldRoute)) == null, equalTo(true));
+    assertThat(a.get(new SymbolicRouteKey("a", "default", newRoute)) == null, equalTo(false));
+    assertThat(b.get(new SymbolicRouteKey("b", "default", newRoute)) == null, equalTo(false));
+  }
+
+  @Test
+  public void testRouteReplacementRequiresNewContributionIdentity() {
+    StaticRoute route = route(10);
+    GuardedRib<StaticRoute> a = new GuardedRib<>(PREFERENCE);
+    SymbolicRouteConvergenceEngine<StaticRoute> engine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(processor("a", a)), ImmutableList.of());
+    SymbolicRouteMessage<StaticRoute> advertisement =
+        initial("a", route, GUARDS.variable("same_identity"));
+    engine.converge(ImmutableList.of(advertisement));
+    SymbolicRouteContributionId id =
+        new SymbolicRouteContributionId(
+            advertisement.getMessageId(), advertisement.getSender(), advertisement.getReceiver());
+
+    assertThrows(IllegalArgumentException.class, () -> engine.replace(id, advertisement));
+  }
+
+  @Test
+  public void testSameContributionCannotMoveCandidateAndDoesNotMutateRib() {
+    StaticRoute oldRoute = route(20);
+    StaticRoute changedRoute = route(10);
+    GuardedRib<StaticRoute> a = new GuardedRib<>(PREFERENCE);
+    SymbolicRouteConvergenceEngine<StaticRoute> engine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(processor("a", a)), ImmutableList.of());
+    SymbolicRouteMessage<StaticRoute> original =
+        initial("a", oldRoute, GUARDS.variable("identity_original"));
+    engine.converge(ImmutableList.of(original));
+    SymbolicRouteMessage<StaticRoute> illegalMove =
+        new SymbolicRouteMessage<>(
+            original.getMessageId(),
+            original.getSender(),
+            original.getReceiver(),
+            original.getStage(),
+            changedRoute,
+            GUARDS.variable("identity_changed"),
+            original.getProvenance());
+
+    assertThrows(
+        IllegalArgumentException.class, () -> engine.converge(ImmutableList.of(illegalMove)));
+
+    assertThat(a.getEntries(), hasSize(1));
+    assertThat(a.get(new SymbolicRouteKey("a", "default", oldRoute)) == null, equalTo(false));
+    assertThat(a.get(new SymbolicRouteKey("a", "default", changedRoute)) == null, equalTo(true));
+  }
+
+  @Test
+  public void testRouteReplacementRequiresExistingOldAndUnusedNewIdentity() {
+    StaticRoute oldRoute = route(20);
+    StaticRoute newRoute = route(10);
+    GuardedRib<StaticRoute> a = new GuardedRib<>(PREFERENCE);
+    SymbolicRouteConvergenceEngine<StaticRoute> engine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(processor("a", a)), ImmutableList.of());
+    SymbolicRouteMessage<StaticRoute> oldAdvertisement =
+        initial("a", oldRoute, GUARDS.variable("existing_old"));
+    SymbolicRouteMessage<StaticRoute> alreadyUsed =
+        initial("a", newRoute, GUARDS.variable("already_used"));
+    engine.converge(ImmutableList.of(oldAdvertisement, alreadyUsed));
+    SymbolicRouteContributionId oldId =
+        new SymbolicRouteContributionId(
+            oldAdvertisement.getMessageId(),
+            oldAdvertisement.getSender(),
+            oldAdvertisement.getReceiver());
+    SymbolicRouteContributionId missingId =
+        new SymbolicRouteContributionId("missing", "origin", "a");
+
+    assertThrows(IllegalArgumentException.class, () -> engine.replace(missingId, alreadyUsed));
+    assertThrows(IllegalArgumentException.class, () -> engine.replace(oldId, alreadyUsed));
+    assertThat(a.getEntries(), hasSize(2));
+  }
 }

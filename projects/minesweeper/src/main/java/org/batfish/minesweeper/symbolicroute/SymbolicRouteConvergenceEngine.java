@@ -93,6 +93,33 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
     return run(queue);
   }
 
+  /** Atomically withdraws one contribution and advertises its replacement under a new identity. */
+  public SymbolicRouteConvergenceResult replace(
+      SymbolicRouteContributionId oldContribution,
+      SymbolicRouteMessage<R> replacementAdvertisement) {
+    requireNonNull(oldContribution, "oldContribution must be provided");
+    requireNonNull(replacementAdvertisement, "replacementAdvertisement must be provided");
+    SymbolicRouteContributionId replacementContribution =
+        new SymbolicRouteContributionId(
+            replacementAdvertisement.getMessageId(),
+            replacementAdvertisement.getSender(),
+            replacementAdvertisement.getReceiver());
+    if (oldContribution.equals(replacementContribution)) {
+      throw new IllegalArgumentException("route replacement requires a new contribution identity");
+    }
+    ContributionLocation oldLocation = _contributionLocations.get(oldContribution);
+    if (oldLocation == null) {
+      throw new IllegalArgumentException("route replacement requires an existing old contribution");
+    }
+    if (_contributionLocations.containsKey(replacementContribution)) {
+      throw new IllegalArgumentException("route replacement requires an unused new identity");
+    }
+    Queue<SymbolicRouteWorkItem<R>> queue = new ArrayDeque<>();
+    queue.add(SymbolicRouteWorkItem.withdraw(oldContribution, oldLocation._guard));
+    queue.add(SymbolicRouteWorkItem.advertise(replacementAdvertisement));
+    return run(queue);
+  }
+
   private SymbolicRouteConvergenceResult run(Queue<SymbolicRouteWorkItem<R>> queue) {
     int processedMessages = 0;
     int processedWithdrawals = 0;
@@ -119,17 +146,19 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
     SymbolicRouteContributionId contributionId =
         new SymbolicRouteContributionId(
             message.getMessageId(), message.getSender(), message.getReceiver());
-    java.util.Optional<SymbolicRouteIngressResult<R>> result = processor.processMessage(message);
-    if (!result.isPresent()) {
+    java.util.Optional<SymbolicRouteIngressCandidate<R>> prepared = processor.prepare(message);
+    if (!prepared.isPresent()) {
       ContributionLocation oldLocation = _contributionLocations.get(contributionId);
       return oldLocation == null ? 0 : removeContribution(contributionId, oldLocation, queue);
     }
-    SymbolicRouteIngressResult<R> ingressResult = result.get();
     ContributionLocation oldLocation = _contributionLocations.get(contributionId);
-    if (oldLocation != null && !oldLocation._key.equals(ingressResult.getKey())) {
-      throw new UnsupportedOperationException(
-          "moving one contribution between candidate keys is not yet supported");
+    SymbolicRouteKey preparedKey = prepared.get().getCandidate().getKey();
+    if (oldLocation != null && !oldLocation._key.equals(preparedKey)) {
+      throw new IllegalArgumentException(
+          "one contribution identity must deterministically map to one candidate key; use replace"
+              + " with a new identity for a route replacement");
     }
+    SymbolicRouteIngressResult<R> ingressResult = processor.install(prepared.get());
     _contributionLocations.put(
         contributionId,
         new ContributionLocation(

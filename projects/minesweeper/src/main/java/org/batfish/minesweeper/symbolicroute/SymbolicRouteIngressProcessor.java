@@ -50,6 +50,13 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
 
   /** Processes one message and returns empty only when ingress policy denies it. */
   public Optional<SymbolicRouteIngressResult<R>> processMessage(SymbolicRouteMessage<R> message) {
+    return prepare(message).map(this::install);
+  }
+
+  /**
+   * Applies ingress policy without modifying the RIB, so callers can validate candidate identity.
+   */
+  Optional<SymbolicRouteIngressCandidate<R>> prepare(SymbolicRouteMessage<R> message) {
     requireNonNull(message, "message must be provided");
     if (message.getStage() != SymbolicRouteMessage.Stage.INGRESS) {
       throw new IllegalArgumentException("ingress processor accepts only INGRESS messages");
@@ -71,12 +78,19 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
     }
     SymbolicRoute<R> candidate =
         new SymbolicRoute<>(key, route, message.getGuard(), message.getProvenance());
-    GuardedRibDelta<R> delta =
-        _rib.putContribution(
+    return Optional.of(
+        new SymbolicRouteIngressCandidate<>(
             new SymbolicRouteContributionId(
                 message.getMessageId(), message.getSender(), message.getReceiver()),
-            candidate);
-    return Optional.of(new SymbolicRouteIngressResult<>(key, delta));
+            candidate));
+  }
+
+  /** Installs a previously prepared ingress candidate. */
+  SymbolicRouteIngressResult<R> install(SymbolicRouteIngressCandidate<R> prepared) {
+    requireNonNull(prepared, "prepared candidate must be provided");
+    SymbolicRoute<R> candidate = prepared.getCandidate();
+    GuardedRibDelta<R> delta = _rib.putContribution(prepared.getContributionId(), candidate);
+    return new SymbolicRouteIngressResult<>(candidate.getKey(), delta);
   }
 
   public boolean isQueueEmpty() {
