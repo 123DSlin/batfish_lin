@@ -472,3 +472,45 @@ Stage 1 的 `SymbolicRibUpdate`、`SymbolicRibDelta`、`SymbolicRibUpdateType` �
 - 实现提交：`eeef747498a50a920a25557179a32c530d57e22d`
 - 提交时间：2026-08-25 15:45 CST
 - 回退：`git revert eeef747498`
+
+## Stage 3.2：Egress、链路 Guard 与传播依赖（2026-08-25 16:06 CST）
+
+### 算法范围
+
+本阶段实现 Hoyan Algorithm 1 第 17–22 行的协议无关边界：对选中的 guarded RIB entry
+应用 egress policy，生成发往 peer 的 advertisement，把 route 的 `selectionGuard` 与
+链路存活 guard 合取，并建立 parent contribution 到 child advertisement 的 propagation
+dependency。生成的消息已处于 receiver 的 `INGRESS` 边界，可由后续全网收敛引擎重新
+放入 work queue。
+
+### 实现结构
+
+- `SymbolicRouteEgressPolicy`：由 BGP/OSPF adapter 实现的 ACCEPT/DENY/route transform
+  契约。
+- `SymbolicRouteMessageIdFactory`：由 adapter 提供稳定的输出 advertisement identity。
+- `SymbolicRouteExporter`：验证 sender/RIB/provenance 边界，应用 policy，计算
+  `selectionGuard AND linkGuard`，扩展 provenance path 并生成 INGRESS 消息。
+- `SymbolicRoutePropagationDependencies`：使用 typed contribution identity 保存
+  parent-to-child 集合；集合去重，且只对实际生成的消息建立依赖。
+
+### 已验证语义
+
+1. 输出 guard 使用 selection guard 而非 availability guard，并正确合取链路 guard。
+2. egress DENY 不生成 advertisement，也不产生伪 dependency。
+3. 不可满足的 `selectionGuard AND linkGuard` 被剪枝。
+4. egress transform 后的 concrete route 被写入输出消息。
+5. 多个 parent contribution 可共同依赖同一个聚合后的 child advertisement。
+6. provenance path 从 sender 扩展至 receiver；单 parent 时保存 parent message ID。
+7. exporter 拒绝不属于 sender RIB 的 entry。
+
+### 验证、限制与 Git
+
+- Stage 1–3.2 定向测试：通过。
+- 未过滤的完整 Minesweeper 测试：通过。
+- test PMD 与 `git diff --check`：通过。
+- 主源码 PMD 仍只报告已记录的旧核心文件基线；新增文件没有违规。
+- 尚未把 exporter 输出接回全局 work queue，也未实现依赖删除与 recursive withdrawal；
+  因此本阶段不宣称已经实现 Algorithm 1 第 23–32 行或全网收敛。
+- 实现提交：`fa3ec406d2e3d3ca6f49f8e91742ffc04df50cb7`
+- 提交时间：2026-08-25 16:06 CST
+- 回退：`git revert fa3ec406d2`
