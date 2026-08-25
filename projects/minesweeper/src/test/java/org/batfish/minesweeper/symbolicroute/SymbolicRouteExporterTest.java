@@ -6,6 +6,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.Context;
 import java.util.Optional;
 import org.batfish.datamodel.Prefix;
@@ -207,5 +208,34 @@ public final class SymbolicRouteExporterTest {
 
     assertThrows(
         IllegalArgumentException.class, () -> wrongExporter.export(entry, ImmutableList.of()));
+  }
+
+  @Test
+  public void testReexportReplacesParentDependencies() {
+    SymbolicRouteContributionId oldParent =
+        new SymbolicRouteContributionId("old-parent", "old", "sender");
+    SymbolicRouteContributionId newParent =
+        new SymbolicRouteContributionId("new-parent", "new", "sender");
+    SymbolicRoutePropagationDependencies dependencies = new SymbolicRoutePropagationDependencies();
+    SymbolicRouteExporter<StaticRoute> exporter =
+        exporter(
+            GUARDS.variable("replace_link"),
+            (sender, receiver, route) -> Optional.of(route),
+            dependencies);
+    GuardedRibEntry<StaticRoute> entry =
+        entry(GUARDS.variable("replace_availability"), GUARDS.variable("replace_selection"));
+
+    SymbolicRouteMessage<StaticRoute> first =
+        exporter.export(entry, ImmutableList.of(oldParent)).get();
+    SymbolicRouteMessage<StaticRoute> second =
+        exporter.export(entry, ImmutableList.of(newParent)).get();
+    SymbolicRouteContributionId child =
+        new SymbolicRouteContributionId(
+            second.getMessageId(), second.getSender(), second.getReceiver());
+
+    assertThat(first.getMessageId(), equalTo(second.getMessageId()));
+    assertThat(dependencies.getChildren(oldParent).isEmpty(), equalTo(true));
+    assertThat(dependencies.getChildren(newParent), equalTo(ImmutableSet.of(child)));
+    assertThat(dependencies.getParents(child), equalTo(ImmutableSet.of(newParent)));
   }
 }

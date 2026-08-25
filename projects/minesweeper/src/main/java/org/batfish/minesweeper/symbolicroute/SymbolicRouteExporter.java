@@ -65,7 +65,7 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
             "messageIdFactory returned null");
     SymbolicRouteContributionId child =
         new SymbolicRouteContributionId(messageId, _sender, _receiver);
-    parentList.forEach(parent -> _dependencies.addDependency(parent, child));
+    _dependencies.replaceParents(child, parentList);
     SymbolicRouteProvenance oldProvenance = symbolicRoute.getProvenance();
     List<String> path = new ArrayList<>(oldProvenance.getRouterPath());
     path.add(_receiver);
@@ -97,5 +97,9 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
   @Nonnull
   public String getReceiver() {
     return _receiver;
+  }
+
+  public void removeDependencies(SymbolicRouteContributionId child) {
+    _dependencies.removeChild(child);
   }
 }

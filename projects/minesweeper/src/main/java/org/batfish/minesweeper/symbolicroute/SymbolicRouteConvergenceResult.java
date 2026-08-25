@@ -5,9 +5,11 @@ public final class SymbolicRouteConvergenceResult {
 
   private final int _processedMessages;
   private final int _ribUpdates;
+  private final int _processedWithdrawals;
 
-  SymbolicRouteConvergenceResult(int processedMessages, int ribUpdates) {
+  SymbolicRouteConvergenceResult(int processedMessages, int processedWithdrawals, int ribUpdates) {
     _processedMessages = processedMessages;
+    _processedWithdrawals = processedWithdrawals;
     _ribUpdates = ribUpdates;
   }
 
@@ -17,5 +19,9 @@ public final class SymbolicRouteConvergenceResult {
 
   public int getRibUpdates() {
     return _ribUpdates;
+  }
+
+  public int getProcessedWithdrawals() {
+    return _processedWithdrawals;
   }
 }

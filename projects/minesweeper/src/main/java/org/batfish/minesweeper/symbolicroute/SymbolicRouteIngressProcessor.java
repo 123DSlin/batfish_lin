@@ -40,36 +40,43 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
     List<GuardedRibDelta<R>> deltas = new ArrayList<>();
     SymbolicRouteMessage<R> message;
     while ((message = _workQueue.poll()) != null) {
-      if (message.getStage() != SymbolicRouteMessage.Stage.INGRESS) {
-        throw new IllegalArgumentException("ingress processor accepts only INGRESS messages");
-      }
-      if (!message.getReceiver().equals(_receiver)) {
-        throw new IllegalArgumentException("message receiver does not match the processor RIB");
-      }
-      Optional<R> acceptedRoute =
-          requireNonNull(_ingressPolicy.process(message), "ingress policy returned null");
-      if (!acceptedRoute.isPresent()) {
-        continue;
-      }
-      R route = acceptedRoute.get();
-      SymbolicRouteKey key =
-          requireNonNull(
-              _keyFactory.create(message.getReceiver(), route), "key factory returned null");
-      if (!key.getRouter().equals(_receiver)) {
-        throw new IllegalArgumentException("key factory returned a key for a different router");
-      }
-      SymbolicRoute<R> candidate =
-          new SymbolicRoute<>(key, route, message.getGuard(), message.getProvenance());
-      GuardedRibDelta<R> delta =
-          _rib.putContribution(
-              new SymbolicRouteContributionId(
-                  message.getMessageId(), message.getSender(), message.getReceiver()),
-              candidate);
-      if (!delta.isEmpty()) {
-        deltas.add(delta);
-      }
+      processMessage(message)
+          .map(SymbolicRouteIngressResult::getDelta)
+          .filter(delta -> !delta.isEmpty())
+          .ifPresent(deltas::add);
     }
     return ImmutableList.copyOf(deltas);
+  }
+
+  /** Processes one message and returns empty only when ingress policy denies it. */
+  public Optional<SymbolicRouteIngressResult<R>> processMessage(SymbolicRouteMessage<R> message) {
+    requireNonNull(message, "message must be provided");
+    if (message.getStage() != SymbolicRouteMessage.Stage.INGRESS) {
+      throw new IllegalArgumentException("ingress processor accepts only INGRESS messages");
+    }
+    if (!message.getReceiver().equals(_receiver)) {
+      throw new IllegalArgumentException("message receiver does not match the processor RIB");
+    }
+    Optional<R> acceptedRoute =
+        requireNonNull(_ingressPolicy.process(message), "ingress policy returned null");
+    if (!acceptedRoute.isPresent()) {
+      return Optional.empty();
+    }
+    R route = acceptedRoute.get();
+    SymbolicRouteKey key =
+        requireNonNull(
+            _keyFactory.create(message.getReceiver(), route), "key factory returned null");
+    if (!key.getRouter().equals(_receiver)) {
+      throw new IllegalArgumentException("key factory returned a key for a different router");
+    }
+    SymbolicRoute<R> candidate =
+        new SymbolicRoute<>(key, route, message.getGuard(), message.getProvenance());
+    GuardedRibDelta<R> delta =
+        _rib.putContribution(
+            new SymbolicRouteContributionId(
+                message.getMessageId(), message.getSender(), message.getReceiver()),
+            candidate);
+    return Optional.of(new SymbolicRouteIngressResult<>(key, delta));
   }
 
   public boolean isQueueEmpty() {

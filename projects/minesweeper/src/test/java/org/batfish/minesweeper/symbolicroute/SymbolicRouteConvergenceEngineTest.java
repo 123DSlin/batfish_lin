@@ -175,4 +175,171 @@ public final class SymbolicRouteConvergenceEngineTest {
             engine.converge(
                 ImmutableList.of(initial("missing", route, GUARDS.variable("missing_receiver")))));
   }
+
+  @Test
+  public void testLateHigherPriorityRouteRecursivelyReplacesLowerAdvertisements() {
+    RouteGuard lowGuard = GUARDS.variable("late_low");
+    RouteGuard highGuard = GUARDS.variable("late_high");
+    RouteGuard ab = GUARDS.variable("late_ab");
+    RouteGuard bc = GUARDS.variable("late_bc");
+    StaticRoute low = route(20);
+    StaticRoute high = route(10);
+    GuardedRib<StaticRoute> a = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> b = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> c = new GuardedRib<>(PREFERENCE);
+    SymbolicRoutePropagationDependencies dependencies = new SymbolicRoutePropagationDependencies();
+    SymbolicRouteConvergenceEngine<StaticRoute> engine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(processor("a", a), processor("b", b), processor("c", c)),
+            ImmutableList.of(
+                exporter("a", "b", ab, (s, r, candidate) -> Optional.of(candidate), dependencies),
+                exporter("b", "c", bc, (s, r, candidate) -> Optional.of(candidate), dependencies)));
+
+    engine.converge(ImmutableList.of(initial("a", low, lowGuard)));
+    SymbolicRouteConvergenceResult lateHighResult =
+        engine.converge(ImmutableList.of(initial("a", high, highGuard)));
+
+    assertThat(lateHighResult.getProcessedWithdrawals() > 0, equalTo(true));
+    assertThat(c.getEntries(), hasSize(2));
+    assertThat(
+        c.get(new SymbolicRouteKey("c", "default", high))
+            .getAvailabilityGuard()
+            .isEquivalentTo(highGuard.and(ab).and(bc)),
+        equalTo(true));
+    assertThat(
+        c.get(new SymbolicRouteKey("c", "default", low))
+            .getAvailabilityGuard()
+            .isEquivalentTo(lowGuard.and(highGuard.not()).and(ab).and(bc)),
+        equalTo(true));
+
+    GuardedRib<StaticRoute> aHighFirst = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> bHighFirst = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> cHighFirst = new GuardedRib<>(PREFERENCE);
+    SymbolicRouteConvergenceEngine<StaticRoute> highFirstEngine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(
+                processor("a", aHighFirst), processor("b", bHighFirst), processor("c", cHighFirst)),
+            ImmutableList.of(
+                exporter(
+                    "a",
+                    "b",
+                    ab,
+                    (s, r, candidate) -> Optional.of(candidate),
+                    new SymbolicRoutePropagationDependencies()),
+                exporter(
+                    "b",
+                    "c",
+                    bc,
+                    (s, r, candidate) -> Optional.of(candidate),
+                    new SymbolicRoutePropagationDependencies())));
+    highFirstEngine.converge(
+        ImmutableList.of(initial("a", high, highGuard), initial("a", low, lowGuard)));
+
+    assertThat(
+        c.get(new SymbolicRouteKey("c", "default", low))
+            .getAvailabilityGuard()
+            .isEquivalentTo(
+                cHighFirst.get(new SymbolicRouteKey("c", "default", low)).getAvailabilityGuard()),
+        equalTo(true));
+    assertThat(
+        c.get(new SymbolicRouteKey("c", "default", high))
+            .getAvailabilityGuard()
+            .isEquivalentTo(
+                cHighFirst.get(new SymbolicRouteKey("c", "default", high)).getAvailabilityGuard()),
+        equalTo(true));
+  }
+
+  @Test
+  public void testRootWithdrawalRecursivelyRemovesDescendants() {
+    StaticRoute route = route(10);
+    GuardedRib<StaticRoute> a = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> b = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> c = new GuardedRib<>(PREFERENCE);
+    SymbolicRoutePropagationDependencies dependencies = new SymbolicRoutePropagationDependencies();
+    SymbolicRouteConvergenceEngine<StaticRoute> engine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(processor("a", a), processor("b", b), processor("c", c)),
+            ImmutableList.of(
+                exporter(
+                    "a",
+                    "b",
+                    GUARDS.variable("withdraw_ab"),
+                    (s, r, candidate) -> Optional.of(candidate),
+                    dependencies),
+                exporter(
+                    "b",
+                    "c",
+                    GUARDS.variable("withdraw_bc"),
+                    (s, r, candidate) -> Optional.of(candidate),
+                    dependencies)));
+    SymbolicRouteMessage<StaticRoute> seed = initial("a", route, GUARDS.variable("withdraw_seed"));
+    engine.converge(ImmutableList.of(seed));
+
+    SymbolicRouteContributionId root =
+        new SymbolicRouteContributionId(seed.getMessageId(), seed.getSender(), seed.getReceiver());
+    SymbolicRouteConvergenceResult result = engine.withdraw(ImmutableList.of(root));
+
+    assertThat(result.getProcessedWithdrawals(), equalTo(3));
+    assertThat(a.getEntries().isEmpty(), equalTo(true));
+    assertThat(b.getEntries().isEmpty(), equalTo(true));
+    assertThat(c.getEntries().isEmpty(), equalTo(true));
+    assertThat(dependencies.getChildren(root).isEmpty(), equalTo(true));
+  }
+
+  @Test
+  public void testWithdrawingOneOfTwoContributionsKeepsCandidateAndIsIdempotent() {
+    StaticRoute route = route(10);
+    RouteGuard leftGuard = GUARDS.variable("multi_left");
+    RouteGuard rightGuard = GUARDS.variable("multi_right");
+    RouteGuard link = GUARDS.variable("multi_link");
+    GuardedRib<StaticRoute> a = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> b = new GuardedRib<>(PREFERENCE);
+    SymbolicRouteConvergenceEngine<StaticRoute> engine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(processor("a", a), processor("b", b)),
+            ImmutableList.of(
+                exporter(
+                    "a",
+                    "b",
+                    link,
+                    (s, r, candidate) -> Optional.of(candidate),
+                    new SymbolicRoutePropagationDependencies())));
+    SymbolicRouteMessage<StaticRoute> left = initial("a", route, leftGuard);
+    SymbolicRouteMessage<StaticRoute> right =
+        new SymbolicRouteMessage<>(
+            "second-origin->a:10",
+            "second-origin",
+            "a",
+            SymbolicRouteMessage.Stage.INGRESS,
+            route,
+            rightGuard,
+            new SymbolicRouteProvenance(
+                "second-origin",
+                "a",
+                "second-origin",
+                null,
+                ImmutableList.of("second-origin", "a"),
+                null));
+    engine.converge(ImmutableList.of(left, right));
+    SymbolicRouteContributionId leftId =
+        new SymbolicRouteContributionId(left.getMessageId(), left.getSender(), left.getReceiver());
+
+    engine.withdraw(ImmutableList.of(leftId));
+
+    assertThat(a.getEntries(), hasSize(1));
+    assertThat(b.getEntries(), hasSize(1));
+    assertThat(
+        a.get(new SymbolicRouteKey("a", "default", route))
+            .getAvailabilityGuard()
+            .isEquivalentTo(rightGuard),
+        equalTo(true));
+    assertThat(
+        b.get(new SymbolicRouteKey("b", "default", route))
+            .getAvailabilityGuard()
+            .isEquivalentTo(rightGuard.and(link)),
+        equalTo(true));
+    SymbolicRouteConvergenceResult duplicate = engine.withdraw(ImmutableList.of(leftId));
+    assertThat(duplicate.getProcessedWithdrawals(), equalTo(0));
+    assertThat(duplicate.getRibUpdates(), equalTo(0));
+  }
 }
