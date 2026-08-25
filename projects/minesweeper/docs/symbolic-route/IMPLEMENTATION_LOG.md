@@ -435,3 +435,40 @@ propagation dependency 与 recursive withdrawal。
 - 审计文档更新时间：2026-08-25 15:40 CST
 - 回退实现：`git revert 20144c498e`
 - 审计提交与 push 状态由本记录的独立文档提交保存。
+
+## Update 模型冗余清理（2026-08-25 15:45 CST）
+
+### 清理原因
+
+Stage 1 的 `SymbolicRibUpdate`、`SymbolicRibDelta`、`SymbolicRibUpdateType` 只描述
+`SymbolicRoute` 的 availability guard 变化。Stage 2 引入的 `GuardedRibUpdate`、
+`GuardedRibDelta`、`GuardedRibUpdateType` 基于 `GuardedRibEntry`，同时表达 availability
+与 selection guard 的变化，已经完全取代前一组类型。旧类型没有生产调用，仅由孤立单元
+测试引用，继续保留会让 Stage 3 propagation 出现两套 delta 语义。
+
+### 已删除与保留
+
+删除：
+
+- `SymbolicRibUpdate.java`
+- `SymbolicRibDelta.java`
+- `SymbolicRibUpdateType.java`
+- 上述孤立类型对应的测试
+- `SymbolicRoute.getPresenceGuard/withPresenceGuard` 过渡别名
+
+保留：
+
+- `SymbolicRoute`：单个 concrete route candidate 与 availability guard；
+- `GuardedRib`：候选集合、contribution 聚合和 route selection；
+- `GuardedRibEntry`：availability 与派生 selection guard；
+- `GuardedRibUpdate/Delta`：唯一正式的 RIB 变化模型。
+
+### 验证与 Git
+
+- 净删除 167 行；未修改 Minesweeper 核心旧文件。
+- symbolic-route 定向测试：通过。
+- 未过滤的完整 Minesweeper 测试：通过。
+- test PMD 与 `git diff --check`：通过。
+- 实现提交：`eeef747498a50a920a25557179a32c530d57e22d`
+- 提交时间：2026-08-25 15:45 CST
+- 回退：`git revert eeef747498`
