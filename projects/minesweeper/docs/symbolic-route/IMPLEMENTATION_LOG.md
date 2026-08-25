@@ -602,3 +602,42 @@ delta 会重复相同流程，从而递归撤回全部后代，再传播新结�
 - 实现提交：`ef2d6e2767714b62269aeec28094de91ea4f8ada`
 - 实现/审计更新时间：2026-08-25 16:36 CST
 - 回退：`git revert ef2d6e2767`
+
+## Stage 3.4 补强：Contribution Identity 与 Route Replacement（2026-08-25 16:49 CST）
+
+### 明确的身份契约
+
+1. 在固定配置快照下，同一 contribution ID 必须由 ingress policy 确定性地映射到同一
+   candidate key（即同一 concrete transformed route 所属候选）。
+2. 普通 guard 更新只更新该 contribution 的 availability guard，不得改变 concrete route
+   或 candidate key。
+3. 上游 route attributes 或配置策略变化导致 transformed route 改变时，调用显式
+   `replace(oldContribution, replacementAdvertisement)`：旧 contribution 及其传播后代先
+   递归撤回，再使用未占用的新 contribution identity 加入新 candidate。
+4. 只有当新旧 route 在协议语义上本来就应同时存在时，调用方才应保留旧 identity，并用
+   另一个新 identity 执行普通 advertisement；不得把 coexistence 表示成 replacement。
+
+### 实现与安全性
+
+- ingress 被拆成 `prepare` 与 `install` 两阶段。policy transform 和 key 构造先完成，
+  convergence engine 在修改 RIB 前检查既有 identity 的 key，因此非法跨 key 更新会抛出
+  `IllegalArgumentException`，且不会留下半写入的新 candidate。
+- `replace` 要求旧 identity 已存在、新 identity 与旧 identity 不同且尚未被占用；校验通过
+  后，在同一次 FIFO run 中顺序加入旧 contribution 的 WITHDRAW 与新 advertisement。
+- 新增 `SymbolicRouteIngressCandidate`，仅承载已完成 ingress policy、但尚未写入 RIB 的
+  contribution/candidate 对，不引入协议专属字段。
+
+### 测试与验证
+
+- route replacement 在 A→B 拓扑递归删除旧 route，并把新 identity/new route 传播到 A、B。
+- 复用旧 identity、旧 identity 不存在或新 identity 已占用均被拒绝。
+- 同一 identity 携带不同 concrete route 会在 RIB 写入前被拒绝；断言旧 candidate 保留且
+  新 candidate 不存在，验证失败路径无状态污染。
+- `SymbolicRouteConvergenceEngineTest`：通过。
+- 未过滤的完整 `//projects/minesweeper:minesweeper_tests`：通过。
+- `git diff --check`：通过。
+- `//projects/minesweeper:pmd` 仍只报告 `Graph`、`Encoder`、`EncoderSlice`、
+  `PropertyChecker` 等既有基线违规；本次 `symbolicroute` 文件没有新增 PMD 违规。
+- 实现提交：`bb956a21f2`
+- 实现/审计更新时间：2026-08-25 16:49 CST
+- 回退：`git revert bb956a21f2`
