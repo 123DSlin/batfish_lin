@@ -553,3 +553,52 @@ update 数，从而实现 Algorithm 1 第 23 行的单调传播收敛核心。
 - 实现提交时间：2026-08-25 16:17 CST
 - 审计更新时间：2026-08-25 16:18 CST
 - 回退：`git revert 09e080b84e`
+
+## Stage 3.4：Advertisement Registry 与 Recursive Withdrawal（2026-08-25 16:36 CST）
+
+### 算法范围
+
+本阶段实现 Hoyan Algorithm 1 第 24–32 行，并解除 Stage 3.3 对非单调变化的临时限制。
+当 RIB entry 被删除或 guard/selection 改变时，engine 先从 advertisement registry 找到
+每个 outgoing peer 上的旧 child contribution，删除旧 dependency 并将 WITHDRAW 放入
+全局 FIFO queue；随后按新 guard 生成 ADVERTISE。下游处理 withdrawal 后产生的新 RIB
+delta 会重复相同流程，从而递归撤回全部后代，再传播新结果，直到 queue 为空。
+
+### 实现结构
+
+- `SymbolicRouteWorkItem`：统一表示 `ADVERTISE` 与带 expected-old-guard 的 `WITHDRAW`。
+- `SymbolicRouteIngressResult`：一次 ACCEPT ingress 的 candidate key 与 RIB delta，避免
+  convergence engine 猜测 policy transform 后的 key。
+- convergence engine 持久保存：
+  - contribution ID → receiver/key/当前 guard 的位置索引；
+  - exporter/candidate key → 已发布 child ID/guard 的 advertisement registry。
+- propagation dependencies 现在同时保存 parent→children 与 child→parents，并支持
+  `replaceParents`、`removeChild`，不会在重传播时遗留旧边。
+- withdrawal 携带 expected old guard；如果同 ID 的新版本已经到达，过期 withdrawal
+  会被忽略，防止稳定 message ID 下的旧事件误删新 contribution。
+
+### 已验证语义
+
+1. A→B→C 上低优先级 route 先收敛后，高优先级 route 到达会产生递归 withdrawal。
+2. 低优先级 route 使用收缩后的 `low AND NOT high` guard 重新传播，高优先级 route 同时
+   正常传播至 C。
+3. high-first 与 late-high 两种到达顺序得到逻辑等价的最终 guards。
+4. 从根 contribution 发起 withdrawal 会删除 A、B、C 上的 route，并清除根的 child
+   dependency。
+5. 两个 contribution 支撑同一 candidate 时只撤回一个，candidate 和另一个来源仍保留，
+   下游 guard 被正确缩小。
+6. 重复 withdrawal 幂等，不产生消息或 RIB update。
+7. 相同 child 重传播时原 parent edges 被完整替换，不留悬空 dependency。
+
+### 验证、限制与 Git
+
+- Stage 1–3.4 定向测试：通过。
+- 未过滤的完整 Minesweeper 测试：通过。
+- test PMD 与 `git diff --check`：通过。
+- 主源码 PMD 只报告既有基线文件，本阶段文件没有违规。
+- 当前仍显式拒绝“同一 contribution ID 经 ingress policy 后移动到不同 candidate key”；
+  固定配置快照中的正常 guard 更新与 late-high 不触发此限制。协议 adapter 接入时将决定
+  message identity 是否应随 transformed route 改变，或实现跨 key 原子迁移。
+- 实现提交：`ef2d6e2767714b62269aeec28094de91ea4f8ada`
+- 实现/审计更新时间：2026-08-25 16:36 CST
+- 回退：`git revert ef2d6e2767`
