@@ -382,3 +382,56 @@ egress 的 route update condition 才排除所有高优先级规则。
 - 审计文档更新时间：2026-08-25 15:25 CST
 - 回退实现：`git revert d6f913850f`
 - 审计提交和远端 push 状态由紧随其后的审计提交记录。
+
+## Stage 3.1：初始化、Work Queue、Ingress 与 RIB 更新（2026-08-25 15:39 CST）
+
+### 算法范围
+
+本阶段严格限定为 Hoyan Algorithm 1 第 2–10 行：
+
+- 第 2–3 行：接收并初始化 route advertisements；
+- 第 4–5 行：用确定性 FIFO work queue 逐条消费消息；
+- 第 6–7 行：执行 receiver ingress policy，DENY 消息不进入 RIB；
+- 第 8–9 行：对 ACCEPT 后的 concrete route 构造 candidate key，并调用 Stage 2 guarded
+  RIB 完成 route selection 与 contribution update；
+- 第 10 行：为后续 egress/propagation 收集非空 RIB deltas。
+
+本阶段尚未实现 Algorithm 1 第 11–32 行的 late-higher-priority、egress、link guard、
+propagation dependency 与 recursive withdrawal。
+
+### 实现结构
+
+- `SymbolicRouteWorkQueue`：协议无关、确定性的 FIFO 消息队列。
+- `SymbolicRouteIngressPolicy`：协议 adapter 契约，返回 DENY 或处理后的 concrete route。
+- `SymbolicRouteKeyFactory`：在 ingress policy 完成后为处理后的 route 构造 scoped key。
+- `SymbolicRouteIngressProcessor`：绑定单一 receiver RIB，消费初始消息直至队列为空。
+- BGP/OSPF policy 细节没有复制到公共核心；后续 adapter 应调用 Batfish 对应的真实
+  `RoutingPolicy.process` 和协议 route builder/session API。
+
+### 已验证语义
+
+1. 初始化消息严格按 FIFO 顺序执行且最终队列为空。
+2. ingress DENY 不产生 RIB entry 或 delta。
+3. ingress 修改后的 route 同时决定 key 与 RIB payload，输入 route 不会误入 RIB。
+4. 同一消息用逻辑等价 guard 重放不产生无效 delta。
+5. 不同消息产生相同 candidate 时 availability guard 做逻辑 OR。
+6. ingress processor 拒绝 EGRESS 消息。
+7. processor 绑定 receiver，拒绝写入其他 router 的消息；key factory 结果也必须属于该
+   receiver。
+
+### 验证与基线
+
+- Stage 1–3.1 symbolic-route 定向测试：通过。
+- 未过滤的完整 `//projects/minesweeper:minesweeper_tests`：通过。
+- `//projects/minesweeper:minesweeper_tests_pmd`：通过。
+- `git diff --check`：通过。
+- 主源码 PMD 仍只报告已记录的旧核心文件基线违规；本阶段新增文件没有出现在违规列表，
+  且没有修改 `Graph`、`Encoder`、`EncoderSlice` 或 `PropertyChecker`。
+
+### Git 记录
+
+- 实现提交：`20144c498e517954ec78877cf413093033d7b24c`
+- 实现提交时间：2026-08-25 15:39 CST
+- 审计文档更新时间：2026-08-25 15:40 CST
+- 回退实现：`git revert 20144c498e`
+- 审计提交与 push 状态由本记录的独立文档提交保存。
