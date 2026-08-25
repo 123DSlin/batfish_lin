@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import org.batfish.datamodel.AbstractRouteDecorator;
 
 /** Hoyan Algorithm 1 lines 17-22: egress policy, link guard, advertisement, and dependency. */
@@ -14,6 +15,7 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
 
   @Nonnull private final String _sender;
   @Nonnull private final String _receiver;
+  @Nullable private final String _sessionId;
   @Nonnull private final RouteGuard _linkGuard;
   @Nonnull private final SymbolicRouteEgressPolicy<R> _egressPolicy;
   @Nonnull private final SymbolicRouteMessageIdFactory<R> _messageIdFactory;
@@ -26,8 +28,20 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
       SymbolicRouteEgressPolicy<R> egressPolicy,
       SymbolicRouteMessageIdFactory<R> messageIdFactory,
       SymbolicRoutePropagationDependencies dependencies) {
+    this(sender, receiver, null, linkGuard, egressPolicy, messageIdFactory, dependencies);
+  }
+
+  public SymbolicRouteExporter(
+      String sender,
+      String receiver,
+      @Nullable String sessionId,
+      RouteGuard linkGuard,
+      SymbolicRouteEgressPolicy<R> egressPolicy,
+      SymbolicRouteMessageIdFactory<R> messageIdFactory,
+      SymbolicRoutePropagationDependencies dependencies) {
     _sender = requireNonNull(sender, "sender must be provided");
     _receiver = requireNonNull(receiver, "receiver must be provided");
+    _sessionId = sessionId;
     _linkGuard = requireNonNull(linkGuard, "linkGuard must be provided");
     _egressPolicy = requireNonNull(egressPolicy, "egressPolicy must be provided");
     _messageIdFactory = requireNonNull(messageIdFactory, "messageIdFactory must be provided");
@@ -83,6 +97,7 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
             messageId,
             _sender,
             _receiver,
+            _sessionId,
             SymbolicRouteMessage.Stage.INGRESS,
             exportedRoute.get(),
             messageGuard,
