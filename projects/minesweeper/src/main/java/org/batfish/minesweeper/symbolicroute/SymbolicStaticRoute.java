@@ -30,6 +30,13 @@ public final class SymbolicStaticRoute {
     return _messageId;
   }
 
+  /** Stable local contribution identity, namespaced by protocol and source VRF. */
+  @Nonnull
+  public String getContributionMessageId() {
+    String vrf = _route.getSourceVrf();
+    return String.format("static:%d:%s:%s", vrf.length(), vrf, _messageId);
+  }
+
   @Nonnull
   public String getRouter() {
     return _router;

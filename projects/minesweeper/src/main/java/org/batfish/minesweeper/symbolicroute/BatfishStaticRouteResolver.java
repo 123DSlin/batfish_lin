@@ -6,9 +6,12 @@ import static org.batfish.dataplane.protocols.StaticRouteHelper.shouldActivateNe
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import org.batfish.datamodel.AbstractRoute;
 import org.batfish.datamodel.AnnotatedRoute;
@@ -45,34 +48,114 @@ public final class BatfishStaticRouteResolver {
     requireNonNull(network, "network must be provided");
     List<SymbolicStaticRoute> routes =
         ImmutableList.copyOf(requireNonNull(staticRoutes, "staticRoutes must be provided"));
-    Map<SymbolicStaticRoute, RouteGuard> installed = new LinkedHashMap<>();
-    boolean changed;
-    int rounds = 0;
-    do {
-      changed = false;
-      for (SymbolicStaticRoute route : routes) {
-        GuardedRib<AnnotatedRoute<AbstractRoute>> rib = network.getRib(route.getRouter());
-        RouteGuard guard = activationGuard(rib, route);
-        RouteGuard previous = installed.get(route);
-        if (previous != null && previous.isEquivalentTo(guard)) {
-          continue;
+    validateInputs(network, routes);
+
+    // A resolution run owns these contributions. Remove stale results first so activation is
+    // computed from the caller's non-recursive initial RIB, as VirtualRouter does each iteration.
+    List<SymbolicRouteContributionId> ownedContributions =
+        routes.stream()
+            .map(BatfishStaticRouteResolver::contributionId)
+            .collect(Collectors.toList());
+    network.getEngine().withdraw(ownedContributions);
+
+    Map<SymbolicStaticRoute, RouteGuard> current = falseState(routes);
+    List<Map<SymbolicStaticRoute, RouteGuard>> history = new ArrayList<>();
+    history.add(current);
+    try {
+      while (true) {
+        // Synchronous round: compute every guard from one RIB snapshot before mutating the engine.
+        Map<SymbolicStaticRoute, RouteGuard> next = computeRound(network, routes);
+        if (equivalentState(current, next)) {
+          return ImmutableMap.copyOf(next);
         }
-        installed.put(route, guard);
-        network
-            .getEngine()
-            .converge(
-                ImmutableList.of(
-                    new SymbolicRouteSeed<>(
-                            route.getMessageId(), route.getRouter(), widen(route.getRoute()), guard)
-                        .toMessage()));
-        changed = true;
+        if (history.stream().anyMatch(old -> equivalentState(old, next))) {
+          throw new IllegalStateException("static route activation entered a semantic guard cycle");
+        }
+        ImmutableList.Builder<SymbolicRouteMessage<AnnotatedRoute<AbstractRoute>>> updates =
+            ImmutableList.builder();
+        for (SymbolicStaticRoute route : routes) {
+          if (!current.get(route).isEquivalentTo(next.get(route))) {
+            updates.add(
+                new SymbolicRouteSeed<>(
+                        route.getContributionMessageId(),
+                        route.getRouter(),
+                        widen(route.getRoute()),
+                        next.get(route))
+                    .toMessage());
+          }
+        }
+        network.getEngine().converge(updates.build());
+        current = next;
+        history.add(current);
       }
-      rounds++;
-      if (rounds > routes.size() + 1) {
-        throw new IllegalStateException("static route activation did not reach a fixed point");
+    } catch (RuntimeException failure) {
+      // Resolution is all-or-nothing with respect to its derived static contributions.
+      network.getEngine().withdraw(ownedContributions);
+      throw failure;
+    }
+  }
+
+  private static void validateInputs(
+      SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> network,
+      List<SymbolicStaticRoute> routes) {
+    Set<SymbolicRouteContributionId> identities = new HashSet<>();
+    for (SymbolicStaticRoute route : routes) {
+      network.getRib(route.getRouter());
+      if (!(route.getRoute().getRoute().getNextHop() instanceof NextHopIp)) {
+        throw new IllegalArgumentException(
+            "Batfish recursive activation requires a next-hop-IP route");
       }
-    } while (changed);
-    return ImmutableMap.copyOf(installed);
+      if (!identities.add(contributionId(route))) {
+        throw new IllegalArgumentException("duplicate static route contribution identity");
+      }
+      SymbolicRouteKey key =
+          new SymbolicRouteKey(
+              route.getRouter(), route.getRoute().getSourceVrf(), widen(route.getRoute()));
+      Set<SymbolicRouteContributionId> existing =
+          network.getRib(route.getRouter()).getContributionIds(key);
+      if (existing.stream().anyMatch(id -> !id.equals(contributionId(route)))) {
+        throw new IllegalArgumentException(
+            "recursive static candidate is already installed by an unowned contribution");
+      }
+    }
+  }
+
+  private static Map<SymbolicStaticRoute, RouteGuard> falseState(List<SymbolicStaticRoute> routes) {
+    Map<SymbolicStaticRoute, RouteGuard> state = new LinkedHashMap<>();
+    for (SymbolicStaticRoute route : routes) {
+      RouteGuard configured = route.getConfigurationGuard();
+      state.put(route, configured.and(configured.not()).simplify());
+    }
+    return state;
+  }
+
+  private static Map<SymbolicStaticRoute, RouteGuard> computeRound(
+      SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> network,
+      List<SymbolicStaticRoute> routes) {
+    Map<SymbolicStaticRoute, RouteGuard> state = new LinkedHashMap<>();
+    for (SymbolicStaticRoute route : routes) {
+      state.put(route, activationGuard(network.getRib(route.getRouter()), route));
+    }
+    return state;
+  }
+
+  private static boolean equivalentState(
+      Map<SymbolicStaticRoute, RouteGuard> left, Map<SymbolicStaticRoute, RouteGuard> right) {
+    if (left.size() != right.size()) {
+      return false;
+    }
+    for (Map.Entry<SymbolicStaticRoute, RouteGuard> entry : left.entrySet()) {
+      RouteGuard other = right.get(entry.getKey());
+      if (other == null || !entry.getValue().isEquivalentTo(other)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static SymbolicRouteContributionId contributionId(SymbolicStaticRoute route) {
+    return new SymbolicRouteContributionId(
+        route.getContributionMessageId(), route.getRouter(), route.getRouter());
   }
 
   /** Computes the activation guard for one next-hop-IP static route. */
