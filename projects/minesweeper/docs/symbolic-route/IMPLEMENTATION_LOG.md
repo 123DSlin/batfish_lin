@@ -743,3 +743,41 @@ route 的 route”分开：
 - 实现提交：`afb2b9dc37`
 - 实现/审计更新时间：2026-08-25 21:38 CST
 - 回退实现：`git revert afb2b9dc37`
+
+## Stage 4.2 Correction：Static Fixed-point 可靠性（2026-08-25 21:56 CST）
+
+### 审计发现与修正
+
+1. **Fixed-point 原子性**：旧实现逐条计算并立即写入，导致同一轮后面的 route 看见本轮前面
+   route 的新状态，结果依赖输入顺序；输入中途失败还可能留下部分安装。现改为同步轮次：先从
+   同一 RIB 快照计算全部 next guards，再将有语义变化的 advertisement 作为一个 batch 提交。
+   所有输入在首次 mutation 前统一验证；周期或运行时失败会撤回本解析器拥有的全部派生 static
+   contributions，恢复为无派生 static route 的初始 RIB。
+2. **终止检测**：删除不可靠的 `routes.size() + 1` 轮数假设。现在以整个 guard vector 的逻辑
+   等价作为 fixed-point 判据，并保存历史语义状态；若新状态等价于非相邻历史状态，则显式报告
+   semantic guard cycle，而不是误报超出轮数或留下任意中间结果。
+3. **VRF 隔离**：本地 static contribution message ID 采用长度前缀的
+   `static:<vrf-length>:<vrf>:<caller-id>` namespace。同一 router、同一 caller message ID 在
+   blue/red VRF 中形成不同 contribution identity；candidate 与 LPM 仍严格按 source VRF 过滤。
+4. **初始状态**：每次解析前先撤回本解析器对输入 static routes 的旧 contributions，避免上次
+   运行结果自我维持。若相同 concrete static candidate 已由非解析器 contribution 安装，则在
+   mutation 前拒绝运行，避免 Batfish `StaticRouteHelper` 的“route 已在 RIB”规则造成虚假自激活。
+
+### 新增回归测试
+
+- 逆序 recursive static chain 在同步轮次下收敛到相同 guard。
+- 首次解析成功后撤回 connected support，再次解析必须得到 false，证明不会继承 stale static。
+- blue/red VRF 使用相同 caller message ID 时分别得到各自 connected guard。
+- batch 中后置非法 route 必须在第一条 route 安装前失败，RIB 不出现部分写入。
+- 外部 contribution 预装相同 recursive static candidate 时必须拒绝，且原 RIB 不变。
+- 原有 symbolic LPM 全赋值 differential test 与 longer-prefix blocker test 继续通过。
+
+### 验证与版本
+
+- `//projects/minesweeper:minesweeper_tests`：通过。
+- `//projects/minesweeper:minesweeper_tests_pmd`：通过。
+- `git diff --check`：通过。
+- 未修改 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker`。
+- correction 实现提交：`35d8507a95`
+- 实现/审计更新时间：2026-08-25 21:56 CST
+- 回退 correction：`git revert 35d8507a95`
