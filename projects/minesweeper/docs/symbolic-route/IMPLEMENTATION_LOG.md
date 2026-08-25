@@ -781,3 +781,47 @@ route 的 route”分开：
 - correction 实现提交：`35d8507a95`
 - 实现/审计更新时间：2026-08-25 21:56 CST
 - 回退 correction：`git revert 35d8507a95`
+
+## Stage 4.3：Batfish Routing Policy 与 Redistribution 生命周期（2026-08-25 22:10 CST）
+
+### 4.3a：精确策略执行
+
+- `BatfishRoutingPolicyProcessor` 从目标 `Configuration.getRoutingPolicies()` 查找 policy，并
+  直接调用 Batfish `RoutingPolicy.process(input, outputBuilder, direction)`；Minesweeper 不复制
+  prefix/community/protocol match、statement control flow 或 attribute transformation。
+- protocol-specific output builder 由调用方提供。公共层不猜测 OSPF external metric type、
+  IS-IS level/system-id 或 BGP session attributes；这些 builder 必须由后续协议 adapter 使用
+  Batfish 对应 helper 初始化。
+- `BatfishRoutingPolicyResult` 明确区分 `ACCEPTED`、`DENIED`、`POLICY_NOT_FOUND`。只有
+  ACCEPTED 携带强类型 `AnnotatedRoute<R>`；target VRF 在 policy boundary 明确标注。
+
+### 4.3b：显式 Redistribution 状态迁移
+
+- `BatfishRedistributionKey` 将 source message、router、source/target VRF、source/target
+  protocol 和 policy name 共同纳入逻辑 identity，避免跨 VRF、协议或 policy 相互覆盖。
+- `BatfishRedistributionReconciler` 将 policy outcome 映射到 Stage 3.4 生命周期：
+  - 首次 ACCEPT：普通 advertisement；
+  - concrete route 不变、guard 改变：复用 contribution identity 更新 availability；
+  - transformed concrete route 改变：提升 generation，使用新 identity 调用原子 `replace`；
+  - DENIED 或 POLICY_NOT_FOUND：撤回已有 contribution 及传播后代；
+  - target VRF 或 target protocol 不匹配：mutation 前拒绝，保留旧 contribution。
+- 本阶段只实现公共 policy/redistribution 边界，不自行构造 OSPF、IS-IS 或 BGP route。
+  Stage 4.4 协议 adapter 将调用 Batfish protocol helper 创建相应 output builder/route，再把
+  结果交给本阶段 reconciler。
+
+### 测试与验证
+
+- direct `RoutingPolicy.process` 与 processor 的 permit + `SetMetric` 输出逐项相等。
+- DENY 与 policy missing 被区分，且均不产生 output route。
+- guard-only 更新保持 contribution identity，并替换 availability guard。
+- transformed route 改变触发 withdrawal + 新 identity，RIB 只保留新 route。
+- ACCEPT 后 DENY 会撤回 contribution。
+- 错误 target VRF 在 replacement 前被拒绝，旧 identity 和 route 保持不变。
+- `//projects/minesweeper:minesweeper_tests`：通过。
+- `//projects/minesweeper:minesweeper_tests_pmd`：通过。
+- 主源码 PMD 仅报告既有 34 条 tolerance/SMT 基线违规，Stage 4.3 文件无命中。
+- `git diff --check`：通过。
+- 未修改 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker`。
+- 实现提交：`1c4a7e8191`
+- 实现/审计更新时间：2026-08-25 22:10 CST
+- 回退：`git revert 1c4a7e8191`
