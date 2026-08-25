@@ -514,3 +514,42 @@ dependency。生成的消息已处于 receiver 的 `INGRESS` 边界，可由后�
 - 实现提交：`fa3ec406d2e3d3ca6f49f8e91742ffc04df50cb7`
 - 提交时间：2026-08-25 16:06 CST
 - 回退：`git revert fa3ec406d2`
+
+## Stage 3.3：多跳 Work Queue 单调收敛（2026-08-25 16:17 CST）
+
+### 算法范围
+
+本阶段把 Stage 3.1 ingress processor 与 Stage 3.2 exporter 接入网络级 FIFO work queue。
+每条消息在 receiver 执行 ingress、更新 guarded RIB；只有非空 delta 才触发该 router 的
+outgoing exporters，产生的下一跳消息重新进入队列。队列为空时返回处理消息数和 RIB
+update 数，从而实现 Algorithm 1 第 23 行的单调传播收敛核心。
+
+### 实现内容
+
+- `SymbolicRouteConvergenceEngine`：注册每个 router 唯一的 ingress processor，校验每条
+  exporter edge 的两端均存在，迭代处理全网 queue。
+- `SymbolicRouteConvergenceResult`：记录 processed messages 与 effective RIB updates。
+- `GuardedRib.getContributionIds`：向 exporter 提供当前 candidate 的全部父贡献。
+- ingress processor/exporter 增加只读 receiver、RIB、sender 访问器，用于网络编排，不
+  暴露可变内部集合。
+
+### 测试覆盖
+
+1. A→B→C 三路由器传播并收敛，C 的 guard 等价于 seed∧alive(A-B)∧alive(B-C)。
+2. 相同 seed message 重放只处理入口消息，产生 0 个 RIB update，不继续传播。
+3. egress DENY 正确剪断传播分支。
+4. 发往未注册 receiver 的消息被拒绝。
+5. exporter endpoints 必须都具有 ingress processor。
+
+### 安全边界、验证与 Git
+
+- 当前只宣称单调收敛核心。若变化会删除旧 RIB entry 或使先前 advertisement 消失，
+  engine 显式抛出 `UnsupportedOperationException`，而不是留下过期下游 route。
+- 解除该限制需要 Stage 3.4 的 advertisement registry、dependency removal 和 recursive
+  withdrawal（Algorithm 1 第 24–32 行）。
+- Stage 1–3.3 定向测试、完整 Minesweeper 测试、test PMD、`git diff --check` 均通过。
+- 主源码 PMD 只报告既有基线文件；新增 convergence 文件没有违规。
+- 实现提交：`09e080b84e1eece5fb4429cf6ec3d2a3c4d8f487`
+- 实现提交时间：2026-08-25 16:17 CST
+- 审计更新时间：2026-08-25 16:18 CST
+- 回退：`git revert 09e080b84e`
