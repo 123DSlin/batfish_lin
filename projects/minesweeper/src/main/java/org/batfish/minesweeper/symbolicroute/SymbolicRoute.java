@@ -52,19 +52,6 @@ public final class SymbolicRoute<R extends AbstractRouteDecorator> {
     return new SymbolicRoute<>(_key, _route, availabilityGuard, _provenance);
   }
 
-  /** @deprecated Use {@link #getAvailabilityGuard()}. */
-  @Deprecated
-  @Nonnull
-  public RouteGuard getPresenceGuard() {
-    return getAvailabilityGuard();
-  }
-
-  /** @deprecated Use {@link #withAvailabilityGuard(RouteGuard)}. */
-  @Deprecated
-  public SymbolicRoute<R> withPresenceGuard(RouteGuard presenceGuard) {
-    return withAvailabilityGuard(presenceGuard);
-  }
-
   @Override
   public boolean equals(Object o) {
     if (this == o) {

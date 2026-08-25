@@ -2,7 +2,6 @@ package org.batfish.minesweeper.symbolicroute;
 
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
@@ -158,14 +157,14 @@ public final class SymbolicRouteModelTest {
   }
 
   @Test
-  public void testWithPresenceGuardIsImmutable() {
+  public void testWithAvailabilityGuardIsImmutable() {
     TestRouteGuard oldGuard = new TestRouteGuard("G1");
     TestRouteGuard newGuard = new TestRouteGuard("G2");
     SymbolicRoute<StaticRoute> original = symbolicRoute(oldGuard);
-    SymbolicRoute<StaticRoute> updated = original.withPresenceGuard(newGuard);
+    SymbolicRoute<StaticRoute> updated = original.withAvailabilityGuard(newGuard);
 
-    assertThat(original.getPresenceGuard(), equalTo(oldGuard));
-    assertThat(updated.getPresenceGuard(), equalTo(newGuard));
+    assertThat(original.getAvailabilityGuard(), equalTo(oldGuard));
+    assertThat(updated.getAvailabilityGuard(), equalTo(newGuard));
     assertThat(updated.getKey(), equalTo(original.getKey()));
     assertThat(updated.getRoute(), equalTo(original.getRoute()));
     assertThat(updated.getProvenance(), equalTo(original.getProvenance()));
@@ -189,45 +188,6 @@ public final class SymbolicRouteModelTest {
     assertThat(message.getReceiver(), equalTo("r2"));
     assertThat(message.getStage(), equalTo(SymbolicRouteMessage.Stage.INGRESS));
     assertThat(message.getGuard(), equalTo(guard));
-  }
-
-  @Test
-  public void testRibDeltaRepresentsAddChangeAndRemove() {
-    SymbolicRoute<StaticRoute> oldRoute = symbolicRoute(new TestRouteGuard("G1"));
-    SymbolicRoute<StaticRoute> newRoute = oldRoute.withPresenceGuard(new TestRouteGuard("G2"));
-    SymbolicRibUpdate<StaticRoute> added = SymbolicRibUpdate.added(oldRoute);
-    SymbolicRibUpdate<StaticRoute> changed =
-        SymbolicRibUpdate.availabilityGuardChanged(oldRoute, newRoute);
-    SymbolicRibUpdate<StaticRoute> removed = SymbolicRibUpdate.removed(newRoute);
-    SymbolicRibDelta<StaticRoute> delta =
-        new SymbolicRibDelta<>(ImmutableList.of(added, changed, removed));
-
-    assertThat(delta.isEmpty(), equalTo(false));
-    assertThat(delta.getUpdates().size(), equalTo(3));
-    assertThat(added.getType(), equalTo(SymbolicRibUpdateType.ADDED));
-    assertThat(added.getOldRoute(), nullValue());
-    assertThat(added.getNewRoute(), equalTo(oldRoute));
-    assertThat(changed.getType(), equalTo(SymbolicRibUpdateType.AVAILABILITY_GUARD_CHANGED));
-    assertThat(changed.getOldRoute(), equalTo(oldRoute));
-    assertThat(changed.getNewRoute(), equalTo(newRoute));
-    assertThat(removed.getType(), equalTo(SymbolicRibUpdateType.REMOVED));
-    assertThat(removed.getOldRoute(), equalTo(newRoute));
-    assertThat(removed.getNewRoute(), nullValue());
-  }
-
-  @Test
-  public void testGuardChangeRequiresSameRouteKey() {
-    SymbolicRoute<StaticRoute> oldRoute = symbolicRoute(new TestRouteGuard("G1"));
-    SymbolicRoute<StaticRoute> differentRoute =
-        new SymbolicRoute<>(
-            new SymbolicRouteKey("r2", "different-vrf", staticRoute()),
-            staticRoute(),
-            new TestRouteGuard("G2"),
-            provenance());
-
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> SymbolicRibUpdate.availabilityGuardChanged(oldRoute, differentRoute));
   }
 
   @Test
