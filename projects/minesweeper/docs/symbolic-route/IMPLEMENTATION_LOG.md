@@ -641,3 +641,55 @@ delta 会重复相同流程，从而递归撤回全部后代，再传播新结�
 - 实现提交：`bb956a21f2`
 - 实现/审计更新时间：2026-08-25 16:49 CST
 - 回退：`git revert bb956a21f2`
+
+## Stage 4.1：协议无关的 Symbolic Route Network 装配层（2026-08-25 21:02 CST）
+
+### 阶段边界
+
+本阶段只把 Stage 3.4 的 convergence engine 从“测试中手工拼装”提升为可由协议 adapter
+驱动的网络级入口。没有实现 BGP、iBGP、IS-IS、OSPF、static 的具体协议语义，也没有
+实现 HoYAn Algorithm 2、SR 或 symbolic traffic execution。
+
+### 实现内容
+
+- `SymbolicRouteProtocolAdapter`：集中声明 receiver preference comparator、import policy、
+  import 后 candidate key、session export policy 和稳定 export message identity。协议专属
+  属性仍由后续 adapter 处理，不进入通用 convergence engine。
+- `SymbolicRouteSession`：表示一条有稳定 session ID 的定向协议邻接及 link guard；显式
+  session ID 允许相同 router pair 上的并行 VRF/interface/protocol session 共存。
+- `SymbolicRouteSeed`：把本地 originated route、初始 availability guard 和稳定 seed
+  identity 转换成合法的 INGRESS advertisement/provenance。
+- `SymbolicRouteNetworkFactory`：统一校验 router、session endpoint、session identity、seed
+  identity，创建每台 router 的 guarded RIB/ingress processor，以及每条 session 的 exporter。
+- `SymbolicRouteNetwork`：保存 immutable RIB registry、initial advertisements、共享
+  propagation dependency registry 和 convergence engine，并提供统一 `converge()` 入口。
+- `SymbolicRouteMessage`/`SymbolicRouteExporter`：传播 nullable session ID；本地 seed 的
+  session ID 为 null，session advertisement 向 import adapter 暴露准确的 session context。
+
+### Identity 与并行 Session 约束
+
+1. session ID 在一个 assembled network 内必须唯一。
+2. seed contribution identity 在 factory 阶段必须唯一。
+3. export message ID 自动使用长度前缀的 session namespace；即使 adapter 对两条并行
+   session 返回相同 route identity，也会形成两个不同 contribution，不会相互覆盖。
+4. adapter identity 保持稳定时，重复运行同一 initial seed 是语义 no-op，不产生 RIB delta。
+
+### 测试与验证
+
+- A→B→C 由 factory 自动装配并收敛，C 的 guard 等价于 seed∧link(A-B)∧link(B-C)。
+- session ID 从 exporter advertisement 正确传至各 receiver 的 import adapter；本地 seed
+  的 session ID 为 null。
+- 两条 A→B 并行 session 产生两个独立 contribution；B 的 availability guard 等价于
+  `seed AND (link1 OR link2)`。
+- 重复 router、未知 session endpoint、未知 seed origin、self-session、重复 session ID、
+  重复 seed identity 均在装配阶段被拒绝。
+- 重放同一稳定 seed：只消费 seed 消息，产生 0 个 RIB update。
+- Stage 4.1 定向测试：通过。
+- 未过滤的 `//projects/minesweeper:minesweeper_tests`：通过。
+- `//projects/minesweeper:minesweeper_tests_pmd` 与 `git diff --check`：通过。
+- 主源码 PMD 只报告此前确认存在于 `17569485af` 的 tolerance/SMT 基线违规；本阶段
+  `symbolicroute` 文件没有新增 PMD 违规。
+- 未修改 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker` 或其他旧 SMT 核心文件。
+- 实现提交：`f525a1a199`
+- 实现/审计更新时间：2026-08-25 21:02 CST
+- 回退：`git revert f525a1a199`
