@@ -3,6 +3,7 @@ package org.batfish.minesweeper.symbolicroute;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -113,6 +114,13 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
 
   public ImmutableList<GuardedRibEntry<R>> getEntries() {
     return ImmutableList.copyOf(computeEntries().values());
+  }
+
+  /** Returns the advertisement contributions currently supporting a candidate. */
+  public ImmutableSet<SymbolicRouteContributionId> getContributionIds(SymbolicRouteKey key) {
+    requireNonNull(key, "key must be provided");
+    Map<SymbolicRouteContributionId, SymbolicRoute<R>> contributions = _contributions.get(key);
+    return contributions == null ? ImmutableSet.of() : ImmutableSet.copyOf(contributions.keySet());
   }
 
   private Map<SymbolicRouteKey, GuardedRibEntry<R>> computeEntries() {

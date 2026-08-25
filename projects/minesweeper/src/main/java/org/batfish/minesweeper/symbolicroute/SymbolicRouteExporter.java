@@ -88,4 +88,14 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
             messageGuard,
             provenance));
   }
+
+  @Nonnull
+  public String getSender() {
+    return _sender;
+  }
+
+  @Nonnull
+  public String getReceiver() {
+    return _receiver;
+  }
 }

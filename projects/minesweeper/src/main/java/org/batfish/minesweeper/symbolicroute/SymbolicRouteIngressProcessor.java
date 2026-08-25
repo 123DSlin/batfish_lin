@@ -75,4 +75,14 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
   public boolean isQueueEmpty() {
     return _workQueue.isEmpty();
   }
+
+  @Nonnull
+  public String getReceiver() {
+    return _receiver;
+  }
+
+  @Nonnull
+  public GuardedRib<R> getRib() {
+    return _rib;
+  }
 }
