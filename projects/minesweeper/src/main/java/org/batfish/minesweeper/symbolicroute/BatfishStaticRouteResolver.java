@@ -17,7 +17,14 @@ import org.batfish.datamodel.StaticRoute;
 import org.batfish.datamodel.route.nh.NextHopIp;
 import org.batfish.dataplane.rib.Rib;
 
-/** Symbolically lifts Batfish main-RIB LPM and static next-hop-IP activation semantics. */
+/**
+ * Symbolically lifts Batfish main-RIB LPM and static next-hop-IP activation semantics.
+ *
+ * <p>A concrete {@link Rib#longestPrefixMatch} call is used only as a semantic oracle. It cannot
+ * replace symbolic LPM: an activating shorter prefix is explicitly guarded by the negation of every
+ * available longer-prefix match, including longer matches that cannot themselves activate the
+ * static route.
+ */
 public final class BatfishStaticRouteResolver {
 
   private BatfishStaticRouteResolver() {}

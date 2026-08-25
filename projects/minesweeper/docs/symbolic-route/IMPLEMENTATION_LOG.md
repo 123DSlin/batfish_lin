@@ -693,3 +693,53 @@ delta 会重复相同流程，从而递归撤回全部后代，再传播新结�
 - 实现提交：`f525a1a199`
 - 实现/审计更新时间：2026-08-25 21:02 CST
 - 回退：`git revert f525a1a199`
+
+## Stage 4.2：复用 Batfish 精确 Main RIB 与 Static Route 语义（2026-08-25 21:38 CST）
+
+### 复用边界
+
+- `BatfishMainRibRouteAdapter` 直接委托 Batfish `Rib.comparePreference`，不在 Minesweeper
+  内重新实现 administrative distance、metric 或跨协议主 RIB 偏好；仅转换 comparator 的
+  正负号契约。
+- `BatfishStaticRouteResolver` 直接调用 Batfish `Rib.longestPrefixMatch` 与
+  `StaticRouteHelper.shouldActivateNextHopIpRoute`，不自行复制 static-route activation 判断。
+- `SymbolicStaticRoute` 保持 `AnnotatedRoute<StaticRoute>` 强类型；只有进入协议无关 main RIB
+  边界时才安全提升为 `AnnotatedRoute<AbstractRoute>`。
+- 本地 static route 安装不虚构 routing policy：Batfish `VirtualRouter.initStaticRibs` 对
+  discard、next-hop-interface 和 next-hop-VRF 路由直接初始化；next-hop-IP 路由由
+  `VirtualRouter.activateStaticRoutes`/`StaticRouteHelper` 递归激活。协议间 redistribution
+  policy 留给后续 BGP/OSPF/IS-IS adapter。
+
+### Symbolic LPM 正确性约束
+
+`Rib.longestPrefixMatch` 是 concrete semantic oracle，不能取代 symbolic LPM。解析 RIB 中
+不同长度前缀可在不同 guard 下生效，因此实现将“参与 LPM 的 route”和“可以激活目标 static
+route 的 route”分开：
+
+1. Batfish concrete LPM 判定候选是否匹配 next-hop，以及一个前缀是否比另一个更具体；
+2. 每个可激活候选的 symbolic guard 都与所有更长匹配前缀的 selection guard 的否定相与；
+3. 更长前缀即使不能激活目标 static route，仍然遮蔽较短前缀；
+4. 所有条件化候选再取析取，最后与 static route 的 configuration guard 相与。
+
+因此不会把“较短前缀可用”错误近似成“static route 一定可激活”，避免过度估计激活范围。
+`GuardedRib.sameRibScope` 同时按 router、VRF、network 隔离普通 route preference；不同前缀
+之间的竞争只发生在上述 symbolic LPM 层。
+
+### 递归解析与测试
+
+- `resolveToFixedPoint` 按 Batfish activation oracle 反复计算 next-hop-IP static routes，使用
+  稳定 contribution identity 更新 guarded main RIB，直到 guard 逻辑等价稳定。
+- main-RIB preference 测试对比 adapter comparator 与 `Rib.comparePreference`。
+- symbolic LPM 对所有两变量 guard 赋值逐项构造 concrete `Rib`，与
+  `StaticRouteHelper.shouldActivateNextHopIpRoute` 做差分比较。
+- 专门覆盖“不能激活目标的更长前缀仍遮蔽可激活短前缀”，防止 symbolic LPM 过度估计。
+- 覆盖 connected → static → static 的逆序输入递归链，确认固定点 guard 等价。
+- `//projects/minesweeper:minesweeper_tests`：通过。
+- `//projects/minesweeper:minesweeper_tests_pmd`：通过。
+- 主源码 `//projects/minesweeper:pmd` 仍只报告 34 条已确认的旧 tolerance/SMT 基线违规；
+  新增 `symbolicroute` 文件无 PMD 命中。
+- `git diff --check`：通过。
+- 未修改 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker`。
+- 实现提交：`afb2b9dc37`
+- 实现/审计更新时间：2026-08-25 21:38 CST
+- 回退实现：`git revert afb2b9dc37`
