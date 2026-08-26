@@ -44,8 +44,10 @@ I(message, receiver) = E(message, sender) AND alive(l)
 
 ### 当前进度
 
-Stage 1 已完成协议无关的不可变数据模型；Stage 2 已实现 Z3 guard algebra 和协议无关的
-guarded RIB 核心。传播收敛、BGP/OSPF adapter 或 tolerance 绑定尚未实现。详细记录见
+Stage 1–3 已完成协议无关数据模型、Z3 guard algebra、guarded RIB、FIFO 收敛、传播依赖和
+recursive withdrawal。Stage 4 已接入 connected/static 和当前验收范围内的 IPv4 eBGP Batfish
+协议语义，并提供一次运行得到全网 router/VRF Symbolic RIB 的 typed pipeline。OSPF、IS-IS、
+iBGP、SR、`k`-failure pruning 和 tolerance 后续 SMT 绑定尚未实现。详细记录见
 [`IMPLEMENTATION_LOG.md`](IMPLEMENTATION_LOG.md)，代码审查要点见
 [`REVIEW_GUIDE.md`](REVIEW_GUIDE.md)。
 
@@ -108,6 +110,14 @@ encodings and consistency checks.
 
 - [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md): append-only stage-by-stage implementation log.
 - [REVIEW_GUIDE.md](REVIEW_GUIDE.md): invariants and questions to use during code review.
+- [PAPER_ALIGNMENT.md](PAPER_ALIGNMENT.md): HoYAN/YU/tolerance guarded-RIB semantic audit.
+- [PROTOCOL_PIPELINE.md](PROTOCOL_PIPELINE.md): currently executable protocol pipeline and scope.
+
+Run the tolerance R1-to-R4 reachability question and generate its readable Symbolic RIB with
+`./tools/generate_tolerance_symbolic_rib.sh`. `SmtReachabilityTest` creates the next available
+`smts/smt_output_XXXX` directory. The same run writes the exact stable-RIB guard expressions to
+`0_symbolic_routes_init.txt` and the logically equivalent, stronger Z3 display simplification to
+`0_symbolic_routes.txt`.
 
 ## Git workflow
 

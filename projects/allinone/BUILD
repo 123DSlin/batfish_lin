@@ -246,6 +246,7 @@ junit_tests(
         "//projects/question",
         "//projects/minesweeper",
         "//projects/minesweeper:matchers",
+        "//projects/lib/z3",
         "@maven//:com_google_guava_guava",
         "@maven//:junit_junit",
         "@maven//:org_hamcrest_hamcrest",

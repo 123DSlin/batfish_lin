@@ -3,6 +3,9 @@ package org.batfish.minesweeper.smt;
 import org.batfish.common.Answerer;
 // import org.batfish.common.NetworkSnapshot;
 import org.batfish.datamodel.IpWildcard;
+import org.batfish.datamodel.DataPlane;
+import org.batfish.datamodel.Ip;
+import org.batfish.datamodel.RoutingProtocol;
 import org.batfish.datamodel.Zone;
 import org.batfish.datamodel.answers.AnswerElement;
 import org.batfish.main.Batfish;
@@ -17,6 +20,11 @@ import org.batfish.minesweeper.question.SmtBoundedLengthQuestionPlugin.BoundedLe
 import org.batfish.minesweeper.question.SmtBlackholeQuestionPlugin.BlackholeQuestion;
 import org.batfish.minesweeper.utils.ConfigLoader;
 import org.batfish.minesweeper.utils.RibPrinter;
+import org.batfish.minesweeper.symbolicroute.BatfishBgpRedistributionRule;
+import org.batfish.minesweeper.symbolicroute.BatfishParsedSnapshotPipelineInputBuilder;
+import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipeline;
+import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipelineResult;
+import org.batfish.minesweeper.symbolicroute.Z3RouteGuardFactory;
 import static org.batfish.minesweeper.smt.Encoder.createOutputDirectory;
 
 import static org.hamcrest.Matchers.instanceOf;
@@ -32,6 +40,9 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.ZoneId;
 import java.util.Set;
 import java.util.SortedMap;
@@ -40,6 +51,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 import com.google.devtools.build.runfiles.Runfiles;
+import com.google.common.collect.ImmutableList;
+import com.microsoft.z3.Context;
 
 public class SmtReachabilityTest {
     @Rule public TemporaryFolder _temp = new TemporaryFolder();
@@ -50,6 +63,7 @@ public class SmtReachabilityTest {
     // printers for output files
     private PrintWriter _bgpRouteWriter;
     private PrintWriter _dataPlaneWriter;
+    private String _outputDir;
 
     @Before
     public void setup() throws IOException {
@@ -65,9 +79,10 @@ public class SmtReachabilityTest {
         System.out.println("=== Running test at " + formattedNow + " (Beijing Time) ===");
 
         // create a smt output directory
-        String outputDir = createOutputDirectory();
-        String outputBgpRouteFileName = outputDir + "/0_ebgp_routes.txt";
-        String outputDataPlaneFileName = outputDir + "/0_data_plane.txt";
+        _outputDir = createOutputDirectory();
+        System.out.println("SMT_OUTPUT_DIRECTORY=" + _outputDir);
+        String outputBgpRouteFileName = _outputDir + "/0_ebgp_routes.txt";
+        String outputDataPlaneFileName = _outputDir + "/0_data_plane.txt";
         File outputBgpRouteFile = new File(outputBgpRouteFileName);
         File outputDataPlaneFile = new File(outputDataPlaneFileName);
         try {
@@ -79,10 +94,10 @@ public class SmtReachabilityTest {
 
         // read the configurations from the filesystem
         Runfiles runfiles = Runfiles.create();
-
+        String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_hard");
-         String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_accessment");
+        // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_accessment");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_accessment_intro");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_coursera");
 
@@ -121,13 +136,45 @@ public class SmtReachabilityTest {
         long start = System.currentTimeMillis();
         // compute data plane for printing RIBs before
         _batfish.computeDataPlane(_batfish.getSnapshot(), _bgpRouteWriter);
+        DataPlane dataPlane = _batfish.loadDataPlane(_batfish.getSnapshot());
         // print MAIN RIB (forwarding table) of the data plane: one best route per prefix per node.
         RoutesQuestion routesQuestion = new RoutesQuestion();
         RoutesAnswerer routesAnswerer = new RoutesAnswerer(routesQuestion, _batfish);
         AnswerElement routesAnswer = routesAnswerer.answer(_batfish.getSnapshot());
         RibPrinter.printRouteTable(routesAnswer, _dataPlaneWriter);
+        writeSymbolicRoutes(dataPlane);
         long end = System.currentTimeMillis();
         System.out.println("[Time taken to compute data plane and print RIBs: " + (end - start) + " ms]");
+    }
+
+    private void writeSymbolicRoutes(DataPlane dataPlane) throws IOException {
+        SortedMap<String, org.batfish.datamodel.Configuration> configurations =
+                _batfish.loadConfigurations(_batfish.getSnapshot());
+        try (Context context = new Context()) {
+            BatfishSymbolicRoutePipelineResult result =
+                    BatfishSymbolicRoutePipeline.run(
+                            BatfishParsedSnapshotPipelineInputBuilder.build(
+                                    configurations,
+                                    dataPlane.getRibs(),
+                                    _batfish.getTopologyProvider()
+                                            .getBgpTopology(_batfish.getSnapshot())
+                                            .getGraph(),
+                                    new Z3RouteGuardFactory(context),
+                                    ImmutableList.of(
+                                            new BatfishBgpRedistributionRule(
+                                                    "r1-originate-P",
+                                                    "r1",
+                                                    org.batfish.datamodel.Configuration.DEFAULT_VRF_NAME,
+                                                    org.batfish.datamodel.Configuration.DEFAULT_VRF_NAME,
+                                                    "REDISTRIBUTE_CONNECTED",
+                                                    RoutingProtocol.BGP))));
+            Files.write(
+                    Paths.get(_outputDir, "0_symbolic_routes_init.txt"),
+                    result.toRawReadableText().getBytes(StandardCharsets.UTF_8));
+            Files.write(
+                    Paths.get(_outputDir, "0_symbolic_routes.txt"),
+                    result.toReadableText().getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     /**
@@ -137,6 +184,12 @@ public class SmtReachabilityTest {
     @Test
     public void testReachability() {
         final ReachabilityQuestion question = new ReachabilityQuestion();
+
+        // tolerance-symbolic-route
+        question.setIngressNodeRegex("r1");
+        question.setFinalNodeRegex("r4");
+        IpWildcard ipWildcard = IpWildcard.parse("192.0.14.2/32");
+        question.setDstIps(Set.of(ipWildcard));
 
         // user-study specification 1: ECMP reachability
         // question.setIngressNodeRegex("r3");
@@ -158,10 +211,10 @@ public class SmtReachabilityTest {
         // question.setNegate(true);
 
         // user-study specification 3: Customer reachability
-        question.setIngressNodeRegex("customer");
-        question.setFinalNodeRegex("isp1");
-        IpWildcard ipWildcard = IpWildcard.parse("198.51.100.0/24");
-        question.setDstIps(Set.of(ipWildcard));
+        // question.setIngressNodeRegex("customer");
+        // question.setFinalNodeRegex("isp1");
+        // IpWildcard ipWildcard = IpWildcard.parse("198.51.100.0/24");
+        // question.setDstIps(Set.of(ipWildcard));
 
         // user-study specification 4: No transit
         // question.setIngressNodeRegex("isp2");

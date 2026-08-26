@@ -1,0 +1,174 @@
+package org.batfish.minesweeper.symbolicroute;
+
+import static java.util.Objects.requireNonNull;
+import static org.batfish.datamodel.Configuration.DEFAULT_VRF_NAME;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.graph.EndpointPair;
+import com.google.common.graph.ValueGraph;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import javax.annotation.Nonnull;
+import org.batfish.datamodel.AbstractRoute;
+import org.batfish.datamodel.AnnotatedRoute;
+import org.batfish.datamodel.BgpPeerConfig;
+import org.batfish.datamodel.BgpPeerConfigId;
+import org.batfish.datamodel.BgpProcess;
+import org.batfish.datamodel.BgpSessionProperties;
+import org.batfish.datamodel.ConcreteInterfaceAddress;
+import org.batfish.datamodel.Configuration;
+import org.batfish.datamodel.ConnectedRoute;
+import org.batfish.datamodel.GenericRibReadOnly;
+import org.batfish.datamodel.Interface;
+import org.batfish.datamodel.Ip;
+import org.batfish.datamodel.NetworkConfigurations;
+
+/** Builds the currently supported connected/numbered-eBGP input from parsed Batfish state. */
+public final class BatfishParsedSnapshotPipelineInputBuilder {
+
+  private BatfishParsedSnapshotPipelineInputBuilder() {}
+
+  @Nonnull
+  public static BatfishSymbolicRoutePipelineInput build(
+      Map<String, Configuration> configurations,
+      Map<
+              String,
+              ? extends Map<String, ? extends GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
+          concreteMainRibs,
+      ValueGraph<BgpPeerConfigId, BgpSessionProperties> bgpTopology,
+      Z3RouteGuardFactory guardFactory,
+      Iterable<BatfishBgpRedistributionRule> redistributionRules) {
+    requireNonNull(configurations, "configurations must be provided");
+    requireNonNull(concreteMainRibs, "concreteMainRibs must be provided");
+    requireNonNull(bgpTopology, "bgpTopology must be provided");
+    TopologyLinkGuards topologyGuards =
+        BatfishTopologyGuardInitializer.inferTopology(configurations, guardFactory);
+    List<SymbolicRouteSeed<AnnotatedRoute<AbstractRoute>>> mainSeeds = new ArrayList<>();
+    for (Configuration configuration : configurations.values()) {
+      for (Interface iface : configuration.getAllInterfaces().values()) {
+        LinkFailureKey linkFailureKey =
+            topologyGuards.getKey(configuration.getHostname(), iface.getName());
+        RouteGuard inferredGuard =
+            topologyGuards.getGuard(configuration.getHostname(), iface.getName());
+        RouteGuard guard = inferredGuard == null ? guardFactory.trueGuard() : inferredGuard;
+        for (ConcreteInterfaceAddress address : iface.getAllConcreteAddresses()) {
+          AnnotatedRoute<AbstractRoute> route =
+              new AnnotatedRoute<>(
+                  new ConnectedRoute(address.getPrefix(), iface.getName()), DEFAULT_VRF_NAME);
+          mainSeeds.add(
+              new SymbolicRouteSeed<>(
+                  "connected:"
+                      + configuration.getHostname()
+                      + ":"
+                      + iface.getName()
+                      + ":"
+                      + address,
+                  configuration.getHostname(),
+                  route,
+                  guard,
+                  linkFailureKey));
+        }
+      }
+    }
+
+    Map<String, Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>> normalizedRibs =
+        new LinkedHashMap<>();
+    concreteMainRibs.forEach(
+        (router, byVrf) -> {
+          Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>> ribs =
+              new LinkedHashMap<>();
+          ribs.putAll(byVrf);
+          normalizedRibs.put(router, ribs);
+        });
+
+    List<BatfishBgpEdge> edges = new ArrayList<>();
+    List<SymbolicRouteSession> sessions = new ArrayList<>();
+    NetworkConfigurations networkConfigurations = NetworkConfigurations.of(configurations);
+    for (EndpointPair<BgpPeerConfigId> topologyEdge : bgpTopology.edges()) {
+      BgpPeerConfigId senderId = topologyEdge.source();
+      BgpPeerConfigId receiverId = topologyEdge.target();
+      BgpPeerConfig senderPeer =
+          requireNonNull(
+              networkConfigurations.getBgpPeerConfig(senderId), "sender peer must be present");
+      BgpPeerConfig receiverPeer =
+          requireNonNull(
+              networkConfigurations.getBgpPeerConfig(receiverId), "receiver peer must be present");
+      Configuration sender = configurations.get(senderId.getHostname());
+      Configuration receiver = configurations.get(receiverId.getHostname());
+      BgpProcess senderProcess = sender.getVrfs().get(senderId.getVrfName()).getBgpProcess();
+      BgpProcess receiverProcess = receiver.getVrfs().get(receiverId.getVrfName()).getBgpProcess();
+      BgpSessionProperties importProperties = bgpTopology.edgeValue(senderId, receiverId).get();
+      BgpSessionProperties exportProperties = bgpTopology.edgeValue(receiverId, senderId).get();
+      if (!importProperties.isEbgp()) {
+        throw new IllegalArgumentException("parsed snapshot builder currently supports only eBGP");
+      }
+      String sessionId = sessionId(senderId, receiverId);
+      Ip senderIp = requireNonNull(senderPeer.getLocalIp(), "numbered eBGP sender IP is required");
+      String senderInterface =
+          requireNonNull(
+              interfaceForIp(sender, senderIp),
+              "BGP session must resolve to a guarded L3 interface");
+      LinkFailureKey linkFailureKey =
+          requireNonNull(
+              topologyGuards.getKey(sender.getHostname(), senderInterface),
+              "BGP session must resolve to a canonical link identity");
+      RouteGuard linkGuard =
+          requireNonNull(
+              topologyGuards.getGuard(sender.getHostname(), senderInterface),
+              "BGP session must resolve to an aliveness guard");
+      edges.add(
+          new BatfishBgpEdge(
+              sessionId,
+              senderId.getVrfName(),
+              receiverId.getVrfName(),
+              sender,
+              receiver,
+              senderPeer,
+              receiverPeer,
+              senderProcess,
+              receiverProcess,
+              exportProperties,
+              importProperties,
+              senderIp,
+              null,
+              false));
+      sessions.add(
+          new SymbolicRouteSession(
+              sessionId,
+              senderId.getHostname(),
+              receiverId.getHostname(),
+              linkGuard,
+              linkFailureKey));
+    }
+    return new BatfishSymbolicRoutePipelineInput(
+        configurations,
+        mainSeeds,
+        ImmutableList.of(),
+        redistributionRules,
+        edges,
+        sessions,
+        normalizedRibs);
+  }
+
+  private static String interfaceForIp(Configuration configuration, Ip localIp) {
+    for (Interface iface : configuration.getAllInterfaces().values()) {
+      if (iface.getAllConcreteAddresses().stream()
+          .anyMatch(address -> address.getIp().equals(localIp))) {
+        return iface.getName();
+      }
+    }
+    return null;
+  }
+
+  private static String sessionId(BgpPeerConfigId sender, BgpPeerConfigId receiver) {
+    return sender.getHostname()
+        + ":"
+        + sender.getVrfName()
+        + "->"
+        + receiver.getHostname()
+        + ":"
+        + receiver.getVrfName();
+  }
+}

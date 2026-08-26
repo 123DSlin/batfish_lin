@@ -13,9 +13,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import javax.annotation.Nonnull;
+import org.batfish.datamodel.AbstractRoute;
 import org.batfish.datamodel.AnnotatedRoute;
-import org.batfish.datamodel.BgpTieBreaker;
+import org.batfish.datamodel.BgpProcess;
 import org.batfish.datamodel.Bgpv4Route;
+import org.batfish.datamodel.GenericRibReadOnly;
 import org.batfish.datamodel.bgp.AddressFamily;
 import org.batfish.datamodel.routing_policy.RoutingPolicy;
 import org.batfish.dataplane.rib.Bgpv4Rib;
@@ -25,22 +27,53 @@ public final class BatfishBgpProtocolAdapter
     implements SymbolicRouteProtocolAdapter<AnnotatedRoute<Bgpv4Route>> {
 
   @Nonnull private final Map<String, BatfishBgpEdge> _edges;
-  @Nonnull private final Bgpv4Rib _preferenceOracle;
+  @Nonnull private final Map<String, Map<SymbolicRouteKey, String>> _exportIdentities;
 
-  public BatfishBgpProtocolAdapter(Iterable<BatfishBgpEdge> edges) {
+  @Nonnull
+  private final Map<String, Map<SymbolicRouteKey, AnnotatedRoute<Bgpv4Route>>> _exportedRoutes;
+
+  @Nonnull private final Map<String, Map<String, Bgpv4Rib>> _preferenceOracles;
+
+  public BatfishBgpProtocolAdapter(
+      Iterable<BatfishBgpEdge> edges,
+      Map<String, Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>> mainRibs) {
     _edges = new LinkedHashMap<>();
+    _exportIdentities = new LinkedHashMap<>();
+    _exportedRoutes = new LinkedHashMap<>();
+    _preferenceOracles = new LinkedHashMap<>();
+    requireNonNull(mainRibs, "mainRibs must be provided");
     for (BatfishBgpEdge edge : requireNonNull(edges, "edges must be provided")) {
       if (_edges.put(edge.getSessionId(), edge) != null) {
         throw new IllegalArgumentException("duplicate BGP edge session identity");
       }
+      _exportIdentities.put(edge.getSessionId(), new LinkedHashMap<>());
+      _exportedRoutes.put(edge.getSessionId(), new LinkedHashMap<>());
+      installPreferenceOracle(
+          edge.getSenderConfiguration().getHostname(),
+          edge.getSenderVrf(),
+          edge.getSenderProcess(),
+          mainRibs);
+      installPreferenceOracle(
+          edge.getReceiverConfiguration().getHostname(),
+          edge.getReceiverVrf(),
+          edge.getReceiverProcess(),
+          mainRibs);
     }
-    _preferenceOracle = new Bgpv4Rib(null, BgpTieBreaker.ROUTER_ID, 1, null, false, false);
   }
 
   @Override
   public Comparator<AnnotatedRoute<Bgpv4Route>> preferenceComparator(String receiver) {
-    return (left, right) ->
-        -Integer.signum(_preferenceOracle.comparePreference(left.getRoute(), right.getRoute()));
+    return (left, right) -> {
+      if (!left.getSourceVrf().equals(right.getSourceVrf())) {
+        throw new IllegalArgumentException("BGP preference comparison requires one receiver VRF");
+      }
+      Map<String, Bgpv4Rib> byVrf = _preferenceOracles.get(receiver);
+      Bgpv4Rib oracle = byVrf == null ? null : byVrf.get(left.getSourceVrf());
+      if (oracle == null) {
+        throw new IllegalArgumentException("missing receiver/VRF BGP preference oracle");
+      }
+      return -Integer.signum(oracle.comparePreference(left.getRoute(), right.getRoute()));
+    };
   }
 
   @Override
@@ -137,8 +170,21 @@ public final class BatfishBgpProtocolAdapter
   @Override
   @Nonnull
   public String createExportMessageId(
-      SymbolicRouteSession session, AnnotatedRoute<Bgpv4Route> exportedRoute) {
-    return exportedRoute.toString();
+      SymbolicRouteSession session,
+      SymbolicRouteKey candidateKey,
+      AnnotatedRoute<Bgpv4Route> exportedRoute) {
+    Map<SymbolicRouteKey, String> identities = _exportIdentities.get(session.getSessionId());
+    if (identities == null) {
+      throw new IllegalArgumentException("unknown BGP edge session identity");
+    }
+    Map<SymbolicRouteKey, AnnotatedRoute<Bgpv4Route>> routes =
+        _exportedRoutes.get(session.getSessionId());
+    AnnotatedRoute<Bgpv4Route> previous = routes.putIfAbsent(candidateKey, exportedRoute);
+    if (previous != null && !previous.equals(exportedRoute)) {
+      throw new IllegalStateException(
+          "BGP export changed within one fixed snapshot; use atomic route replacement");
+    }
+    return identities.computeIfAbsent(candidateKey, unused -> "bgp-candidate-" + identities.size());
   }
 
   private BatfishBgpEdge edge(String sessionId) {
@@ -147,5 +193,32 @@ public final class BatfishBgpProtocolAdapter
       throw new IllegalArgumentException("unknown BGP edge session identity");
     }
     return edge;
+  }
+
+  private void installPreferenceOracle(
+      String router,
+      String vrf,
+      BgpProcess process,
+      Map<String, Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>> mainRibs) {
+    Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>> routerRibs =
+        mainRibs.get(router);
+    GenericRibReadOnly<AnnotatedRoute<AbstractRoute>> mainRib =
+        routerRibs == null ? null : routerRibs.get(vrf);
+    if (mainRib == null) {
+      throw new IllegalArgumentException(
+          "missing receiver/VRF concrete main RIB for BGP preference");
+    }
+    boolean multipath = process.getMultipathEbgp() || process.getMultipathIbgp();
+    _preferenceOracles
+        .computeIfAbsent(router, unused -> new LinkedHashMap<>())
+        .putIfAbsent(
+            vrf,
+            new Bgpv4Rib(
+                mainRib,
+                process.getTieBreaker(),
+                multipath ? null : 1,
+                multipath ? process.getMultipathEquivalentAsPathMatchMode() : null,
+                false,
+                process.getClusterListAsIgpCost()));
   }
 }

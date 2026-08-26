@@ -53,7 +53,8 @@ public final class SymbolicRouteNetworkFactoryTest {
     }
 
     @Override
-    public String createExportMessageId(SymbolicRouteSession session, StaticRoute exportedRoute) {
+    public String createExportMessageId(
+        SymbolicRouteSession session, SymbolicRouteKey candidateKey, StaticRoute exportedRoute) {
       return String.format(
           "%s->%s:%s:%s",
           session.getSender(),

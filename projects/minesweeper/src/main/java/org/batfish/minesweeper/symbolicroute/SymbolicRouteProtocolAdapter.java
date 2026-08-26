@@ -26,5 +26,6 @@ public interface SymbolicRouteProtocolAdapter<R extends AbstractRouteDecorator> 
 
   /** Assigns a stable identity to one exported concrete route on a directed session. */
   @Nonnull
-  String createExportMessageId(SymbolicRouteSession session, R exportedRoute);
+  String createExportMessageId(
+      SymbolicRouteSession session, SymbolicRouteKey candidateKey, R exportedRoute);
 }

@@ -75,7 +75,8 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
     parents.forEach(parentList::add);
     String messageId =
         requireNonNull(
-            _messageIdFactory.create(_sender, _receiver, exportedRoute.get()),
+            _messageIdFactory.create(
+                _sender, _receiver, symbolicRoute.getKey(), exportedRoute.get()),
             "messageIdFactory returned null");
     SymbolicRouteContributionId child =
         new SymbolicRouteContributionId(messageId, _sender, _receiver);

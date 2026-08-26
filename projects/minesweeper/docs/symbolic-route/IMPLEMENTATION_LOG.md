@@ -844,3 +844,320 @@ route 的 route”分开：
 - 测试补强提交：`aab08cc93e`
 - 更新时间：2026-08-25 22:21 CST
 - 回退：`git revert aab08cc93e`
+
+## Stage 4.4：Batfish-backed IPv4 BGP 基础 Pipeline（2026-08-25 22:37 CST）
+
+### 实现
+
+- `BatfishBgpRedistribution` 直接复用 `BgpProtocolHelper.convertNonBgpRouteToBgpRoute` 和
+  Batfish `RoutingPolicy.processBgpRoute`，将 connected/static main-RIB route 转为本地 BGP。
+- `BatfishBgpProtocolAdapter` 使用 `AnnotatedRoute<Bgpv4Route>` 保留 VRF，不使用裸 BGP route
+  猜测 VRF；candidate key 按 receiver、source VRF 和完整 transformed route 构造。
+- directed BGP edge 分别保存 export 方向所需的反向/incoming session properties 与 receiver
+  import 方向的 session properties，避免把 head/tail AS/IP 方向混用。
+- export 顺序直接复用 Batfish：`transformBgpRoutePreExport` → export policy →
+  `transformBgpRoutePostExport`；import 顺序为 `transformBgpRouteOnImport` → import policy。
+- BGP candidate preference 委托 `Bgpv4Rib.comparePreference`；symbolic comparator 只转换正负号。
+- session endpoint 与 sender VRF 均显式校验，防止跨 session/VRF 静默传播。
+
+### 测试与范围
+
+- connected route 经 Batfish non-BGP conversion 后保留 `srcProtocol=CONNECTED` 和 target VRF。
+- static → redistribution policy → local BGP → eBGP export/import → receiver guarded BGP RIB
+  端到端通过；接收 guard 等价于 `sourceGuard AND linkGuard`，AS path 包含发送 AS。
+- BGP preference comparator 与 Batfish `Bgpv4Rib.comparePreference` 差分一致。
+- 完整 Minesweeper tests 与 test PMD：通过。
+- 主源码 PMD 仍只有既有 34 条 tolerance/SMT 基线违规，新文件无命中。
+- 未修改 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker`。
+- OSPF、IS-IS、Segment Routing 仅创建 TODO 文档，明确未实现，未加入占位协议逻辑。
+
+### 尚未宣称完成的 BGP 能力
+
+iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break、confederation 和
+动态 session replacement 尚需独立验收。特别是 concrete null-main-RIB `Bgpv4Rib` 不能代表
+条件化 IGP cost；后续必须基于 guarded IGP state 提升该比较，不能用 concrete dataplane 代替。
+
+- 基础实现提交：`374d7c3309`
+- 更新时间：2026-08-25 22:37 CST
+- 回退：`git revert 374d7c3309`
+
+## Stage 4.4 审计修正：BGP advertisement identity 与 preference oracle（2026-08-26 11:14 CST）
+
+### Identity 修正
+
+- 删除 `exportedRoute.toString()` message ID。该字符串不是协议身份，无法隔离并行 session，
+  也不能为 route replacement 保留可撤回的旧 identity。
+- adapter 现在按 `sessionId + sender SymbolicRouteKey` 分配稳定、不透明的 candidate token；
+  network factory 再使用无歧义的长度前缀给 token 加 session namespace。
+- 同一 session/candidate 的 guard-only 重放复用 identity；transformed concrete route 改变会
+  产生新 candidate identity，旧 contribution 由 Stage 3.4 dependency/replace 生命周期撤回。
+- 不同父 contribution 产生相同 concrete candidate 时不错误丢失父关系：RIB 对 availability
+  做 OR 聚合，但 contribution ID 与 dependency parent set 仍分别保存。
+
+### Preference oracle 修正
+
+- 删除全局、固定 `ROUTER_ID` 且 main RIB 为 null 的共享 `Bgpv4Rib`。
+- 为每个 router/VRF 建立 Batfish `Bgpv4Rib` oracle，读取对应 `BgpProcess` 的 tie-break、
+  eBGP/iBGP multipath、AS-path equivalence mode、cluster-list-as-IGP-cost，并使用调用方提供的
+  该 VRF concrete main RIB 计算 next-hop IGP cost。
+- 缺失 router/VRF main RIB 或跨 VRF comparison 立即拒绝，不静默退回近似比较。
+- 范围边界：该 oracle 对固定 concrete underlay 精确；若 IGP reachability/cost 本身带 guard，
+  后续必须实现 guarded preference lifting，不能以单一 concrete main RIB 代替 symbolic 语义。
+
+### 定向验证
+
+- 同一 candidate 重试 identity 稳定，identity 不包含 route 字符串。
+- route attribute 改变得到新 identity，避免覆盖旧 advertisement 的撤回句柄。
+- 同一 candidate 在一个固定快照内若产生不同 export route 会立即拒绝，要求调用方走原子
+  route replacement；不会复用旧 ID 或遗留旧传播后代。
+- receiver `b/default` 的两个 next hop 使用不同 main-RIB IGP metric；symbolic comparator 与
+  用同一 receiver `BgpProcess`、同一 VRF main RIB 构造的 Batfish `Bgpv4Rib` 差分一致。
+- 完整 `//projects/minesweeper:minesweeper_tests`：通过。
+- `//projects/minesweeper:minesweeper_tests_pmd`：通过。
+- 主源码 PMD 仍失败于既有 34 条 Graph/tolerance/SMT 基线违规；本轮 symbolicroute 文件无命中。
+- `git diff --check`：通过。
+- 未修改 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker`。
+- 最终验证更新时间：2026-08-26 11:19 CST。
+
+## Stage 4.5：一次运行得到全网 Guarded RIB（2026-08-26 11:39 CST）
+
+### Pipeline
+
+- 新增 `BatfishSymbolicRoutePipeline.run(input)`，一次调用依次完成 main-RIB seed 收敛、
+  recursive static fixed point、connected/static redistribution、本地 BGP origination 和 directed
+  IPv4 eBGP 全网收敛。
+- main RIB 与 BGP RIB 保持两个协议语义正确的 stable plane，不用一个错误的 comparator 混合；
+  `BatfishSymbolicRoutePipelineResult` 将两者统一呈现为全网结果。
+- redistribution 只接受当前已验收的 connected/static source，并直接复用
+  `BatfishBgpRedistribution` 的 Batfish conversion 与 routing policy。
+- pipeline 在运行前验证 configuration hostname、concrete router/VRF main RIB、edge/session
+  一一对应、session endpoint、redistribution rule identity 和 route 所属 router，避免部分运行后
+  才发现输入拓扑不一致。
+
+### 输出
+
+- `getAllRoutes()` 返回确定顺序的全部 main/BGP guarded candidates。
+- `getRoutesByRouterAndVrf()` 返回 `router -> VRF -> entries`。
+- 输出以全部输入 configuration 的 router/VRF 为骨架；没有任何 route 的 VRF 也保留空数组，
+  因此不会从报告中消失。
+- `toJson()` 使用 Batfish JSON mapper 产生 pretty JSON。
+- 每条记录包括 plane、router、VRF、prefix、protocol、next hop、concrete route、
+  availabilityGuard、selectionGuard、contribution IDs 和 router path。
+- route 的字符串只用于人类可读报告，绝不参与 message/contribution identity。
+
+### 测试
+
+- 两路由器端到端：guarded connected 激活 recursive static，两者经 Batfish redistribution
+  进入本地 BGP，再经过带 guard 的 eBGP session 到接收端。
+- 最终得到 6 条记录：发送端 main RIB 2 条、发送端 BGP RIB 2 条、接收端 BGP RIB 2 条。
+- recursive static 在接收端的 availability guard 等价于
+  `connected_enabled AND static_enabled AND a_b_session`。
+- 验证 router/VRF 分组、JSON guard 字段和 provenance router path。
+- 增加无路由的第三台设备，验证其 default VRF 仍以空 RIB 出现在结果中。
+- edge/session 不匹配在收敛开始前拒绝。
+- 完整 Minesweeper tests：246 个测试通过。
+- test PMD：通过。
+- 主源码 PMD 仍只有既有 34 条 Graph/tolerance/SMT 基线违规；Stage 4.5 文件无命中。
+- `git diff --check`：通过。
+- 未修改 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker`。
+
+### 下一输入适配层
+
+当前完成的是 typed normalized pipeline。等配置格式和 guard 命名/赋值规则确认后，再接入
+“上传配置目录 -> Batfish parse/convert -> 自动生成 seeds/edges/sessions -> pipeline -> JSON”入口；
+在此之前不猜测配置 guard，也不静默把未验收的 iBGP、OSPF、IS-IS 或 SR 当作已支持。
+
+## Stage 4.5 论文对齐审计与 tolerance 四路由器实例（2026-08-26 12:03 CST）
+
+### HoYAN / YU / tolerance Symbolic RIB 审计
+
+- 逐项复核 HoYAN §5.3–5.4、Algorithm 1，YU §4.1/§4.4，以及 tolerance Step 2/Figure 4。
+- `availabilityGuard` 对应候选 route 存在条件；`selectionGuard` 对应排除所有严格更优候选后
+  的最终 selected branch。tolerance symbolic route 必须使用后者。
+- ingress、normal preference、egress、link conjunction、equal-preference OR、propagation tree、
+  late-higher-priority correction、recursive withdrawal 和无新 semantic delta 收敛均已对齐。
+- 当前不支持 route aggregation、iBGP、IS-IS/OSPF、SR。`k`-failure pruning 尚未实现，但它是
+  完整 SRIB 上的可选 bounded-domain 后处理，不影响未剪枝 SRIB 的语义正确性。
+- 完整矩阵记录于 `PAPER_ALIGNMENT.md`。
+
+### parser 驱动的论文实例
+
+- 配置位于 `networks/tolerance-symbolic-route/configs`，而非 Minesweeper 私有 example 目录。
+- 测试使用 `BatfishTestUtils.getBatfishFromTestrigText`，实际经过 Cisco parser 与
+  vendor-independent conversion；pipeline 消费解析得到的 interface、connected route、
+  BGP process、peer 和 routing policy 对象。
+- 论文 prefix `P` 实例化为 `10.0.0.0/24`；`a1...a5` 分别对应 R1-R2、R1-R4、R1-R3、
+  R2-R4、R3-R4 五条链路。
+- R4 parser 输出的三个 import policies 分别设置 local preference 200、100、50。
+- pipeline 实际得到 R4 三条 BGP candidates，其 selection guards 为：
+  - R1-R2-R4：`a1 AND a4`；
+  - R1-R4：`a2 AND NOT(a1 AND a4)`；
+  - R1-R3-R4：`a3 AND a5 AND NOT(a2) AND NOT(a1 AND a4)`。
+- 三者与 tolerance Figure 4 的 `g2`、`g1`、`g3` 逻辑等价；三条均在 `k=1` 域内可满足，
+  因而本例加入 `k=1` pruning 也不会删除任何一条。
+
+### 查询与防漏边界
+
+- 新增精确 `getRoutes(router, vrf)`；已配置但为空的 RIB 返回空列表，未知 router/VRF 拒绝。
+- redistribution policy 缺失现在抛出异常，不再与合法 policy DENY 一样静默跳过。
+- 新增 missing policy、missing concrete main-RIB context、unmatched edge/session 测试。
+- parser 集成测试断言 R4 恰有三条 BGP route、全网恰有六条 BGP route，并逐条对 guard 做
+  Z3 逻辑等价检查，避免仅比较字符串而漏路由。
+- 完整 Minesweeper tests：249 个测试通过；test PMD 通过。
+- 主源码 PMD 仍仅报告既有 34 条 Graph/tolerance/SMT 基线违规，本轮文件无命中。
+- `git diff --check`：通过；未修改 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker`。
+- 最终验证时间：2026-08-26 12:05 CST。
+
+## Stage 4.5 可审计结果导出（2026-08-26 12:10 CST）
+
+- 新增 `BatfishSymbolicRoutePipelineResult.toReadableText()`，按 router/VRF 输出适合人工审阅的
+  deterministic 文本，同时保留空 VRF。
+- 精简记录保留 plane、prefix、protocol、next hop、availability guard、selection guard 和
+  router path；不暴露用于内部撤回的冗长 contribution identity。
+- 新增 `tools/generate_tolerance_symbolic_rib.sh`：真实运行 Batfish parser integration test，
+  只有全部断言通过后才提取本次 pipeline 的结果。
+- 最终结果遵循既有 SMT 输出惯例，写入本次 reachability 分析动态创建的
+  `smts/smt_output_XXXX/0_symbolic_routes.txt`，在一个文件中按 R1--R4 分类；该文件由运行
+  结果生成，不是手写 expected output。
+- `networks/tolerance-symbolic-route` 只保留 Batfish snapshot 的 `configs/*.cfg`；Bazel
+  filegroup 位于顶层 `networks/BUILD`，脚本、expected output、guard metadata 和结果均不再
+  混放在网络配置目录。
+- 脚本失败时打印完整 Bazel 日志，避免命令无输出而无法定位。
+
+## Stage 4.5 topology guard 与平面输出修正（2026-08-26 12:31 CST）
+
+- 删除 tolerance integration test 中逐条手写的 `putLink(..., "aN", ...)`。
+- 新增 `BatfishTopologyGuardInitializer`，从 Batfish parser 生成的 configuration/interface
+  address 自动按共享 L3 prefix 发现链路端点；普通点到点 guard 使用排序后的设备名，例如
+  `r1_r4`，双向接口共享同一 guard。
+- topology guard 使用方向无关的强类型 `LinkFailureKey`。由于当前 Encoder 将内部链路按设备对
+  合并，现阶段对并行链路和多接入网段显式拒绝，避免生成无法映射到 SMT failure variable 的
+  虚假独立 guard。
+- Symbolic RIB 改为与既有 `0_data_plane.txt` 相同的一行一路由平面表格，列为 Node、VRF、
+  Network、RIB、Protocol、NextHopIP、NextHopInterface、AvailabilityGuard、SelectionGuard、Path。
+- NextHopIP/NextHopInterface 从 Batfish typed `NextHopIp`/`NextHopInterface` 提取，不解析
+  `toString()`。
+- parser-backed pipeline 与结果生成通过；test PMD 通过。main PMD 仍只包含既有 34 条
+  Graph/tolerance/SMT baseline，新增 symbolic-route 文件无命中。
+
+## Stage 4.5 reachability 输出生命周期接入（2026-08-26 12:49 CST）
+
+- 修正固定输出 `smt_output_0024` 的临时实现。`SmtReachabilityTest.setup()` 仍是唯一调用
+  `Encoder.createOutputDirectory()` 的 owner，并通过 `SMT_OUTPUT_DIRECTORY=<path>` 公布本次
+  实际目录；未修改 `Encoder` 的既有创建/搜索逻辑。
+- `SmtReachabilityTest.setup()` 在同一个 Batfish 实例完成 concrete dataplane 后直接调用
+  parser-backed symbolic pipeline，并向本次目录写入 `0_symbolic_routes.txt`；不需要运行任何
+  第二命令。`tools/generate_tolerance_symbolic_rib.sh` 现在只是该 Bazel 测试命令的可选包装。
+- 新增 `BatfishParsedSnapshotPipelineInputBuilder`，从 parsed configurations、concrete main
+  RIB 和 Batfish BGP topology 自动建立 connected seeds、双向 eBGP edges/sessions 与 link
+  guards；测试不再复制手工 edge 列表。
+- reachability 问题设置为 ingress `r1`、final node `r4`、destination `192.0.14.2/32`。选择
+  R4 的实际接口地址是为了让 Batfish destination-location 语义确实落在 R4；论文路由前缀
+  `10.0.0.0/24` 仍用于 Symbolic RIB 的三候选优先级验证。
+- 仅直接运行 `SmtReachabilityTest#testReachability`，实际自动创建 `smts/smt_output_0026`，
+  其中同时存在 SMT encoding、concrete data plane、
+  BGP routes、question metadata 和 `0_symbolic_routes.txt`；reachability assertion 与 symbolic
+  guard assertions 均通过。
+- `//projects/minesweeper:minesweeper_tests_pmd` 通过。allinone test PMD 仍命中原有 11 条
+  SmtReachability/Fat4/Sp4 baseline（unused imports/fields 与 parameter reassignment），本次新增
+  代码无命中。
+
+## Stage 5.1 统一 failure identity：第一步（2026-08-26 13:18 CST）
+
+- 新增方向无关的 `LinkFailureKey(firstRouter, secondRouter)`；`r1→r4` 与 `r4→r1` 在 equals、
+  hashCode 和排序语义上完全相同，`r1_r4` 仅作为人类可读名称，业务逻辑不解析该字符串。
+- `BatfishTopologyGuardInitializer` 改为先生成 `LinkFailureKey`，再创建显示用 guard variable；
+  删除以前为并行链路附加 subnet、但无法对应 Encoder failure variable 的错误策略。
+- 明确发现 Encoder 当前的关键边界：内部链路 failure 是 `Int 0/1` 且按 router pair 合并；
+  symbolic-route guard 是 link-aliveness Boolean。当前 Symbolic RIB 阶段只要求 canonical
+  identity、统一 up/down 极性与 failure counting，并让 connected、BGP session、forwarding edge
+  引用同一 key；guard 编译到 Minesweeper BoolExpr 属于 tolerance Step 3。
+- 新增 identity 正反向等价与 self-link 拒绝测试；与 parser-backed tolerance pipeline 一起通过。
+
+### 论文范围纠正（2026-08-26 13:27 CST）
+
+- 重读 tolerance Step 2、Step 3 与 Figure 5：Step 1 的 per-device SMT encoding 和 Step 2 的
+  symbolic-route analysis 明确由 separate tools/models 产生，论文不要求共享 Z3 Context。
+- Step 2 当前必须完成：canonical link identity；aliveness=true/up 与 failure=not(aliveness) 的
+  统一极性；failure budget 按 down components 计数；connected seed、BGP session 和 forwarding
+  edge 使用同一 `LinkFailureKey`；以及 k-failure pruning。
+- guard 编译进 Minesweeper BoolExpr、seed encoding 和 consistency condition 属于 Step 3，延后
+  实现。当前验收目标恢复为“正确生成经过 k-failure pruning 的 Symbolic RIB”。
+
+## Stage 5.1 canonical link identity 贯通（2026-08-26 13:28 CST）
+
+- 新增 `TopologyLinkGuards`，集中保存 `hostname:interface -> LinkFailureKey` 与
+  `LinkFailureKey -> aliveness RouteGuard`，避免 connected 和 BGP 各自重新推导 link identity。
+- `SymbolicRouteSeed` 与 `SymbolicRouteSession` 可显式携带 `LinkFailureKey`；parsed snapshot
+  builder 对 connected seed 和对应 eBGP session 注入同一个对象，并拒绝 session endpoints 与
+  key 不匹配。
+- 新增 `MinesweeperLinkFailureKeys.fromGraphEdge`，正反向 internal forwarding edges 均映射到
+  相同的方向无关 key；external/null-peer 与 abstract edge 不伪造 internal-link identity。
+- 新增 `LinkAvailabilityAssignment`，唯一极性为 `true=up`、`false=failed`，failure count 只统计
+  false 值，负数 budget 显式拒绝。
+- 并行链路和多接入网段继续 fail closed，因为当前 Minesweeper failure model 无法为它们提供
+  一一对应的 component identity。
+- identity、seed/session 共享、forward/reverse GraphEdge、up/down counting 与 parser pipeline
+  测试通过；直接运行 `SmtReachabilityTest` 生成 `smt_output_0027/0_symbolic_routes.txt`。
+- 下一项仅为 Step 2 的 k-failure pruning；不进行 guard-to-Encoder 编译或 consistency condition。
+
+## Stage 5.1 parser-driven canonical identity 端到端断言（2026-08-26 13:50 CST）
+
+- `ToleranceFourRouterParsedPipelineTest` 删除手工 connected seed 和单向 BGP edge 构造，改为从
+  同一组四台路由器配置经 Batfish parser、concrete dataplane 和 Batfish BGP topology 构建
+  `BatfishParsedSnapshotPipelineInputBuilder` 输入，并将该输入直接交给 symbolic-route pipeline。
+- 对拓扑中全部 5 条物理链路逐条执行非空洞的双向断言：两端 connected seed、正反向
+  BGP session、正反向 Minesweeper forwarding edge 必须映射到同一个方向无关
+  `LinkFailureKey`。断言直接比较强类型 key，不解析 guard name 或 `toString()`。
+- parser 生成的 BGP topology 是双向的，因此全网 BGP symbolic candidates 为 10，取代了旧手工
+  单向模型的 6；R4 对论文前缀仍精确产生 3 个候选，local-preference 和 selection guard
+  断言保持通过。
+- `ToleranceFourRouterParsedPipelineTest` 与 `//projects/minesweeper:minesweeper_tests_pmd` 通过；
+  `git diff --check` 通过。本次未修改 `Graph`、`Encoder`、`EncoderSlice` 或 `PropertyChecker`。
+- 该断言完成 parser-driven canonical identity 的集成验收；Tolerance Step 2 的剩余工作仍是
+  k-failure pruning。
+
+## Stage 5.2 MAIN RIB 协议汇总与 BGP 本地起源 next-hop 修正（2026-08-26 14:26 CST）
+
+- 修正 pipeline 中 MAIN 与 BGP 相互独立的语义错误：BGP Loc-RIB 收敛后，将每个可路由的
+  BGP selected candidate 及其 selection guard 安装到 protocol-neutral MAIN RIB，再由
+  `BatfishMainRibRouteAdapter`/Batfish `Rib.comparePreference` 执行跨协议优先级选择。
+- 与 Batfish `BgpRoutingProcess.redistributeRouteToLocalRib` 对齐：重分发生成的本地 BGP route
+  继承 source route 的 next-hop，并标记 `nonRouting=true`，防止重新灌入 MAIN。删除
+  `BatfishBgpRedistributionRule` 中人工指定的 next-hop IP；R1 本地起源 BGP route 现显示
+  `NextHopIP=-`，不再错误使用 `192.0.12.1`。
+- `0_symbolic_routes.txt` 改为两个明确分区：首先输出 `MAIN RIB (cross-protocol forwarding
+  candidates)`，其下输出 `BGP LOC-RIB (protocol detail)`；删除每行重复的 RIB 列，并将
+  Z3 guard 规整为单行文本。
+- 四路由器 parser-driven 测试新增断言：R4 MAIN 含三个 BGP 条件候选，它们在
+  MAIN 中的 selection guard 与论文三档 local-preference 条件逻辑等价；R1 本地 BGP
+  `NextHopIP` 为 `-`。
+- symbolic-route 定向测试、test PMD 及真实 `SmtReachabilityTest#testReachability` 通过，
+  生成 `smts/smt_output_0029/0_symbolic_routes.txt`。主源码 PMD 仍只报告已记录的
+  Graph/Encoder/EncoderSlice/PropertyChecker 等 34 条基线违规，本次文件无新命中。
+
+### Symbolic guard 展示层简化（2026-08-26 14:29 CST）
+
+- 内部 `SymbolicRoute` 和 `GuardedRibEntry` 继续保留原始 `RouteGuard` 对象，不修改传播、
+  withdrawal、逻辑等价或可满足性判定所使用的 symbolic state。
+- 仅在构建展示用 `SymbolicRibRecord` 时，分别对 availability guard 和 selection guard
+  调用 `RouteGuard.simplify()`；Z3-backed guard 因此调用 Z3 `BoolExpr.simplify()`。JSON 与 txt
+  共用该简化视图，txt 另将空白规整为单行。
+- parser pipeline、test PMD 和 `SmtReachabilityTest#testReachability` 通过，生成
+  `smts/smt_output_0031/0_symbolic_routes.txt`；`git diff --check` 通过。
+
+### 原始 guard 与增强化简结果分离（2026-08-26 14:40 CST）
+
+- 说明 R2/R3 旧展示未充分化简的原因：Z3 `BoolExpr.simplify()` 只执行局部语法化简，
+  不会系统利用整个合取上下文消除循环/备选路径 selection condition 中的冗余项。
+- 新增 `RouteGuard.simplifyForDisplay()`；Z3 实现使用 `simplify -> ctx-solver-simplify ->
+  propagate-values -> simplify` tactic pipeline。该方法只由报告视图调用，不取代内部
+  guard，也不参与 convergence、withdrawal 或优先级计算。
+- `SmtReachabilityTest` 现在同时生成 `0_symbolic_routes_init.txt`（stable RIB 中的原始
+  guard 文本）与 `0_symbolic_routes.txt`（逻辑等价的增强化简展示）。
+- 实际输出为 `smts/smt_output_0032`；化简文件由 6840 bytes 降为 6380 bytes。例如
+  R2 经 R4 的 guard 从 `(and r1_r4 (not (and r1_r2 r2_r4)) r2_r4)` 化简为
+  `(and r1_r4 (not r1_r2) r2_r4)`。
+- 四路由器端到端测试对 MAIN availability 和 BGP selection guard 逐项验证原始式与
+  `simplifyForDisplay()` 结果逻辑等价，并验证原始文件保留 `let` 表达式、化简文件
+  消除该中间结构；定向测试与 test PMD 通过。

@@ -51,7 +51,9 @@ public final class BatfishMainRibRouteAdapter
   @Override
   @Nonnull
   public String createExportMessageId(
-      SymbolicRouteSession session, AnnotatedRoute<AbstractRoute> exportedRoute) {
+      SymbolicRouteSession session,
+      SymbolicRouteKey candidateKey,
+      AnnotatedRoute<AbstractRoute> exportedRoute) {
     throw new IllegalStateException("main-RIB routes require explicit protocol redistribution");
   }
 }

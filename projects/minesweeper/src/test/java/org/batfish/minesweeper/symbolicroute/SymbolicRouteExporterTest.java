@@ -59,7 +59,7 @@ public final class SymbolicRouteExporterTest {
         "receiver",
         linkGuard,
         policy,
-        (sender, receiver, route) -> sender + "->" + receiver + ":route",
+        (sender, receiver, key, route) -> sender + "->" + receiver + ":route",
         dependencies);
   }
 
@@ -203,7 +203,7 @@ public final class SymbolicRouteExporterTest {
             "receiver",
             GUARDS.variable("owner_link"),
             (sender, receiver, route) -> Optional.of(route),
-            (sender, receiver, route) -> "message",
+            (sender, receiver, key, route) -> "message",
             new SymbolicRoutePropagationDependencies());
 
     assertThrows(

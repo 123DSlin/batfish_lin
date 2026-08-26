@@ -6,5 +6,5 @@ import org.batfish.datamodel.AbstractRouteDecorator;
 @FunctionalInterface
 public interface SymbolicRouteMessageIdFactory<R extends AbstractRouteDecorator> {
 
-  String create(String sender, String receiver, R route);
+  String create(String sender, String receiver, SymbolicRouteKey candidateKey, R route);
 }

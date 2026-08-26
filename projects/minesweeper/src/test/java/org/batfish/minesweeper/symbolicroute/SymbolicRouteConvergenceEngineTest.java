@@ -54,7 +54,7 @@ public final class SymbolicRouteConvergenceEngineTest {
         receiver,
         linkGuard,
         policy,
-        (from, to, route) -> from + "->" + to + ":" + route.getAdministrativeCost(),
+        (from, to, key, route) -> from + "->" + to + ":" + route.getAdministrativeCost(),
         dependencies);
   }
 

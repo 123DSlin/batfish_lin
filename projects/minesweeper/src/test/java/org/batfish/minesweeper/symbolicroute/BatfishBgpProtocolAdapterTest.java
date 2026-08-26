@@ -17,17 +17,19 @@ import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.BgpActivePeerConfig;
 import org.batfish.datamodel.BgpProcess;
 import org.batfish.datamodel.BgpSessionProperties;
-import org.batfish.datamodel.BgpTieBreaker;
 import org.batfish.datamodel.Bgpv4Route;
 import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.ConnectedRoute;
+import org.batfish.datamodel.GenericRibReadOnly;
 import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.NetworkFactory;
 import org.batfish.datamodel.Prefix;
 import org.batfish.datamodel.StaticRoute;
 import org.batfish.datamodel.bgp.Ipv4UnicastAddressFamily;
+import org.batfish.datamodel.route.nh.NextHopDiscard;
 import org.batfish.datamodel.routing_policy.RoutingPolicy;
 import org.batfish.dataplane.rib.Bgpv4Rib;
+import org.batfish.dataplane.rib.Rib;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -38,26 +40,6 @@ public final class BatfishBgpProtocolAdapterTest {
 
   private static final Context CONTEXT = new Context();
   private static final Z3RouteGuardFactory GUARDS = new Z3RouteGuardFactory(CONTEXT);
-
-  @Test
-  public void testBgpPreferenceDelegatesToBatfishBgpRib() {
-    Bgpv4Route high =
-        Bgpv4Route.testBuilder()
-            .setNetwork(Prefix.parse("203.0.113.0/24"))
-            .setLocalPreference(200L)
-            .build();
-    Bgpv4Route low = high.toBuilder().setLocalPreference(100L).build();
-    BatfishBgpProtocolAdapter adapter = new BatfishBgpProtocolAdapter(ImmutableList.of());
-    Bgpv4Rib oracle = new Bgpv4Rib(null, BgpTieBreaker.ROUTER_ID, 1, null, false, false);
-
-    assertThat(
-        Integer.signum(
-            adapter
-                .preferenceComparator("r")
-                .compare(
-                    new AnnotatedRoute<>(high, "default"), new AnnotatedRoute<>(low, "default"))),
-        equalTo(-Integer.signum(oracle.comparePreference(high, low))));
-  }
 
   @Test
   public void testConnectedRouteUsesBatfishNonBgpConversion() {
@@ -85,12 +67,15 @@ public final class BatfishBgpProtocolAdapterTest {
             "redistribute-connected",
             connected,
             "blue",
-            Ip.parse("1.1.1.1"),
             BGP);
 
     assertThat(result.getOutcome(), equalTo(BatfishRoutingPolicyResult.Outcome.ACCEPTED));
     assertThat(result.getOutputRoute().get().getRoute().getSrcProtocol(), equalTo(CONNECTED));
     assertThat(result.getOutputRoute().get().getSourceVrf(), equalTo("blue"));
+    assertThat(
+        result.getOutputRoute().get().getRoute().getNextHop(),
+        equalTo(NextHopDiscard.instance()));
+    assertThat(result.getOutputRoute().get().getRoute().getNonRouting(), equalTo(true));
   }
 
   @Test
@@ -166,16 +151,46 @@ public final class BatfishBgpProtocolAdapterTest {
             StaticRoute.testBuilder().setNetwork(Prefix.parse("192.0.2.0/24")).build(), "default");
     BatfishRoutingPolicyResult<Bgpv4Route> originated =
         BatfishBgpRedistribution.redistribute(
-            a, aProcess, "redistribute", statik, "default", Ip.parse("10.0.0.1"), BGP);
+            a, aProcess, "redistribute", statik, "default", BGP);
     RouteGuard sourceGuard = GUARDS.variable("source_guard");
     RouteGuard linkGuard = GUARDS.variable("bgp_link");
     AnnotatedRoute<Bgpv4Route> seedRoute = originated.getOutputRoute().get();
+    Rib aMainRib = new Rib();
+    Rib bMainRib = new Rib();
+    BatfishBgpProtocolAdapter adapter =
+        new BatfishBgpProtocolAdapter(
+            ImmutableList.of(edge), mainRibs("a", aMainRib, "b", bMainRib));
+    SymbolicRouteSession symbolicSession = new SymbolicRouteSession("a-b", "a", "b", linkGuard);
+    SymbolicRouteKey seedKey = new SymbolicRouteKey("a", "default", seedRoute);
+    AnnotatedRoute<Bgpv4Route> exportedSeed =
+        adapter.processExport(symbolicSession, seedRoute).get();
+    String messageId = adapter.createExportMessageId(symbolicSession, seedKey, exportedSeed);
+
+    assertThat(
+        adapter.createExportMessageId(symbolicSession, seedKey, exportedSeed), equalTo(messageId));
+    assertThat(messageId.contains(exportedSeed.toString()), equalTo(false));
+    AnnotatedRoute<Bgpv4Route> changedRoute =
+        new AnnotatedRoute<>(exportedSeed.getRoute().toBuilder().setMetric(99L).build(), "default");
+    boolean changedExportRejected = false;
+    try {
+      adapter.createExportMessageId(symbolicSession, seedKey, changedRoute);
+    } catch (IllegalStateException e) {
+      changedExportRejected = true;
+    }
+    assertThat(changedExportRejected, equalTo(true));
+    assertThat(
+        adapter
+            .createExportMessageId(
+                symbolicSession, new SymbolicRouteKey("a", "default", changedRoute), changedRoute)
+            .equals(messageId),
+        equalTo(false));
+
     SymbolicRouteNetwork<AnnotatedRoute<Bgpv4Route>> network =
         SymbolicRouteNetworkFactory.create(
             ImmutableList.of("a", "b"),
-            ImmutableList.of(new SymbolicRouteSession("a-b", "a", "b", linkGuard)),
+            ImmutableList.of(symbolicSession),
             ImmutableList.of(new SymbolicRouteSeed<>("origin", "a", seedRoute, sourceGuard)),
-            new BatfishBgpProtocolAdapter(ImmutableList.of(edge)));
+            adapter);
 
     network.converge();
 
@@ -190,6 +205,82 @@ public final class BatfishBgpProtocolAdapterTest {
         equalTo(true));
   }
 
+  @Test
+  public void testPreferenceUsesReceiverVrfMainRib() {
+    NetworkFactory nf = new NetworkFactory();
+    Configuration a =
+        nf.configurationBuilder().setHostname("a").setConfigurationFormat(CISCO_IOS).build();
+    Configuration b =
+        nf.configurationBuilder().setHostname("b").setConfigurationFormat(CISCO_IOS).build();
+    BgpProcess aProcess =
+        BgpProcess.builder()
+            .setAdminCostsToVendorDefaults(CISCO_IOS)
+            .setRouterId(Ip.parse("1.1.1.1"))
+            .build();
+    BgpProcess bProcess =
+        BgpProcess.builder()
+            .setAdminCostsToVendorDefaults(CISCO_IOS)
+            .setRouterId(Ip.parse("2.2.2.2"))
+            .build();
+    BgpActivePeerConfig aPeer = BgpActivePeerConfig.builder().setLocalAs(1L).build();
+    BgpActivePeerConfig bPeer = BgpActivePeerConfig.builder().setLocalAs(2L).build();
+    BatfishBgpEdge edge =
+        new BatfishBgpEdge(
+            "a-b",
+            "default",
+            "default",
+            a,
+            b,
+            aPeer,
+            bPeer,
+            aProcess,
+            bProcess,
+            session(2L, 1L, "10.0.0.2", "10.0.0.1"),
+            session(1L, 2L, "10.0.0.1", "10.0.0.2"),
+            Ip.parse("10.0.0.1"),
+            null,
+            false);
+    Rib aMainRib = new Rib();
+    Rib bMainRib = new Rib();
+    bMainRib.mergeRoute(
+        new AnnotatedRoute<>(
+            StaticRoute.testBuilder()
+                .setNetwork(Prefix.parse("5.5.5.5/32"))
+                .setAdministrativeCost(1)
+                .setNextHopInterface("eth0")
+                .setMetric(1L)
+                .build(),
+            "default"));
+    bMainRib.mergeRoute(
+        new AnnotatedRoute<>(
+            StaticRoute.testBuilder()
+                .setNetwork(Prefix.parse("5.5.5.6/32"))
+                .setAdministrativeCost(1)
+                .setNextHopInterface("eth0")
+                .setMetric(2L)
+                .build(),
+            "default"));
+    BatfishBgpProtocolAdapter adapter =
+        new BatfishBgpProtocolAdapter(
+            ImmutableList.of(edge), mainRibs("a", aMainRib, "b", bMainRib));
+    Bgpv4Route best =
+        Bgpv4Route.testBuilder()
+            .setNetwork(Prefix.parse("192.0.2.0/24"))
+            .setProtocol(BGP)
+            .setNextHopIp(Ip.parse("5.5.5.5"))
+            .build();
+    Bgpv4Route worse = best.toBuilder().setNextHopIp(Ip.parse("5.5.5.6")).build();
+    Bgpv4Rib concrete =
+        new Bgpv4Rib(
+            bMainRib, bProcess.getTieBreaker(), 1, null, false, bProcess.getClusterListAsIgpCost());
+
+    assertThat(
+        adapter
+            .preferenceComparator("b")
+            .compare(new AnnotatedRoute<>(best, "default"), new AnnotatedRoute<>(worse, "default")),
+        equalTo(-Integer.signum(concrete.comparePreference(best, worse))));
+  }
+
   private static BgpSessionProperties session(
       long tailAs, long headAs, String tailIp, String headIp) {
     return BgpSessionProperties.builder()
@@ -200,5 +291,21 @@ public final class BatfishBgpProtocolAdapterTest {
         .setHeadIp(Ip.parse(headIp))
         .setSessionType(EBGP_SINGLEHOP)
         .build();
+  }
+
+  private static java.util.Map<
+          String, java.util.Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
+      mainRibs(String firstRouter, Rib firstRib, String secondRouter, Rib secondRib) {
+    java.util.Map<String, java.util.Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
+        ribs = new java.util.LinkedHashMap<>();
+    String[] routers = {firstRouter, secondRouter};
+    Rib[] routerRibs = {firstRib, secondRib};
+    for (int i = 0; i < routers.length; i++) {
+      java.util.Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>> byVrf =
+          new java.util.LinkedHashMap<>();
+      byVrf.put("default", routerRibs[i]);
+      ribs.put(routers[i], byVrf);
+    }
+    return ribs;
   }
 }

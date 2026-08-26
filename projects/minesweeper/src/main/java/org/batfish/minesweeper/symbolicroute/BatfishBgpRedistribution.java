@@ -10,7 +10,6 @@ import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.BgpProcess;
 import org.batfish.datamodel.Bgpv4Route;
 import org.batfish.datamodel.Configuration;
-import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.RoutingProtocol;
 import org.batfish.datamodel.routing_policy.RoutingPolicy;
 
@@ -26,14 +25,12 @@ public final class BatfishBgpRedistribution {
       String policyName,
       AnnotatedRoute<AbstractRoute> sourceRoute,
       String targetVrf,
-      Ip nextHopIp,
       RoutingProtocol targetProtocol) {
     requireNonNull(configuration, "configuration must be provided");
     requireNonNull(process, "process must be provided");
     requireNonNull(policyName, "policyName must be provided");
     requireNonNull(sourceRoute, "sourceRoute must be provided");
     requireNonNull(targetVrf, "targetVrf must be provided");
-    requireNonNull(nextHopIp, "nextHopIp must be provided");
     if (targetProtocol != RoutingProtocol.BGP && targetProtocol != RoutingProtocol.IBGP) {
       throw new IllegalArgumentException("BGP redistribution target must be BGP or IBGP");
     }
@@ -45,9 +42,10 @@ public final class BatfishBgpRedistribution {
         convertNonBgpRouteToBgpRoute(
             sourceRoute,
             process.getRouterId(),
-            nextHopIp,
+            sourceRoute.getAbstractRoute().getNextHopIp(),
             process.getAdminCost(targetProtocol),
-            targetProtocol);
+            targetProtocol)
+        .setNonRouting(true);
     if (!policy.processBgpRoute(sourceRoute, output, null, OUT)) {
       return BatfishRoutingPolicyResult.denied();
     }

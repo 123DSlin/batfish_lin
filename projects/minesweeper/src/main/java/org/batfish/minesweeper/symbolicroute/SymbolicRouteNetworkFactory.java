@@ -64,11 +64,11 @@ public final class SymbolicRouteNetworkFactory {
               checkedSession.getSessionId(),
               checkedSession.getLinkGuard(),
               (sender, receiver, route) -> adapter.processExport(checkedSession, route),
-              (sender, receiver, route) ->
+              (sender, receiver, candidateKey, route) ->
                   namespaceMessageId(
                       checkedSession.getSessionId(),
                       requireNonNull(
-                          adapter.createExportMessageId(checkedSession, route),
+                          adapter.createExportMessageId(checkedSession, candidateKey, route),
                           "adapter export message identity must be provided")),
               dependencies));
     }

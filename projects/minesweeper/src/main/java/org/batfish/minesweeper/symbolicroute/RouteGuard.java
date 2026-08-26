@@ -16,6 +16,11 @@ public interface RouteGuard {
 
   RouteGuard simplify();
 
+  /** Stronger, potentially more expensive equivalent simplification for reports only. */
+  default RouteGuard simplifyForDisplay() {
+    return simplify();
+  }
+
   boolean isSatisfiable();
 
   boolean isEquivalentTo(RouteGuard other);

@@ -19,6 +19,7 @@ java_library(
         "//projects/lib/z3",
         "//projects/question",
         "@maven//:com_fasterxml_jackson_core_jackson_annotations",
+        "@maven//:com_fasterxml_jackson_core_jackson_core",
         "@maven//:com_google_auto_service_auto_service_annotations",
         "@maven//:com_google_code_findbugs_jsr305",
         "@maven//:com_google_guava_guava",
@@ -50,6 +51,7 @@ junit_tests(
     srcs = glob([
         "src/test/java/**/*Test.java",
     ]),
+    data = ["//networks:tolerance-symbolic-route"],
     tags = ["z3"],
     runtime_deps = [
         "@maven//:org_apache_logging_log4j_log4j_core",

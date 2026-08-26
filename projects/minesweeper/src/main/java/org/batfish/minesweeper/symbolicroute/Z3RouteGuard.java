@@ -4,8 +4,10 @@ import static java.util.Objects.requireNonNull;
 
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
+import com.microsoft.z3.Goal;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
+import com.microsoft.z3.Tactic;
 import java.util.Objects;
 import javax.annotation.Nonnull;
 
@@ -49,6 +51,23 @@ public final class Z3RouteGuard implements RouteGuard {
   @Override
   public RouteGuard simplify() {
     return new Z3RouteGuard(_context, (BoolExpr) _expression.simplify());
+  }
+
+  @Override
+  public RouteGuard simplifyForDisplay() {
+    Goal goal = _context.mkGoal(false, false, false);
+    goal.add(_expression);
+    Tactic tactic =
+        _context.then(
+            _context.mkTactic("simplify"),
+            _context.mkTactic("ctx-solver-simplify"),
+            _context.mkTactic("propagate-values"),
+            _context.mkTactic("simplify"));
+    Goal[] subgoals = tactic.apply(goal).getSubgoals();
+    if (subgoals.length != 1) {
+      return simplify();
+    }
+    return new Z3RouteGuard(_context, (BoolExpr) subgoals[0].AsBoolExpr().simplify());
   }
 
   @Override
