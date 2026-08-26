@@ -8,9 +8,7 @@ import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.Context;
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
 import java.util.Optional;
 import org.batfish.datamodel.Prefix;
 import org.batfish.datamodel.StaticRoute;
@@ -19,7 +17,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests of Hoyan Algorithm 1 initialization, queue, ingress-policy, and RIB-update steps. */
+/** Tests of Hoyan Algorithm 1 ingress-policy and guarded-RIB installation steps. */
 @RunWith(JUnit4.class)
 public final class SymbolicRouteIngressProcessorTest {
 
@@ -72,29 +70,6 @@ public final class SymbolicRouteIngressProcessorTest {
   }
 
   @Test
-  public void testInitialAdvertisementsAreProcessedInFifoOrder() {
-    List<String> processed = new ArrayList<>();
-    GuardedRib<StaticRoute> rib = new GuardedRib<>(PREFERENCE);
-    SymbolicRouteIngressProcessor<StaticRoute> processor =
-        processor(
-            rib,
-            message -> {
-              processed.add(message.getMessageId());
-              return Optional.of(message.getRoute());
-            });
-
-    processor.process(
-        ImmutableList.of(
-            message("m1", "r1", route(10), GUARDS.variable("fifo_1")),
-            message("m2", "r2", route(20), GUARDS.variable("fifo_2")),
-            message("m3", "r3", route(30), GUARDS.variable("fifo_3"))));
-
-    assertThat(processed, equalTo(ImmutableList.of("m1", "m2", "m3")));
-    assertThat(processor.isQueueEmpty(), equalTo(true));
-    assertThat(rib.getEntries(), hasSize(3));
-  }
-
-  @Test
   public void testDeniedAdvertisementDoesNotReachRib() {
     StaticRoute denied = route(10);
     GuardedRib<StaticRoute> rib = new GuardedRib<>(PREFERENCE);
@@ -102,9 +77,10 @@ public final class SymbolicRouteIngressProcessorTest {
         processor(rib, message -> Optional.empty());
 
     assertThat(
-        processor.process(
-            ImmutableList.of(message("denied", "r1", denied, GUARDS.variable("deny_guard")))),
-        hasSize(0));
+        processor
+            .processMessage(message("denied", "r1", denied, GUARDS.variable("deny_guard")))
+            .isPresent(),
+        equalTo(false));
     assertThat(rib.get(new SymbolicRouteKey("receiver", "default", denied)), nullValue());
   }
 
@@ -116,8 +92,8 @@ public final class SymbolicRouteIngressProcessorTest {
     SymbolicRouteIngressProcessor<StaticRoute> processor =
         processor(rib, message -> Optional.of(transformed));
 
-    processor.process(
-        ImmutableList.of(message("transformed", "r1", input, GUARDS.variable("transform_guard"))));
+    processor.processMessage(
+        message("transformed", "r1", input, GUARDS.variable("transform_guard")));
 
     assertThat(rib.get(new SymbolicRouteKey("receiver", "default", input)), nullValue());
     assertThat(
@@ -134,9 +110,11 @@ public final class SymbolicRouteIngressProcessorTest {
         processor(rib, message -> Optional.of(message.getRoute()));
 
     assertThat(
-        processor.process(ImmutableList.of(message("replay", "r1", route, a.and(b)))), hasSize(1));
+        processor.processMessage(message("replay", "r1", route, a.and(b))).get().getDelta().isEmpty(),
+        equalTo(false));
     assertThat(
-        processor.process(ImmutableList.of(message("replay", "r1", route, b.and(a)))), hasSize(0));
+        processor.processMessage(message("replay", "r1", route, b.and(a))).get().getDelta().isEmpty(),
+        equalTo(true));
     assertThat(rib.getEntries(), hasSize(1));
   }
 
@@ -149,8 +127,8 @@ public final class SymbolicRouteIngressProcessorTest {
     SymbolicRouteIngressProcessor<StaticRoute> processor =
         processor(rib, message -> Optional.of(message.getRoute()));
 
-    processor.process(
-        ImmutableList.of(message("left", "r1", route, left), message("right", "r2", route, right)));
+    processor.processMessage(message("left", "r1", route, left));
+    processor.processMessage(message("right", "r2", route, right));
 
     assertThat(rib.getEntries(), hasSize(1));
     assertThat(
@@ -177,8 +155,7 @@ public final class SymbolicRouteIngressProcessorTest {
     SymbolicRouteIngressProcessor<StaticRoute> processor =
         processor(new GuardedRib<>(PREFERENCE), message -> Optional.of(message.getRoute()));
 
-    assertThrows(IllegalArgumentException.class, () -> processor.process(ImmutableList.of(egress)));
-    assertThat(processor.isQueueEmpty(), equalTo(true));
+    assertThrows(IllegalArgumentException.class, () -> processor.processMessage(egress));
   }
 
   @Test
@@ -198,7 +175,6 @@ public final class SymbolicRouteIngressProcessorTest {
     SymbolicRouteIngressProcessor<StaticRoute> processor =
         processor(new GuardedRib<>(PREFERENCE), message -> Optional.of(message.getRoute()));
 
-    assertThrows(
-        IllegalArgumentException.class, () -> processor.process(ImmutableList.of(wrongReceiver)));
+    assertThrows(IllegalArgumentException.class, () -> processor.processMessage(wrongReceiver));
   }
 }

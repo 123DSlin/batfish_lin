@@ -69,3 +69,20 @@ receiver/VRF main-RIB contexts, guarded route seeds, recursive static routes, re
 directed `BatfishBgpEdge` objects, and symbolic sessions. Raw uploaded configuration parsing and
 automatic guard assignment belong to the next adapter layer, after the accepted configuration and
 guard schema is specified. Unsupported iBGP/OSPF/IS-IS/SR input must not be silently accepted.
+
+## Redistribution implementation boundary
+
+There are currently two deliberately distinct redistribution paths:
+
+1. The fixed-snapshot production pipeline calls `BatfishBgpRedistribution` while constructing its
+   initial local BGP seeds. This path computes one stable Symbolic RIB from an empty state and is
+   the path exercised by `BatfishSymbolicRoutePipeline.run`.
+2. `BatfishRoutingPolicyProcessor`, `BatfishRedistributionKey`, and
+   `BatfishRedistributionReconciler` implement and test an incremental advertise/deny/withdraw/
+   atomic-replacement lifecycle. They are not called by the current fixed-snapshot pipeline.
+
+Keeping both paths permanently would risk semantic drift (for example next-hop, `nonRouting`, or
+missing-policy behavior). Until incremental configuration/policy updates are in scope, the direct
+fixed-snapshot BGP path remains the only production entry. Before incremental updates are enabled,
+the two paths must be unified behind one conversion/policy implementation rather than exposed as
+parallel production APIs.

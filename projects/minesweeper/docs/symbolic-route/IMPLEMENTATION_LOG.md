@@ -1161,3 +1161,22 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 四路由器端到端测试对 MAIN availability 和 BGP selection guard 逐项验证原始式与
   `simplifyForDisplay()` 结果逻辑等价，并验证原始文件保留 `let` 表达式、化简文件
   消除该中间结构；定向测试与 test PMD 通过。
+
+## Stage 5.2 全局队列统一与 redistribution 边界记录（2026-08-26 16:14 CST）
+
+- 删除早期单 ingress 组件队列 `SymbolicRouteWorkQueue`，并从
+  `SymbolicRouteIngressProcessor` 删除内部 `process(Iterable)` 调度循环和
+  `isQueueEmpty()`。Ingress processor 现在只提供 `prepare/install/processMessage` 原子操作。
+- advertisement 和 withdrawal 的唯一生产调度器现为
+  `SymbolicRouteConvergenceEngine` 中的全局 FIFO `Queue<SymbolicRouteWorkItem>`，避免局部队列
+  与全局队列并存导致算法归属不清。
+- 原 ingress FIFO 单元测试迁移为 convergence-engine 测试
+  `testGlobalQueueProcessesInitialAdvertisementsInFifoOrder`，直接验证实际生产队列的顺序；
+  ingress policy、transformation、equivalent replay 和输入边界测试改为调用原子 API。
+- 在 `PROTOCOL_PIPELINE.md` 记录双 redistribution 路径：当前 fixed-snapshot 生产 pipeline
+  使用 `BatfishBgpRedistribution` 构建初始 BGP seeds；`BatfishRoutingPolicyProcessor` +
+  `BatfishRedistributionKey` + `BatfishRedistributionReconciler` 是已测试但尚未接入主路径的
+  incremental lifecycle。在开放增量配置/策略更新前，必须统一两者的 conversion/policy
+  语义，避免 next-hop、`nonRouting` 和 missing-policy 行为漂移。
+- convergence、ingress、pipeline、parser-driven tolerance 定向测试和 test PMD 全部通过；
+  主源码由 177 个减少为 176 个 Java 文件，`git diff --check` 通过。

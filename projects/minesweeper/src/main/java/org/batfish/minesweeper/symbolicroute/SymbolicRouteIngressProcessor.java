@@ -2,21 +2,17 @@ package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
 
-import com.google.common.collect.ImmutableList;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import javax.annotation.Nonnull;
 import org.batfish.datamodel.AbstractRouteDecorator;
 
-/** Hoyan Algorithm 1 lines 2-10: initialization, work queue, ingress policy, and RIB update. */
+/** Hoyan Algorithm 1 ingress-policy and guarded-RIB installation steps. */
 public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorator> {
 
   @Nonnull private final String _receiver;
   @Nonnull private final GuardedRib<R> _rib;
   @Nonnull private final SymbolicRouteIngressPolicy<R> _ingressPolicy;
   @Nonnull private final SymbolicRouteKeyFactory<R> _keyFactory;
-  @Nonnull private final SymbolicRouteWorkQueue<R> _workQueue;
 
   public SymbolicRouteIngressProcessor(
       String receiver,
@@ -27,25 +23,6 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
     _rib = requireNonNull(rib, "rib must be provided");
     _ingressPolicy = requireNonNull(ingressPolicy, "ingressPolicy must be provided");
     _keyFactory = requireNonNull(keyFactory, "keyFactory must be provided");
-    _workQueue = new SymbolicRouteWorkQueue<>();
-  }
-
-  /** Processes the supplied initial advertisements until the ingress work queue is empty. */
-  public ImmutableList<GuardedRibDelta<R>> process(
-      Iterable<SymbolicRouteMessage<R>> initialAdvertisements) {
-    requireNonNull(initialAdvertisements, "initialAdvertisements must be provided");
-    for (SymbolicRouteMessage<R> message : initialAdvertisements) {
-      _workQueue.enqueue(message);
-    }
-    List<GuardedRibDelta<R>> deltas = new ArrayList<>();
-    SymbolicRouteMessage<R> message;
-    while ((message = _workQueue.poll()) != null) {
-      processMessage(message)
-          .map(SymbolicRouteIngressResult::getDelta)
-          .filter(delta -> !delta.isEmpty())
-          .ifPresent(deltas::add);
-    }
-    return ImmutableList.copyOf(deltas);
   }
 
   /** Processes one message and returns empty only when ingress policy denies it. */
@@ -91,10 +68,6 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
     SymbolicRoute<R> candidate = prepared.getCandidate();
     GuardedRibDelta<R> delta = _rib.putContribution(prepared.getContributionId(), candidate);
     return new SymbolicRouteIngressResult<>(candidate.getKey(), delta);
-  }
-
-  public boolean isQueueEmpty() {
-    return _workQueue.isEmpty();
   }
 
   @Nonnull

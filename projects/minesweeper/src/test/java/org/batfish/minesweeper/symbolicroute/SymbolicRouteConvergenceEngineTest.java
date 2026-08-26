@@ -7,7 +7,9 @@ import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.Context;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import org.batfish.datamodel.Prefix;
 import org.batfish.datamodel.StaticRoute;
@@ -36,10 +38,17 @@ public final class SymbolicRouteConvergenceEngineTest {
 
   private static SymbolicRouteIngressProcessor<StaticRoute> processor(
       String router, GuardedRib<StaticRoute> rib) {
+    return processor(router, rib, message -> Optional.of(message.getRoute()));
+  }
+
+  private static SymbolicRouteIngressProcessor<StaticRoute> processor(
+      String router,
+      GuardedRib<StaticRoute> rib,
+      SymbolicRouteIngressPolicy<StaticRoute> ingressPolicy) {
     return new SymbolicRouteIngressProcessor<>(
         router,
         rib,
-        message -> Optional.of(message.getRoute()),
+        ingressPolicy,
         (receiver, route) -> new SymbolicRouteKey(receiver, "default", route));
   }
 
@@ -81,6 +90,35 @@ public final class SymbolicRouteConvergenceEngineTest {
             "Expected " + expected.getSimpleName() + " but caught " + thrown, thrown);
       }
     }
+  }
+
+  @Test
+  public void testGlobalQueueProcessesInitialAdvertisementsInFifoOrder() {
+    List<String> processed = new ArrayList<>();
+    GuardedRib<StaticRoute> rib = new GuardedRib<>(PREFERENCE);
+    SymbolicRouteConvergenceEngine<StaticRoute> engine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(
+                processor(
+                    "a",
+                    rib,
+                    message -> {
+                      processed.add(message.getMessageId());
+                      return Optional.of(message.getRoute());
+                    })),
+            ImmutableList.of());
+
+    engine.converge(
+        ImmutableList.of(
+            initial("a", route(10), GUARDS.variable("fifo_1")),
+            initial("a", route(20), GUARDS.variable("fifo_2")),
+            initial("a", route(30), GUARDS.variable("fifo_3"))));
+
+    assertThat(
+        processed,
+        equalTo(
+            ImmutableList.of("origin->a:10", "origin->a:20", "origin->a:30")));
+    assertThat(rib.getEntries(), hasSize(3));
   }
 
   @Test
