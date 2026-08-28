@@ -112,6 +112,8 @@ encodings and consistency checks.
 - [REVIEW_GUIDE.md](REVIEW_GUIDE.md): invariants and questions to use during code review.
 - [PAPER_ALIGNMENT.md](PAPER_ALIGNMENT.md): HoYAN/YU/tolerance guarded-RIB semantic audit.
 - [PROTOCOL_PIPELINE.md](PROTOCOL_PIPELINE.md): currently executable protocol pipeline and scope.
+- [CODE_ORGANIZATION.md](CODE_ORGANIZATION.md): file ownership, naming rules, and future package
+  boundaries.
 
 Run the tolerance R1-to-R4 reachability question and generate its readable Symbolic RIB with
 `./tools/generate_tolerance_symbolic_rib.sh`. `SmtReachabilityTest` creates the next available

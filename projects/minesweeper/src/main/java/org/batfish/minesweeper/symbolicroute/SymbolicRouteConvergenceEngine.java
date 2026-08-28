@@ -9,10 +9,71 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import org.batfish.datamodel.AbstractRouteDecorator;
 
 /** Network-level FIFO convergence loop for guarded route advertisements. */
 public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorator> {
+
+  /** Advertisement or withdrawal owned and scheduled exclusively by this engine. */
+  private static final class WorkItem<R extends AbstractRouteDecorator> {
+
+    private enum Type {
+      ADVERTISE,
+      WITHDRAW
+    }
+
+    @Nonnull private final Type _type;
+    @Nullable private final SymbolicRouteMessage<R> _message;
+    @Nullable private final SymbolicRouteContributionId _withdrawal;
+    @Nullable private final RouteGuard _expectedGuard;
+
+    private WorkItem(
+        Type type,
+        @Nullable SymbolicRouteMessage<R> message,
+        @Nullable SymbolicRouteContributionId withdrawal,
+        @Nullable RouteGuard expectedGuard) {
+      _type = requireNonNull(type, "type must be provided");
+      _message = message;
+      _withdrawal = withdrawal;
+      _expectedGuard = expectedGuard;
+    }
+
+    private static <R extends AbstractRouteDecorator> WorkItem<R> advertise(
+        SymbolicRouteMessage<R> message) {
+      return new WorkItem<>(Type.ADVERTISE, requireNonNull(message), null, null);
+    }
+
+    private static <R extends AbstractRouteDecorator> WorkItem<R> withdraw(
+        SymbolicRouteContributionId withdrawal, RouteGuard expectedGuard) {
+      return new WorkItem<>(
+          Type.WITHDRAW, null, requireNonNull(withdrawal), requireNonNull(expectedGuard));
+    }
+
+    @Nonnull
+    private SymbolicRouteMessage<R> getMessage() {
+      if (_message == null) {
+        throw new IllegalStateException("withdrawal has no advertisement message");
+      }
+      return _message;
+    }
+
+    @Nonnull
+    private SymbolicRouteContributionId getWithdrawal() {
+      if (_withdrawal == null) {
+        throw new IllegalStateException("advertisement has no withdrawal identity");
+      }
+      return _withdrawal;
+    }
+
+    @Nonnull
+    private RouteGuard getExpectedGuard() {
+      if (_expectedGuard == null) {
+        throw new IllegalStateException("advertisement has no withdrawal guard");
+      }
+      return _expectedGuard;
+    }
+  }
 
   @Nonnull private final Map<String, SymbolicRouteIngressProcessor<R>> _ingressProcessors;
   @Nonnull private final Map<String, List<SymbolicRouteExporter<R>>> _exporters;
@@ -74,8 +135,8 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
   public SymbolicRouteConvergenceResult converge(
       Iterable<SymbolicRouteMessage<R>> initialAdvertisements) {
     requireNonNull(initialAdvertisements, "initialAdvertisements must be provided");
-    Queue<SymbolicRouteWorkItem<R>> queue = new ArrayDeque<>();
-    initialAdvertisements.forEach(message -> queue.add(SymbolicRouteWorkItem.advertise(message)));
+    Queue<WorkItem<R>> queue = new ArrayDeque<>();
+    initialAdvertisements.forEach(message -> queue.add(WorkItem.advertise(message)));
     return run(queue);
   }
 
@@ -83,11 +144,11 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
   public SymbolicRouteConvergenceResult withdraw(
       Iterable<SymbolicRouteContributionId> withdrawals) {
     requireNonNull(withdrawals, "withdrawals must be provided");
-    Queue<SymbolicRouteWorkItem<R>> queue = new ArrayDeque<>();
+    Queue<WorkItem<R>> queue = new ArrayDeque<>();
     for (SymbolicRouteContributionId withdrawal : withdrawals) {
       ContributionLocation location = _contributionLocations.get(withdrawal);
       if (location != null) {
-        queue.add(SymbolicRouteWorkItem.withdraw(withdrawal, location._guard));
+        queue.add(WorkItem.withdraw(withdrawal, location._guard));
       }
     }
     return run(queue);
@@ -114,19 +175,19 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
     if (_contributionLocations.containsKey(replacementContribution)) {
       throw new IllegalArgumentException("route replacement requires an unused new identity");
     }
-    Queue<SymbolicRouteWorkItem<R>> queue = new ArrayDeque<>();
-    queue.add(SymbolicRouteWorkItem.withdraw(oldContribution, oldLocation._guard));
-    queue.add(SymbolicRouteWorkItem.advertise(replacementAdvertisement));
+    Queue<WorkItem<R>> queue = new ArrayDeque<>();
+    queue.add(WorkItem.withdraw(oldContribution, oldLocation._guard));
+    queue.add(WorkItem.advertise(replacementAdvertisement));
     return run(queue);
   }
 
-  private SymbolicRouteConvergenceResult run(Queue<SymbolicRouteWorkItem<R>> queue) {
+  private SymbolicRouteConvergenceResult run(Queue<WorkItem<R>> queue) {
     int processedMessages = 0;
     int processedWithdrawals = 0;
     int ribUpdates = 0;
     while (!queue.isEmpty()) {
-      SymbolicRouteWorkItem<R> item = queue.remove();
-      if (item.getType() == SymbolicRouteWorkItem.Type.WITHDRAW) {
+      WorkItem<R> item = queue.remove();
+      if (item._type == WorkItem.Type.WITHDRAW) {
         processedWithdrawals++;
         ribUpdates += processWithdrawal(item, queue);
         continue;
@@ -138,7 +199,7 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
   }
 
   private int processAdvertisement(
-      SymbolicRouteMessage<R> message, Queue<SymbolicRouteWorkItem<R>> queue) {
+      SymbolicRouteMessage<R> message, Queue<WorkItem<R>> queue) {
     SymbolicRouteIngressProcessor<R> processor = _ingressProcessors.get(message.getReceiver());
     if (processor == null) {
       throw new IllegalArgumentException("no ingress processor for message receiver");
@@ -146,7 +207,8 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
     SymbolicRouteContributionId contributionId =
         new SymbolicRouteContributionId(
             message.getMessageId(), message.getSender(), message.getReceiver());
-    java.util.Optional<SymbolicRouteIngressCandidate<R>> prepared = processor.prepare(message);
+    java.util.Optional<SymbolicRouteIngressProcessor.PreparedCandidate<R>> prepared =
+        processor.prepare(message);
     if (!prepared.isPresent()) {
       ContributionLocation oldLocation = _contributionLocations.get(contributionId);
       return oldLocation == null ? 0 : removeContribution(contributionId, oldLocation, queue);
@@ -167,7 +229,7 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
   }
 
   private int processWithdrawal(
-      SymbolicRouteWorkItem<R> item, Queue<SymbolicRouteWorkItem<R>> queue) {
+      WorkItem<R> item, Queue<WorkItem<R>> queue) {
     SymbolicRouteContributionId contributionId = item.getWithdrawal();
     ContributionLocation location = _contributionLocations.get(contributionId);
     if (location == null || !location._guard.isEquivalentTo(item.getExpectedGuard())) {
@@ -179,7 +241,7 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
   private int removeContribution(
       SymbolicRouteContributionId contributionId,
       ContributionLocation location,
-      Queue<SymbolicRouteWorkItem<R>> queue) {
+      Queue<WorkItem<R>> queue) {
     _contributionLocations.remove(contributionId);
     SymbolicRouteIngressProcessor<R> processor = _ingressProcessors.get(location._receiver);
     GuardedRibDelta<R> delta = processor.getRib().removeContribution(location._key, contributionId);
@@ -189,7 +251,7 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
   private int propagateDelta(
       SymbolicRouteIngressProcessor<R> processor,
       GuardedRibDelta<R> delta,
-      Queue<SymbolicRouteWorkItem<R>> queue) {
+      Queue<WorkItem<R>> queue) {
     int updates = 0;
     for (GuardedRibUpdate<R> update : delta.getUpdates()) {
       updates++;
@@ -202,7 +264,7 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
         AdvertisementRecord oldAdvertisement = byCandidate.remove(key);
         if (oldAdvertisement != null) {
           exporter.removeDependencies(oldAdvertisement._id);
-          queue.add(SymbolicRouteWorkItem.withdraw(oldAdvertisement._id, oldAdvertisement._guard));
+          queue.add(WorkItem.withdraw(oldAdvertisement._id, oldAdvertisement._guard));
         }
         if (update.getNewEntry() == null) {
           continue;
@@ -216,7 +278,7 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
               new SymbolicRouteContributionId(
                   message.getMessageId(), message.getSender(), message.getReceiver());
           byCandidate.put(key, new AdvertisementRecord(childId, message.getGuard()));
-          queue.add(SymbolicRouteWorkItem.advertise(message));
+          queue.add(WorkItem.advertise(message));
         }
       }
     }

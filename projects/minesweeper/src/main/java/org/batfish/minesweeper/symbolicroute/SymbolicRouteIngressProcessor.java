@@ -9,6 +9,29 @@ import org.batfish.datamodel.AbstractRouteDecorator;
 /** Hoyan Algorithm 1 ingress-policy and guarded-RIB installation steps. */
 public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorator> {
 
+  /** Import-policy result prepared for identity validation before installation. */
+  static final class PreparedCandidate<R extends AbstractRouteDecorator> {
+
+    @Nonnull private final SymbolicRouteContributionId _contributionId;
+    @Nonnull private final SymbolicRoute<R> _candidate;
+
+    PreparedCandidate(
+        SymbolicRouteContributionId contributionId, SymbolicRoute<R> candidate) {
+      _contributionId = requireNonNull(contributionId, "contributionId must be provided");
+      _candidate = requireNonNull(candidate, "candidate must be provided");
+    }
+
+    @Nonnull
+    SymbolicRouteContributionId getContributionId() {
+      return _contributionId;
+    }
+
+    @Nonnull
+    SymbolicRoute<R> getCandidate() {
+      return _candidate;
+    }
+  }
+
   @Nonnull private final String _receiver;
   @Nonnull private final GuardedRib<R> _rib;
   @Nonnull private final SymbolicRouteIngressPolicy<R> _ingressPolicy;
@@ -33,7 +56,7 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
   /**
    * Applies ingress policy without modifying the RIB, so callers can validate candidate identity.
    */
-  Optional<SymbolicRouteIngressCandidate<R>> prepare(SymbolicRouteMessage<R> message) {
+  Optional<PreparedCandidate<R>> prepare(SymbolicRouteMessage<R> message) {
     requireNonNull(message, "message must be provided");
     if (message.getStage() != SymbolicRouteMessage.Stage.INGRESS) {
       throw new IllegalArgumentException("ingress processor accepts only INGRESS messages");
@@ -56,14 +79,14 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
     SymbolicRoute<R> candidate =
         new SymbolicRoute<>(key, route, message.getGuard(), message.getProvenance());
     return Optional.of(
-        new SymbolicRouteIngressCandidate<>(
+        new PreparedCandidate<>(
             new SymbolicRouteContributionId(
                 message.getMessageId(), message.getSender(), message.getReceiver()),
             candidate));
   }
 
   /** Installs a previously prepared ingress candidate. */
-  SymbolicRouteIngressResult<R> install(SymbolicRouteIngressCandidate<R> prepared) {
+  SymbolicRouteIngressResult<R> install(PreparedCandidate<R> prepared) {
     requireNonNull(prepared, "prepared candidate must be provided");
     SymbolicRoute<R> candidate = prepared.getCandidate();
     GuardedRibDelta<R> delta = _rib.putContribution(prepared.getContributionId(), candidate);

@@ -1180,3 +1180,23 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   语义，避免 next-hop、`nonRouting` 和 missing-policy 行为漂移。
 - convergence、ingress、pipeline、parser-driven tolerance 定向测试和 test PMD 全部通过；
   主源码由 177 个减少为 176 个 Java 文件，`git diff --check` 通过。
+
+## Stage 5.2 代码组织整理：唯一 owner 辅助类内嵌（2026-08-28 15:33 CST）
+
+- 确立整理规则：独立的 public 模型、扩展点和生命周期类保持一文件一 public type；
+  只有单一 owner 的 package-private helper/DTO 内嵌到 owner，避免同时出现过多小文件和
+  不必要的巨型文件。
+- 删除顶层 `SymbolicRouteWorkItem.java`，收敛为
+  `SymbolicRouteConvergenceEngine.WorkItem`。该类改为 private nested type，只有全局 engine
+  能创建和解释 advertisement/withdrawal 事件。
+- 删除顶层 `SymbolicRouteIngressCandidate.java`，收敛为
+  `SymbolicRouteIngressProcessor.PreparedCandidate`。简化名称的同时保留 package-private 可见性，
+  使 convergence engine 仍可在 RIB 写入前检查 contribution-to-candidate identity。
+- 新增 `CODE_ORGANIZATION.md`，记录命名规则、必须保留的公开类、逻辑分组、未来
+  `guard/rib/engine/batfish/pipeline` 子包边界，以及新增文件的准入条件。子包物理迁移
+  延后到独立机械性 commit，不与 route semantics 修改混合。
+- 公开类保留 `SymbolicRoute` 前缀以表达 engine API 所有权，Batfish-backed 类保留
+  `Batfish` 前缀以区分具体协议语义和协议无关核心；内部 helper 使用 owner 语境下的
+  简称。
+- symbolicroute 生产文件数由 50 减少为 48；engine、ingress、network factory、pipeline、
+  parser-driven tolerance 定向测试和 test PMD 通过，`git diff --check` 通过。
