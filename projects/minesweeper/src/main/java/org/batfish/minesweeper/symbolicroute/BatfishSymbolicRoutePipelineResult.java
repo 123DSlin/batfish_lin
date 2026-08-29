@@ -26,6 +26,7 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull private final SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> _isisL1RibNetwork;
   @Nonnull private final SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> _isisL2RibNetwork;
   @Nonnull private final BatfishIsisLevelTransitionReconciler _isisLevelTransitionReconciler;
+  @Nonnull private final BatfishMainRibReconciler _mainRibReconciler;
   @Nonnull private final SymbolicRouteConvergenceResult _mainConvergence;
   @Nonnull private final SymbolicRouteConvergenceResult _bgpConvergence;
   @Nonnull private final SymbolicRouteConvergenceResult _isisL1Convergence;
@@ -38,6 +39,7 @@ public final class BatfishSymbolicRoutePipelineResult {
       SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL1RibNetwork,
       SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL2RibNetwork,
       BatfishIsisLevelTransitionReconciler isisLevelTransitionReconciler,
+      BatfishMainRibReconciler mainRibReconciler,
       SymbolicRouteConvergenceResult mainConvergence,
       SymbolicRouteConvergenceResult bgpConvergence,
       SymbolicRouteConvergenceResult isisL1Convergence,
@@ -50,6 +52,7 @@ public final class BatfishSymbolicRoutePipelineResult {
     _isisLevelTransitionReconciler =
         requireNonNull(
             isisLevelTransitionReconciler, "isisLevelTransitionReconciler must be provided");
+    _mainRibReconciler = requireNonNull(mainRibReconciler, "mainRibReconciler must be provided");
     _mainConvergence = requireNonNull(mainConvergence, "mainConvergence must be provided");
     _bgpConvergence = requireNonNull(bgpConvergence, "bgpConvergence must be provided");
     _isisL1Convergence = requireNonNull(isisL1Convergence, "isisL1Convergence must be provided");
@@ -89,6 +92,11 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull
   public BatfishIsisLevelTransitionReconciler getIsisLevelTransitionReconciler() {
     return _isisLevelTransitionReconciler;
+  }
+
+  @Nonnull
+  public BatfishMainRibReconciler getMainRibReconciler() {
+    return _mainRibReconciler;
   }
 
   @Nonnull

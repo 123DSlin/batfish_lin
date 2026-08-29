@@ -88,7 +88,7 @@ Stage 6.1 is not complete IS-IS support. The following remain unsupported and mu
 accepted:
 
 - overload behavior;
-- dynamic reconciliation from L1/L2 into MAIN and other downstream protocol planes;
+- dynamic redistribution from changed MAIN state into downstream protocol planes;
 - external L1/L2 routes and export/redistribution policy;
 - broadcast LAN pseudonodes and parallel-link failure identities;
 - concrete Batfish differential tests over enumerated failure assignments;
@@ -96,6 +96,7 @@ accepted:
 - iBGP session guards derived from IS-IS reachability;
 - SR-MPLS/SRv6 advertisements, SID database, policy selection, or traffic execution.
 
-Attached-default and L1-to-L2 dynamic lifecycle are implemented; overload remains fail-closed.
+Attached-default, L1-to-L2 lifecycle, and L1/L2-to-MAIN reconciliation are implemented; overload
+remains fail-closed.
 The remaining items belong to later stages. SR work must begin only after the IS-IS reachability
 guards on which its Node-SID and adjacency-SID semantics depend are complete.

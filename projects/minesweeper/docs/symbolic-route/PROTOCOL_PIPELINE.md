@@ -70,6 +70,20 @@ directed `BatfishBgpEdge` objects, and symbolic sessions. Raw uploaded configura
 automatic guard assignment belong to the next adapter layer, after the accepted configuration and
 guard schema is specified. Unsupported iBGP/OSPF/IS-IS/SR input must not be silently accepted.
 
+## Protocol RIB to MAIN lifecycle
+
+`BatfishMainRibReconciler` registers stable-state listeners on the IS-IS L1, IS-IS L2, and BGP
+networks. It uses `(protocol plane, SymbolicRouteKey)` as source identity and a private stable
+contribution ID for MAIN; route text is never an identity. A selected source branch becoming
+unsatisfiable or disappearing withdraws its MAIN contribution recursively, a logically changed
+guard updates the same contribution, and a changed concrete route is handled as replacement.
+Connected and static routes remain native MAIN seeds and are not owned by this reconciler.
+
+This lifecycle stops at MAIN. A post-return MAIN change does not yet trigger fresh redistribution
+into BGP because the production MAIN-to-BGP conversion remains the fixed-snapshot path described
+below. This boundary does not affect the initial complete symbolic RIB, but it must be resolved
+before configuration/policy changes are supported incrementally across redistribution.
+
 ## Redistribution implementation boundary
 
 There are currently two deliberately distinct redistribution paths:

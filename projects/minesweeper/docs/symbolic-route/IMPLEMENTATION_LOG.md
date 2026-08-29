@@ -1268,3 +1268,23 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 能力边界：本阶段只完成 L1→L2 transition lifecycle。L1/L2 变化之后，已经一次性安装的
   MAIN/BGP 等下游 plane 仍未动态 reconcile；需要查看跨协议动态结果时仍应完整重跑 pipeline，
   后续由通用 protocol-to-MAIN reconciler 解决。
+
+## Stage 6.4 protocol-to-MAIN 持续 reconciliation（2026-08-29 18:06 CST）
+
+- 新增 `BatfishMainRibReconciler`，统一替换 pipeline 中一次性的 IS-IS/BGP MAIN 安装代码。
+  reconciler 注册在 L1、L2 和 BGP engine 的 stable-state 边界，汇总各协议 selected branches，
+  再通过 MAIN engine 的 advertisement/withdrawal API 驱动跨协议 guarded RIB 重新选择。
+- source identity 使用 `(protocol plane, SymbolicRouteKey)`，MAIN contribution 使用内部稳定 ID；
+  不使用 route `toString()`。guard 逻辑变化保留 contribution identity，concrete route 变化或
+  source 消失分别执行 replacement 或 recursive withdrawal。
+- connected/static 仍作为 MAIN 原生 seed，不由 reconciler 接管；IS-IS attached default 的
+  L1/L2 router 拒绝规则仍在注册 source 时显式保留。
+- 动态端到端测试现在同时验证 L1 origin withdrawal、guard update、route replacement 会在
+  L2 和 MAIN 两层同步删除、更新或重建，并验证 replacement 后 MAIN metric 与完整路径 guard。
+- 能力边界：协议 RIB→MAIN 已持续 reconcile；MAIN→BGP redistribution 仍是固定 snapshot 的
+  `BatfishBgpRedistribution` 路径。因此初始完整 symbolic RIB 正确，但返回结果后的 MAIN 变化
+  尚不会自动重新生成本地 BGP contributions，后续需与已实现的 redistribution reconciler 统一。
+- 验收：`//projects/minesweeper:minesweeper_tests` 在 `--nocache_test_results` 下通过；Java format
+  与 `git diff --check` 通过。主源码 PMD 仍只报告 `Graph`、`Encoder`、`EncoderSlice`、
+  `PropertyChecker` 和旧 SMT symbolic-route 文件的仓库基线违规，本阶段未新增
+  `org/batfish/minesweeper/symbolicroute` 违规，也未修改上述关键 SMT 文件。

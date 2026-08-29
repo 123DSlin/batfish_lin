@@ -39,6 +39,9 @@ their owner already supplies the context.
 - IS-IS level lifecycle: `BatfishIsisLevelTransitionReconciler` owns the persistent mapping from
   selected L1 candidate identity to derived L2 contribution identity. It is intentionally separate
   from the protocol adapter and generic convergence engine.
+- Cross-protocol lifecycle: `BatfishMainRibReconciler` owns stable protocol-plane candidate to MAIN
+  contribution identities and the semantic diff that converts protocol RIB stable states into
+  MAIN advertisements, guard updates, replacements, and withdrawals.
 
 Merging these public types would hide lifecycle boundaries, produce large files, or force callers
 to use deeply nested names without reducing semantic complexity.
@@ -71,7 +74,8 @@ explicit. It must not be mixed with route semantics changes.
 
 ## Known boundary requiring later unification
 
-The fixed-snapshot production path uses `BatfishBgpRedistribution`. The separate
+The protocol-to-MAIN path is now unified behind `BatfishMainRibReconciler`. The remaining
+MAIN-to-BGP fixed-snapshot production path uses `BatfishBgpRedistribution`. The separate
 `BatfishRoutingPolicyProcessor` / `BatfishRedistributionKey` / `BatfishRedistributionReconciler`
 group implements an incremental lifecycle but is not called by the production pipeline. See
 `PROTOCOL_PIPELINE.md`. Before incremental configuration changes are supported, both paths must

@@ -57,6 +57,10 @@ public final class BatfishSymbolicRoutePipeline {
         new BatfishIsisLevelTransitionReconciler(
             input.getConfigurations(), isisNetwork, isisL2Network);
     isisNetwork.getEngine().addStableStateListener(levelTransitionReconciler::reconcile);
+    BatfishMainRibReconciler mainRibReconciler = new BatfishMainRibReconciler(mainNetwork);
+    mainRibReconciler.registerSource(
+        "isis-l1", isisNetwork, route -> !rejectAttachedAtL1L2Router(input, route));
+    mainRibReconciler.registerSource("isis-l2", isisL2Network, route -> true);
     SymbolicRouteConvergenceResult isisConvergence = isisNetwork.converge();
     SymbolicRouteConvergenceResult transitionConvergence =
         levelTransitionReconciler.getLastConvergence();
@@ -67,9 +71,6 @@ public final class BatfishSymbolicRoutePipeline {
             nativeL2Convergence.getProcessedWithdrawals()
                 + transitionConvergence.getProcessedWithdrawals(),
             nativeL2Convergence.getRibUpdates() + transitionConvergence.getRibUpdates());
-    installSelectedIsisRoutesInMainRib(input, mainNetwork, isisNetwork, "isis-l1-rib");
-    installSelectedIsisRoutesInMainRib(input, mainNetwork, isisL2Network, "isis-l2-rib");
-
     List<SymbolicRouteSeed<AnnotatedRoute<Bgpv4Route>>> bgpSeeds =
         redistributeSelectedMainRoutes(input, mainNetwork);
     SymbolicRouteNetwork<AnnotatedRoute<Bgpv4Route>> bgpNetwork =
@@ -79,60 +80,19 @@ public final class BatfishSymbolicRoutePipeline {
             bgpSeeds,
             new BatfishBgpProtocolAdapter(input.getBgpEdges(), input.getConcreteMainRibs()));
     SymbolicRouteConvergenceResult bgpConvergence = bgpNetwork.converge();
-    installSelectedBgpRoutesInMainRib(mainNetwork, bgpNetwork);
+    mainRibReconciler.registerSource("bgp", bgpNetwork, route -> true);
     return new BatfishSymbolicRoutePipelineResult(
         mainNetwork,
         bgpNetwork,
         isisNetwork,
         isisL2Network,
         levelTransitionReconciler,
+        mainRibReconciler,
         mainConvergence,
         bgpConvergence,
         isisConvergence,
         isisL2Convergence,
         input.getConfigurations());
-  }
-
-  /** Installs selected, routable IS-IS Level-1 candidates into the main RIB. */
-  private static void installSelectedIsisRoutesInMainRib(
-      BatfishSymbolicRoutePipelineInput input,
-      SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> mainNetwork,
-      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisNetwork,
-      String contributionNamespace) {
-    isisNetwork
-        .getRibs()
-        .values()
-        .forEach(
-            isisRib ->
-                isisRib
-                    .getEntries()
-                    .forEach(
-                        entry -> {
-                          SymbolicRoute<AnnotatedRoute<IsisRoute>> isis = entry.getSymbolicRoute();
-                          if (isis.getRoute().getRoute().getNonRouting()
-                              || !entry.getSelectionGuard().isSatisfiable()
-                              || rejectAttachedAtL1L2Router(input, isis)) {
-                            return;
-                          }
-                          AnnotatedRoute<AbstractRoute> mainRoute =
-                              new AnnotatedRoute<>(
-                                  isis.getRoute().getRoute(), isis.getRoute().getSourceVrf());
-                          SymbolicRouteKey mainKey =
-                              new SymbolicRouteKey(
-                                  isis.getKey().getRouter(), isis.getKey().getVrf(), mainRoute);
-                          mainNetwork
-                              .getRib(isis.getKey().getRouter())
-                              .putContribution(
-                                  new SymbolicRouteContributionId(
-                                      contributionNamespace,
-                                      isis.getKey().getRouter(),
-                                      isis.getKey().getRouter()),
-                                  new SymbolicRoute<>(
-                                      mainKey,
-                                      mainRoute,
-                                      entry.getSelectionGuard(),
-                                      isis.getProvenance()));
-                        }));
   }
 
   private static boolean rejectAttachedAtL1L2Router(
@@ -143,45 +103,6 @@ public final class BatfishSymbolicRoutePipeline {
     Configuration configuration = input.getConfigurations().get(route.getKey().getRouter());
     Vrf vrf = configuration.getVrfs().get(route.getKey().getVrf());
     return vrf != null && vrf.getIsisProcess() != null && vrf.getIsisProcess().getLevel2() != null;
-  }
-
-  /** Installs selected, routable protocol candidates into the protocol-neutral main RIB. */
-  private static void installSelectedBgpRoutesInMainRib(
-      SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> mainNetwork,
-      SymbolicRouteNetwork<AnnotatedRoute<Bgpv4Route>> bgpNetwork) {
-    bgpNetwork
-        .getRibs()
-        .values()
-        .forEach(
-            bgpRib ->
-                bgpRib
-                    .getEntries()
-                    .forEach(
-                        entry -> {
-                          SymbolicRoute<AnnotatedRoute<Bgpv4Route>> bgp = entry.getSymbolicRoute();
-                          if (bgp.getRoute().getRoute().getNonRouting()
-                              || !entry.getSelectionGuard().isSatisfiable()) {
-                            return;
-                          }
-                          AnnotatedRoute<AbstractRoute> mainRoute =
-                              new AnnotatedRoute<>(
-                                  bgp.getRoute().getRoute(), bgp.getRoute().getSourceVrf());
-                          SymbolicRouteKey mainKey =
-                              new SymbolicRouteKey(
-                                  bgp.getKey().getRouter(), bgp.getKey().getVrf(), mainRoute);
-                          mainNetwork
-                              .getRib(bgp.getKey().getRouter())
-                              .putContribution(
-                                  new SymbolicRouteContributionId(
-                                      "bgp-loc-rib",
-                                      bgp.getKey().getRouter(),
-                                      bgp.getKey().getRouter()),
-                                  new SymbolicRoute<>(
-                                      mainKey,
-                                      mainRoute,
-                                      entry.getSelectionGuard(),
-                                      bgp.getProvenance()));
-                        }));
   }
 
   private static List<SymbolicRouteSeed<AnnotatedRoute<Bgpv4Route>>> redistributeSelectedMainRoutes(

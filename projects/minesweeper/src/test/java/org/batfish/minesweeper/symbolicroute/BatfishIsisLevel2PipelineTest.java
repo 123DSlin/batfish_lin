@@ -110,6 +110,7 @@ public final class BatfishIsisLevel2PipelineTest {
     assertThat(reconciler.getActiveTransitionCount() < initialTransitions, equalTo(true));
     assertThat(reconciler.getLastConvergence().getProcessedWithdrawals() > 0, equalTo(true));
     assertThat(hasRoute(result.getIsisL2RibNetwork(), "r4", ORIGIN), equalTo(false));
+    assertThat(hasMainRoute(result, "r4", ORIGIN), equalTo(false));
 
     RouteGuard firstGuard = GUARDS.variable("origin_enabled");
     result
@@ -123,6 +124,9 @@ public final class BatfishIsisLevel2PipelineTest {
     assertThat(
         l2OriginAtR4(result).getSelectionGuard().isEquivalentTo(firstGuard.and(pathGuard)),
         equalTo(true));
+    assertThat(
+        mainOriginAtR4(result).getSelectionGuard().isEquivalentTo(firstGuard.and(pathGuard)),
+        equalTo(true));
 
     RouteGuard updatedGuard = GUARDS.variable("origin_updated");
     result
@@ -133,6 +137,9 @@ public final class BatfishIsisLevel2PipelineTest {
                 localMessage(messageId, origin.getRoute(), updatedGuard, origin.getProvenance())));
     assertThat(
         l2OriginAtR4(result).getSelectionGuard().isEquivalentTo(updatedGuard.and(pathGuard)),
+        equalTo(true));
+    assertThat(
+        mainOriginAtR4(result).getSelectionGuard().isEquivalentTo(updatedGuard.and(pathGuard)),
         equalTo(true));
 
     AnnotatedRoute<IsisRoute> replacementRoute =
@@ -152,6 +159,11 @@ public final class BatfishIsisLevel2PipelineTest {
         l2OriginAtR4(result).getSymbolicRoute().getRoute().getRoute().getMetric(), equalTo(35L));
     assertThat(
         l2OriginAtR4(result).getSelectionGuard().isEquivalentTo(updatedGuard.and(pathGuard)),
+        equalTo(true));
+    assertThat(
+        mainOriginAtR4(result).getSymbolicRoute().getRoute().getRoute().getMetric(), equalTo(35L));
+    assertThat(
+        mainOriginAtR4(result).getSelectionGuard().isEquivalentTo(updatedGuard.and(pathGuard)),
         equalTo(true));
   }
 
@@ -173,6 +185,20 @@ public final class BatfishIsisLevel2PipelineTest {
   private static GuardedRibEntry<AnnotatedRoute<IsisRoute>> l2OriginAtR4(
       BatfishSymbolicRoutePipelineResult result) {
     return result.getIsisL2RibNetwork().getRib("r4").getEntries().stream()
+        .filter(entry -> entry.getSymbolicRoute().getKey().getNetwork().equals(ORIGIN))
+        .findFirst()
+        .get();
+  }
+
+  private static boolean hasMainRoute(
+      BatfishSymbolicRoutePipelineResult result, String router, Prefix prefix) {
+    return result.getMainRibNetwork().getRib(router).getEntries().stream()
+        .anyMatch(entry -> entry.getSymbolicRoute().getKey().getNetwork().equals(prefix));
+  }
+
+  private static GuardedRibEntry<AnnotatedRoute<AbstractRoute>> mainOriginAtR4(
+      BatfishSymbolicRoutePipelineResult result) {
+    return result.getMainRibNetwork().getRib("r4").getEntries().stream()
         .filter(entry -> entry.getSymbolicRoute().getKey().getNetwork().equals(ORIGIN))
         .findFirst()
         .get();
