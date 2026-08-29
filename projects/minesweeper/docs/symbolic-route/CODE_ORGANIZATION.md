@@ -36,6 +36,9 @@ their owner already supplies the context.
 - Batfish IS-IS boundary: `BatfishIsisEdge`, `BatfishIsisProtocolAdapter`, and
   `BatfishIsisTopologyAdapter`. These remain separate because they respectively own parsed edge
   identity, Algorithm 2 import/export semantics, and topology/seed conversion.
+- IS-IS level lifecycle: `BatfishIsisLevelTransitionReconciler` owns the persistent mapping from
+  selected L1 candidate identity to derived L2 contribution identity. It is intentionally separate
+  from the protocol adapter and generic convergence engine.
 
 Merging these public types would hide lifecycle boundaries, produce large files, or force callers
 to use deeply nested names without reducing semantic complexity.

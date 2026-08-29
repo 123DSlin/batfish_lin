@@ -2,9 +2,7 @@ package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
 import static org.batfish.datamodel.RoutingProtocol.CONNECTED;
-import static org.batfish.datamodel.RoutingProtocol.ISIS_L2;
 import static org.batfish.datamodel.RoutingProtocol.STATIC;
-import static org.batfish.dataplane.protocols.IsisProtocolHelper.convertRouteLevel1ToLevel2;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
@@ -47,18 +45,28 @@ public final class BatfishSymbolicRoutePipeline {
             input.getIsisSessions(),
             input.getIsisSeeds(),
             new BatfishIsisProtocolAdapter(input.getIsisEdges()));
-    SymbolicRouteConvergenceResult isisConvergence = isisNetwork.converge();
-    List<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> l2Seeds =
-        new ArrayList<>(input.getIsisL2Seeds());
-    l2Seeds.addAll(upgradeSelectedL1Routes(input, isisNetwork));
     SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL2Network =
         SymbolicRouteNetworkFactory.create(
             routers,
             input.getIsisL2Sessions(),
-            l2Seeds,
+            input.getIsisL2Seeds(),
             new BatfishIsisProtocolAdapter(
                 input.getIsisL2Edges(), org.batfish.datamodel.isis.IsisLevel.LEVEL_2));
-    SymbolicRouteConvergenceResult isisL2Convergence = isisL2Network.converge();
+    SymbolicRouteConvergenceResult nativeL2Convergence = isisL2Network.converge();
+    BatfishIsisLevelTransitionReconciler levelTransitionReconciler =
+        new BatfishIsisLevelTransitionReconciler(
+            input.getConfigurations(), isisNetwork, isisL2Network);
+    isisNetwork.getEngine().addStableStateListener(levelTransitionReconciler::reconcile);
+    SymbolicRouteConvergenceResult isisConvergence = isisNetwork.converge();
+    SymbolicRouteConvergenceResult transitionConvergence =
+        levelTransitionReconciler.getLastConvergence();
+    SymbolicRouteConvergenceResult isisL2Convergence =
+        new SymbolicRouteConvergenceResult(
+            nativeL2Convergence.getProcessedMessages()
+                + transitionConvergence.getProcessedMessages(),
+            nativeL2Convergence.getProcessedWithdrawals()
+                + transitionConvergence.getProcessedWithdrawals(),
+            nativeL2Convergence.getRibUpdates() + transitionConvergence.getRibUpdates());
     installSelectedIsisRoutesInMainRib(input, mainNetwork, isisNetwork, "isis-l1-rib");
     installSelectedIsisRoutesInMainRib(input, mainNetwork, isisL2Network, "isis-l2-rib");
 
@@ -77,60 +85,12 @@ public final class BatfishSymbolicRoutePipeline {
         bgpNetwork,
         isisNetwork,
         isisL2Network,
+        levelTransitionReconciler,
         mainConvergence,
         bgpConvergence,
         isisConvergence,
         isisL2Convergence,
         input.getConfigurations());
-  }
-
-  /** Converts selected L1 branches at non-overloaded L1/L2 routers into guarded L2 seeds. */
-  private static List<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> upgradeSelectedL1Routes(
-      BatfishSymbolicRoutePipelineInput input,
-      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL1Network) {
-    List<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> seeds = new ArrayList<>();
-    for (Map.Entry<String, GuardedRib<AnnotatedRoute<IsisRoute>>> routerRib :
-        isisL1Network.getRibs().entrySet()) {
-      String router = routerRib.getKey();
-      Configuration configuration = input.getConfigurations().get(router);
-      for (GuardedRibEntry<AnnotatedRoute<IsisRoute>> entry : routerRib.getValue().getEntries()) {
-        AnnotatedRoute<IsisRoute> annotated = entry.getSymbolicRoute().getRoute();
-        Vrf vrf = configuration.getVrfs().get(annotated.getSourceVrf());
-        if (vrf == null
-            || vrf.getIsisProcess() == null
-            || vrf.getIsisProcess().getLevel1() == null
-            || vrf.getIsisProcess().getLevel2() == null
-            || vrf.getIsisProcess().getOverload()
-            || !entry.getSelectionGuard().isSatisfiable()) {
-          continue;
-        }
-        int l2Admin = ISIS_L2.getDefaultAdministrativeCost(configuration.getConfigurationFormat());
-        java.util.Optional<IsisRoute> upgraded =
-            convertRouteLevel1ToLevel2(annotated.getRoute(), ISIS_L2, l2Admin);
-        if (!upgraded.isPresent()) {
-          continue;
-        }
-        IsisRoute route = upgraded.get();
-        seeds.add(
-            new SymbolicRouteSeed<>(
-                "isis-l1-to-l2:"
-                    + router
-                    + ":"
-                    + annotated.getSourceVrf()
-                    + ":"
-                    + route.getNetwork()
-                    + ":"
-                    + route.getSystemId()
-                    + ":"
-                    + route.getMetric()
-                    + ":"
-                    + route.getNextHopIp(),
-                router,
-                new AnnotatedRoute<>(route, annotated.getSourceVrf()),
-                entry.getSelectionGuard()));
-      }
-    }
-    return seeds;
   }
 
   /** Installs selected, routable IS-IS Level-1 candidates into the main RIB. */

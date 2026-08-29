@@ -48,10 +48,15 @@ An L1/L2 router originates Batfish-compatible attached default into L1. The rout
 L1-only neighbors and may enter their MAIN RIB, but is not upgraded to L2 and is rejected from the
 originating L1/L2 router's MAIN RIB, matching Batfish `IsisRib` behavior.
 
-The cross-level conversion currently belongs to one fixed-snapshot pipeline run: L1 converges,
-guarded transition contributions are derived, then L2 converges. Incremental mutation after the
-returned result does not yet reconcile withdrawals across the L1/L2 boundary; callers must rerun
-the whole pipeline. This limitation does not affect fixed-configuration symbolic-RIB computation.
+Stage 6.3 replaces the one-shot conversion with `BatfishIsisLevelTransitionReconciler`. The L1
+engine invokes it synchronously only after draining its global FIFO. It scans selected L1 branches,
+maintains stable source-candidate-to-L2-contribution identities, and drives L2 advertisement,
+guard update, replacement, or recursive withdrawal to another stable state. A caller may therefore
+mutate L1 through its convergence engine without rerunning the whole pipeline.
+
+Stage 6.3 将一次性转换替换为持续的跨层 reconciler。L1 全局队列清空后同步触发 reconcile，
+对 source candidate 与 L2 contribution 建立稳定映射；L1 withdrawal、guard update 和 route
+replacement 都会转换成相应的 L2 delta，并在返回前完成 L2 后代递归撤回和重新收敛。
 
 ## Verified behavior / 已验证行为
 
@@ -74,6 +79,8 @@ the whole pipeline. This limitation does not affect fixed-configuration symbolic
 - attached-default acceptance at an L1-only neighbor and rejection at L2/the L1L2 origin MAIN;
 - three L2 metric tiers and equal-cost candidates;
 - explicit fail-closed rejection of unsupported overload semantics.
+- incremental L1 withdrawal, equivalent candidate guard update, and atomic route replacement;
+- automatic removal/recreation of all derived L2 descendants without rerunning the pipeline.
 
 ## Remaining stages / 后续阶段
 
@@ -81,7 +88,7 @@ Stage 6.1 is not complete IS-IS support. The following remain unsupported and mu
 accepted:
 
 - overload behavior;
-- incremental cross-level reconciliation after a returned pipeline result;
+- dynamic reconciliation from L1/L2 into MAIN and other downstream protocol planes;
 - external L1/L2 routes and export/redistribution policy;
 - broadcast LAN pseudonodes and parallel-link failure identities;
 - concrete Batfish differential tests over enumerated failure assignments;
@@ -89,6 +96,6 @@ accepted:
 - iBGP session guards derived from IS-IS reachability;
 - SR-MPLS/SRv6 advertisements, SID database, policy selection, or traffic execution.
 
-Attached-default behavior is implemented; overload remains fail-closed. The remaining items belong
-to Stage 6.3 and later. SR work must begin only after the IS-IS reachability
+Attached-default and L1-to-L2 dynamic lifecycle are implemented; overload remains fail-closed.
+The remaining items belong to later stages. SR work must begin only after the IS-IS reachability
 guards on which its Node-SID and adjacency-SID semantics depend are complete.

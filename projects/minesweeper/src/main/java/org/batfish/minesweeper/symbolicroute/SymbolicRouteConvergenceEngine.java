@@ -77,6 +77,7 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
 
   @Nonnull private final Map<String, SymbolicRouteIngressProcessor<R>> _ingressProcessors;
   @Nonnull private final Map<String, List<SymbolicRouteExporter<R>>> _exporters;
+  @Nonnull private final List<Runnable> _stableStateListeners;
 
   @Nonnull
   private final Map<SymbolicRouteContributionId, ContributionLocation> _contributionLocations;
@@ -119,6 +120,7 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
       }
     }
     _exporters = new LinkedHashMap<>();
+    _stableStateListeners = new ArrayList<>();
     _contributionLocations = new LinkedHashMap<>();
     _advertisements = new LinkedHashMap<>();
     for (SymbolicRouteExporter<R> exporter : exporters) {
@@ -181,6 +183,15 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
     return run(queue);
   }
 
+  /** Registers a synchronous callback invoked after this engine drains its global work queue. */
+  public void addStableStateListener(Runnable listener) {
+    Runnable checked = requireNonNull(listener, "listener must be provided");
+    if (_stableStateListeners.contains(checked)) {
+      throw new IllegalArgumentException("stable-state listener is already registered");
+    }
+    _stableStateListeners.add(checked);
+  }
+
   private SymbolicRouteConvergenceResult run(Queue<WorkItem<R>> queue) {
     int processedMessages = 0;
     int processedWithdrawals = 0;
@@ -195,11 +206,11 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
       processedMessages++;
       ribUpdates += processAdvertisement(item.getMessage(), queue);
     }
+    _stableStateListeners.forEach(Runnable::run);
     return new SymbolicRouteConvergenceResult(processedMessages, processedWithdrawals, ribUpdates);
   }
 
-  private int processAdvertisement(
-      SymbolicRouteMessage<R> message, Queue<WorkItem<R>> queue) {
+  private int processAdvertisement(SymbolicRouteMessage<R> message, Queue<WorkItem<R>> queue) {
     SymbolicRouteIngressProcessor<R> processor = _ingressProcessors.get(message.getReceiver());
     if (processor == null) {
       throw new IllegalArgumentException("no ingress processor for message receiver");
@@ -228,8 +239,7 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
     return propagateDelta(processor, ingressResult.getDelta(), queue);
   }
 
-  private int processWithdrawal(
-      WorkItem<R> item, Queue<WorkItem<R>> queue) {
+  private int processWithdrawal(WorkItem<R> item, Queue<WorkItem<R>> queue) {
     SymbolicRouteContributionId contributionId = item.getWithdrawal();
     ContributionLocation location = _contributionLocations.get(contributionId);
     if (location == null || !location._guard.isEquivalentTo(item.getExpectedGuard())) {

@@ -83,6 +83,102 @@ public final class BatfishIsisLevel2PipelineTest {
   }
 
   @Test
+  public void testIncrementalL1WithdrawalAndGuardUpdateReconcileL2() {
+    Map<String, Configuration> configurations = configurations();
+    IsisTopology topology =
+        IsisTopology.initIsisTopology(configurations, synthesizeL3Topology(configurations));
+    TopologyLinkGuards linkGuards =
+        BatfishTopologyGuardInitializer.inferTopology(configurations, GUARDS);
+    BatfishIsisTopologyAdapter.Result isis =
+        BatfishIsisTopologyAdapter.build(configurations, topology, linkGuards, GUARDS);
+    BatfishSymbolicRoutePipelineResult result =
+        BatfishSymbolicRoutePipeline.run(input(configurations, isis));
+    BatfishIsisLevelTransitionReconciler reconciler = result.getIsisLevelTransitionReconciler();
+    int initialTransitions = reconciler.getActiveTransitionCount();
+    GuardedRibEntry<AnnotatedRoute<IsisRoute>> originEntry =
+        result.getIsisL1RibNetwork().getRib("r1").getEntries().stream()
+            .filter(entry -> entry.getSymbolicRoute().getKey().getNetwork().equals(ORIGIN))
+            .findFirst()
+            .get();
+    SymbolicRoute<AnnotatedRoute<IsisRoute>> origin = originEntry.getSymbolicRoute();
+    String messageId = "isis-l1-origin:r1:default:Loopback0:1.1.1.1/32";
+    SymbolicRouteContributionId originContribution =
+        new SymbolicRouteContributionId(messageId, "r1", "r1");
+
+    result.getIsisL1RibNetwork().getEngine().withdraw(ImmutableList.of(originContribution));
+
+    assertThat(reconciler.getActiveTransitionCount() < initialTransitions, equalTo(true));
+    assertThat(reconciler.getLastConvergence().getProcessedWithdrawals() > 0, equalTo(true));
+    assertThat(hasRoute(result.getIsisL2RibNetwork(), "r4", ORIGIN), equalTo(false));
+
+    RouteGuard firstGuard = GUARDS.variable("origin_enabled");
+    result
+        .getIsisL1RibNetwork()
+        .getEngine()
+        .converge(
+            ImmutableList.of(
+                localMessage(messageId, origin.getRoute(), firstGuard, origin.getProvenance())));
+    RouteGuard pathGuard =
+        GUARDS.variable("r1_r2").and(GUARDS.variable("r2_r3")).and(GUARDS.variable("r3_r4"));
+    assertThat(
+        l2OriginAtR4(result).getSelectionGuard().isEquivalentTo(firstGuard.and(pathGuard)),
+        equalTo(true));
+
+    RouteGuard updatedGuard = GUARDS.variable("origin_updated");
+    result
+        .getIsisL1RibNetwork()
+        .getEngine()
+        .converge(
+            ImmutableList.of(
+                localMessage(messageId, origin.getRoute(), updatedGuard, origin.getProvenance())));
+    assertThat(
+        l2OriginAtR4(result).getSelectionGuard().isEquivalentTo(updatedGuard.and(pathGuard)),
+        equalTo(true));
+
+    AnnotatedRoute<IsisRoute> replacementRoute =
+        new AnnotatedRoute<>(
+            origin.getRoute().getRoute().toBuilder().setMetric(5L).build(), DEFAULT_VRF_NAME);
+    result
+        .getIsisL1RibNetwork()
+        .getEngine()
+        .replace(
+            originContribution,
+            localMessage(
+                "isis-l1-origin-r1-loopback-replacement",
+                replacementRoute,
+                updatedGuard,
+                origin.getProvenance()));
+    assertThat(
+        l2OriginAtR4(result).getSymbolicRoute().getRoute().getRoute().getMetric(), equalTo(35L));
+    assertThat(
+        l2OriginAtR4(result).getSelectionGuard().isEquivalentTo(updatedGuard.and(pathGuard)),
+        equalTo(true));
+  }
+
+  private static SymbolicRouteMessage<AnnotatedRoute<IsisRoute>> localMessage(
+      String messageId,
+      AnnotatedRoute<IsisRoute> route,
+      RouteGuard guard,
+      SymbolicRouteProvenance provenance) {
+    return new SymbolicRouteMessage<>(
+        messageId, "r1", "r1", SymbolicRouteMessage.Stage.INGRESS, route, guard, provenance);
+  }
+
+  private static boolean hasRoute(
+      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> network, String router, Prefix prefix) {
+    return network.getRib(router).getEntries().stream()
+        .anyMatch(entry -> entry.getSymbolicRoute().getKey().getNetwork().equals(prefix));
+  }
+
+  private static GuardedRibEntry<AnnotatedRoute<IsisRoute>> l2OriginAtR4(
+      BatfishSymbolicRoutePipelineResult result) {
+    return result.getIsisL2RibNetwork().getRib("r4").getEntries().stream()
+        .filter(entry -> entry.getSymbolicRoute().getKey().getNetwork().equals(ORIGIN))
+        .findFirst()
+        .get();
+  }
+
+  @Test
   public void testL2ThreePreferenceTiersAndEcmp() {
     BatfishIsisProtocolAdapter adapter =
         new BatfishIsisProtocolAdapter(ImmutableList.of(), IsisLevel.LEVEL_2);

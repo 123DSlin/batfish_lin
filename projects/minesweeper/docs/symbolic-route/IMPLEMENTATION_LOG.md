@@ -1245,3 +1245,26 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 当前 level transition 是 fixed-snapshot orchestration；如果调用者在返回结果后增量撤回
   L1 contribution，尚不会自动跨层 reconcile L2 contribution，必须重新运行完整 pipeline。
   固定配置 symbolic RIB 不受此限制，增量生命周期留到 Stage 6.3。
+
+## Stage 6.3 L1/L2 持续动态生命周期（2026-08-29 17:53 CST）
+
+- `SymbolicRouteConvergenceEngine` 新增同步 stable-state listener：只有全局 advertisement/
+  withdrawal FIFO 完全清空后才触发，确保跨层 consumer 读取的是语义稳定的 Guarded RIB，
+  而不是中间状态。
+- 新增 `BatfishIsisLevelTransitionReconciler`，维护稳定的 L1 `SymbolicRouteKey` → L2
+  contribution identity 映射及 active registry；每次 reconcile 对最终 L1 selected branches
+  做语义 diff，而不是依赖对象相等或 route 字符串。
+- L1 candidate 消失或失去可满足 selection guard 时，reconciler 调用 L2 engine withdrawal，
+  由既有 propagation dependency tree 递归删除所有 L2 descendants；guard 逻辑变化使用同一
+  contribution identity 更新；concrete route replacement 则撤回旧 candidate 后加入新 identity。
+- pipeline 改为先收敛 native L2 state，再注册 reconciler 并收敛 L1；初始运行和返回后的
+  `L1 engine.withdraw/converge/replace` 均会在返回前自动推动 L2 到稳定状态，不再需要重跑
+  整个 pipeline。
+- `BatfishSymbolicRoutePipelineResult` 暴露 level-transition reconciler，便于审计 active
+  transition 数量和最近一次 L2 convergence 统计。
+- `BatfishIsisLevel2PipelineTest` 新增动态生命周期验收：L1 origin withdrawal 自动删除远端
+  L2 route；同 contribution guard 更新改变完整跨层 guard；route replacement 撤回旧 L2
+  candidate 并以新 metric 重建传播结果。
+- 能力边界：本阶段只完成 L1→L2 transition lifecycle。L1/L2 变化之后，已经一次性安装的
+  MAIN/BGP 等下游 plane 仍未动态 reconcile；需要查看跨协议动态结果时仍应完整重跑 pipeline，
+  后续由通用 protocol-to-MAIN reconciler 解决。
