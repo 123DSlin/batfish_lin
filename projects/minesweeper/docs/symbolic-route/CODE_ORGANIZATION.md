@@ -33,6 +33,9 @@ their owner already supplies the context.
 - Link/failure API: `LinkFailureKey`, `TopologyLinkGuards`, `LinkAvailabilityAssignment`.
 - Batfish pipeline API: `BatfishSymbolicRoutePipeline`, `BatfishSymbolicRoutePipelineInput`,
   `BatfishSymbolicRoutePipelineResult`, `BatfishParsedSnapshotPipelineInputBuilder`.
+- Batfish IS-IS boundary: `BatfishIsisEdge`, `BatfishIsisProtocolAdapter`, and
+  `BatfishIsisTopologyAdapter`. These remain separate because they respectively own parsed edge
+  identity, Algorithm 2 import/export semantics, and topology/seed conversion.
 
 Merging these public types would hide lifecycle boundaries, produce large files, or force callers
 to use deeply nested names without reducing semantic complexity.

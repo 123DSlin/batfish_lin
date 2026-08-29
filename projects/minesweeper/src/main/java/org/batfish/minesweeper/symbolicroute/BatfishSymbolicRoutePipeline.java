@@ -17,10 +17,11 @@ import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.BgpProcess;
 import org.batfish.datamodel.Bgpv4Route;
 import org.batfish.datamodel.Configuration;
+import org.batfish.datamodel.IsisRoute;
 import org.batfish.datamodel.RoutingProtocol;
 import org.batfish.datamodel.Vrf;
 
-/** Executes connected/static initialization, static resolution, redistribution, and eBGP once. */
+/** Executes connected/static, IS-IS L1, redistribution, and eBGP to guarded stable state. */
 public final class BatfishSymbolicRoutePipeline {
 
   private BatfishSymbolicRoutePipeline() {}
@@ -38,6 +39,15 @@ public final class BatfishSymbolicRoutePipeline {
     SymbolicRouteConvergenceResult mainConvergence = mainNetwork.converge();
     BatfishStaticRouteResolver.resolveToFixedPoint(mainNetwork, input.getRecursiveStaticRoutes());
 
+    SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisNetwork =
+        SymbolicRouteNetworkFactory.create(
+            routers,
+            input.getIsisSessions(),
+            input.getIsisSeeds(),
+            new BatfishIsisProtocolAdapter(input.getIsisEdges()));
+    SymbolicRouteConvergenceResult isisConvergence = isisNetwork.converge();
+    installSelectedIsisRoutesInMainRib(mainNetwork, isisNetwork);
+
     List<SymbolicRouteSeed<AnnotatedRoute<Bgpv4Route>>> bgpSeeds =
         redistributeSelectedMainRoutes(input, mainNetwork);
     SymbolicRouteNetwork<AnnotatedRoute<Bgpv4Route>> bgpNetwork =
@@ -49,7 +59,52 @@ public final class BatfishSymbolicRoutePipeline {
     SymbolicRouteConvergenceResult bgpConvergence = bgpNetwork.converge();
     installSelectedBgpRoutesInMainRib(mainNetwork, bgpNetwork);
     return new BatfishSymbolicRoutePipelineResult(
-        mainNetwork, bgpNetwork, mainConvergence, bgpConvergence, input.getConfigurations());
+        mainNetwork,
+        bgpNetwork,
+        isisNetwork,
+        mainConvergence,
+        bgpConvergence,
+        isisConvergence,
+        input.getConfigurations());
+  }
+
+  /** Installs selected, routable IS-IS Level-1 candidates into the main RIB. */
+  private static void installSelectedIsisRoutesInMainRib(
+      SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> mainNetwork,
+      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisNetwork) {
+    isisNetwork
+        .getRibs()
+        .values()
+        .forEach(
+            isisRib ->
+                isisRib
+                    .getEntries()
+                    .forEach(
+                        entry -> {
+                          SymbolicRoute<AnnotatedRoute<IsisRoute>> isis = entry.getSymbolicRoute();
+                          if (isis.getRoute().getRoute().getNonRouting()
+                              || !entry.getSelectionGuard().isSatisfiable()) {
+                            return;
+                          }
+                          AnnotatedRoute<AbstractRoute> mainRoute =
+                              new AnnotatedRoute<>(
+                                  isis.getRoute().getRoute(), isis.getRoute().getSourceVrf());
+                          SymbolicRouteKey mainKey =
+                              new SymbolicRouteKey(
+                                  isis.getKey().getRouter(), isis.getKey().getVrf(), mainRoute);
+                          mainNetwork
+                              .getRib(isis.getKey().getRouter())
+                              .putContribution(
+                                  new SymbolicRouteContributionId(
+                                      "isis-l1-rib",
+                                      isis.getKey().getRouter(),
+                                      isis.getKey().getRouter()),
+                                  new SymbolicRoute<>(
+                                      mainKey,
+                                      mainRoute,
+                                      entry.getSelectionGuard(),
+                                      isis.getProvenance()));
+                        }));
   }
 
   /** Installs selected, routable protocol candidates into the protocol-neutral main RIB. */
@@ -65,8 +120,7 @@ public final class BatfishSymbolicRoutePipeline {
                     .getEntries()
                     .forEach(
                         entry -> {
-                          SymbolicRoute<AnnotatedRoute<Bgpv4Route>> bgp =
-                              entry.getSymbolicRoute();
+                          SymbolicRoute<AnnotatedRoute<Bgpv4Route>> bgp = entry.getSymbolicRoute();
                           if (bgp.getRoute().getRoute().getNonRouting()
                               || !entry.getSelectionGuard().isSatisfiable()) {
                             return;
@@ -183,6 +237,7 @@ public final class BatfishSymbolicRoutePipeline {
     if (!edgeIds.equals(sessionIds)) {
       throw new IllegalArgumentException("BGP edges and symbolic sessions must match exactly");
     }
+    validateIsisInputs(input);
     Set<String> ruleIds = new HashSet<>();
     for (BatfishBgpRedistributionRule rule : input.getRedistributionRules()) {
       if (!ruleIds.add(rule.getRuleId())) {
@@ -202,6 +257,35 @@ public final class BatfishSymbolicRoutePipeline {
     for (SymbolicStaticRoute route : input.getRecursiveStaticRoutes()) {
       if (!input.getConfigurations().containsKey(route.getRouter())) {
         throw new IllegalArgumentException("recursive static router must be configured");
+      }
+    }
+  }
+
+  private static void validateIsisInputs(BatfishSymbolicRoutePipelineInput input) {
+    Map<String, BatfishIsisEdge> edges = new LinkedHashMap<>();
+    for (BatfishIsisEdge edge : input.getIsisEdges()) {
+      if (edges.put(edge.getSessionId(), edge) != null) {
+        throw new IllegalArgumentException("duplicate IS-IS edge identity");
+      }
+    }
+    Set<String> sessions = new HashSet<>();
+    for (SymbolicRouteSession session : input.getIsisSessions()) {
+      if (!sessions.add(session.getSessionId())) {
+        throw new IllegalArgumentException("duplicate symbolic IS-IS session identity");
+      }
+      BatfishIsisEdge edge = edges.get(session.getSessionId());
+      if (edge == null
+          || !session.getSender().equals(edge.getSenderConfiguration().getHostname())
+          || !session.getReceiver().equals(edge.getReceiverConfiguration().getHostname())) {
+        throw new IllegalArgumentException("symbolic IS-IS session must match parsed edge");
+      }
+    }
+    if (!edges.keySet().equals(sessions)) {
+      throw new IllegalArgumentException("IS-IS edges and symbolic sessions must match exactly");
+    }
+    for (SymbolicRouteSeed<AnnotatedRoute<IsisRoute>> seed : input.getIsisSeeds()) {
+      if (!input.getConfigurations().containsKey(seed.getOriginRouter())) {
+        throw new IllegalArgumentException("IS-IS seed router must be configured");
       }
     }
   }

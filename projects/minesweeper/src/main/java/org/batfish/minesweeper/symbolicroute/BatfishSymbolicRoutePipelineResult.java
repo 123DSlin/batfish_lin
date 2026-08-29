@@ -15,6 +15,7 @@ import org.batfish.datamodel.AbstractRoute;
 import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.Bgpv4Route;
 import org.batfish.datamodel.Configuration;
+import org.batfish.datamodel.IsisRoute;
 
 /** Final stable state produced by one complete symbolic route pipeline run. */
 public final class BatfishSymbolicRoutePipelineResult {
@@ -22,20 +23,26 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull private final SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> _mainRibNetwork;
 
   @Nonnull private final SymbolicRouteNetwork<AnnotatedRoute<Bgpv4Route>> _bgpRibNetwork;
+  @Nonnull private final SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> _isisL1RibNetwork;
   @Nonnull private final SymbolicRouteConvergenceResult _mainConvergence;
   @Nonnull private final SymbolicRouteConvergenceResult _bgpConvergence;
+  @Nonnull private final SymbolicRouteConvergenceResult _isisL1Convergence;
   @Nonnull private final ImmutableMap<String, ImmutableList<String>> _vrfsByRouter;
 
   BatfishSymbolicRoutePipelineResult(
       SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> mainRibNetwork,
       SymbolicRouteNetwork<AnnotatedRoute<Bgpv4Route>> bgpRibNetwork,
+      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL1RibNetwork,
       SymbolicRouteConvergenceResult mainConvergence,
       SymbolicRouteConvergenceResult bgpConvergence,
+      SymbolicRouteConvergenceResult isisL1Convergence,
       Map<String, Configuration> configurations) {
     _mainRibNetwork = requireNonNull(mainRibNetwork, "mainRibNetwork must be provided");
     _bgpRibNetwork = requireNonNull(bgpRibNetwork, "bgpRibNetwork must be provided");
+    _isisL1RibNetwork = requireNonNull(isisL1RibNetwork, "isisL1RibNetwork must be provided");
     _mainConvergence = requireNonNull(mainConvergence, "mainConvergence must be provided");
     _bgpConvergence = requireNonNull(bgpConvergence, "bgpConvergence must be provided");
+    _isisL1Convergence = requireNonNull(isisL1Convergence, "isisL1Convergence must be provided");
     ImmutableMap.Builder<String, ImmutableList<String>> vrfs = ImmutableMap.builder();
     requireNonNull(configurations, "configurations must be provided")
         .forEach(
@@ -59,6 +66,11 @@ public final class BatfishSymbolicRoutePipelineResult {
   }
 
   @Nonnull
+  public SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> getIsisL1RibNetwork() {
+    return _isisL1RibNetwork;
+  }
+
+  @Nonnull
   public SymbolicRouteConvergenceResult getMainConvergence() {
     return _mainConvergence;
   }
@@ -68,7 +80,12 @@ public final class BatfishSymbolicRoutePipelineResult {
     return _bgpConvergence;
   }
 
-  /** Returns every main-RIB and BGP-RIB candidate in deterministic router/VRF order. */
+  @Nonnull
+  public SymbolicRouteConvergenceResult getIsisL1Convergence() {
+    return _isisL1Convergence;
+  }
+
+  /** Returns every main, BGP, and IS-IS L1 candidate in deterministic router/VRF order. */
   @Nonnull
   public ImmutableList<SymbolicRibRecord> getAllRoutes() {
     return getAllRoutes(true);
@@ -87,10 +104,7 @@ public final class BatfishSymbolicRoutePipelineResult {
                         entry ->
                             records.add(
                                 SymbolicRibRecord.from(
-                                    SymbolicRibRecord.Plane.MAIN,
-                                    rib,
-                                    entry,
-                                    simplifyGuards))));
+                                    SymbolicRibRecord.Plane.MAIN, rib, entry, simplifyGuards))));
     _bgpRibNetwork
         .getRibs()
         .values()
@@ -101,10 +115,18 @@ public final class BatfishSymbolicRoutePipelineResult {
                         entry ->
                             records.add(
                                 SymbolicRibRecord.from(
-                                    SymbolicRibRecord.Plane.BGP,
-                                    rib,
-                                    entry,
-                                    simplifyGuards))));
+                                    SymbolicRibRecord.Plane.BGP, rib, entry, simplifyGuards))));
+    _isisL1RibNetwork
+        .getRibs()
+        .values()
+        .forEach(
+            rib ->
+                rib.getEntries()
+                    .forEach(
+                        entry ->
+                            records.add(
+                                SymbolicRibRecord.from(
+                                    SymbolicRibRecord.Plane.ISIS_L1, rib, entry, simplifyGuards))));
     records.sort(SymbolicRibRecord.ordering());
     return ImmutableList.copyOf(records);
   }
@@ -183,6 +205,8 @@ public final class BatfishSymbolicRoutePipelineResult {
     appendReadableTable(output, SymbolicRibRecord.Plane.MAIN, simplifyGuards);
     output.append("\nBGP LOC-RIB (protocol detail)\n");
     appendReadableTable(output, SymbolicRibRecord.Plane.BGP, simplifyGuards);
+    output.append("\nIS-IS LEVEL-1 RIB (protocol detail)\n");
+    appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L1, simplifyGuards);
     return output.toString();
   }
 

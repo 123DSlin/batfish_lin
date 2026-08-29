@@ -1200,3 +1200,25 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   简称。
 - symbolicroute 生产文件数由 50 减少为 48；engine、ingress、network factory、pipeline、
   parser-driven tolerance 定向测试和 test PMD 通过，`git diff --check` 通过。
+
+## Stage 6.1 HoYAN Algorithm 2：IS-IS L1 符号传播（2026-08-29 16:29 CST）
+
+- 新增 `BatfishIsisTopologyAdapter`，从 Batfish `IsisTopology`/`IsisEdge` 和规范化配置构建
+  L1 directed sessions 与接口路由 seed；不解析配置字符串，不使用 `toString()` 作为身份。
+- 新增 `BatfishIsisEdge` 保存 parser-derived edge、端点配置和接口；symbolic session、active
+  接口 seed 与 forwarding/connected 语义共同引用 topology-derived `LinkFailureKey`。active
+  接口前缀使用链路 aliveness guard，passive 接口前缀使用 `true`。
+- 新增 `BatfishIsisProtocolAdapter`：按照 Batfish `VirtualRouter.propagateIsisRoutes` 在接收侧
+  累加接口 cost、设置邻居 next-hop 和管理距离；使用 `IsisRib.routePreferenceComparator`
+  进行 metric/level 优选；使用 provenance 拒绝重复路由器路径；固定快照内使用稳定的
+  session/candidate message identity。
+- 顶层 pipeline 在 connected/static 初始化后收敛独立 `ISIS_L1` guarded RIB，将其 selected
+  candidates 及 selection guard 安装到 MAIN，然后继续已有 BGP pipeline。结果 API、JSON 和
+  readable txt 增加 `ISIS_L1` plane 与 `IS-IS LEVEL-1 RIB` 分区。
+- `BatfishIsisAlgorithm2Test` 使用五路由拓扑验证 parser-normalized adjacency、14 条 directed
+  edge 的 canonical identity、20/30/40 三层 metric、两条 30-cost ECMP、逐层 failure
+  fallback guard、active-interface origin guard、origin recursive withdrawal、MAIN 安装和输出。
+- IS-IS 定向测试及完整既有 Minesweeper 测试通过。主源码 PMD 没有新增 symbolicroute
+  命中，仍只因 Graph/Encoder/EncoderSlice/PropertyChecker 等已记录基线违规失败。
+- Stage 6.1 明确不声称支持 L2、L1/L2 leaking、overload/attach/down、redistribution、broadcast
+  pseudonode、iBGP-over-IS-IS、SR 或 k-failure pruning；后续边界记录于 `ISIS_TODO.md`。

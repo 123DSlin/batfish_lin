@@ -16,7 +16,8 @@ public final class SymbolicRibRecord {
   /** Stable-state plane in which the candidate was selected. */
   public enum Plane {
     MAIN,
-    BGP
+    BGP,
+    ISIS_L1
   }
 
   @Nonnull private final Plane _plane;

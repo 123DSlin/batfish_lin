@@ -24,8 +24,9 @@ import org.batfish.datamodel.GenericRibReadOnly;
 import org.batfish.datamodel.Interface;
 import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.NetworkConfigurations;
+import org.batfish.datamodel.isis.IsisTopology;
 
-/** Builds the currently supported connected/numbered-eBGP input from parsed Batfish state. */
+/** Builds supported connected, numbered-eBGP, and IS-IS L1 input from parsed Batfish state. */
 public final class BatfishParsedSnapshotPipelineInputBuilder {
 
   private BatfishParsedSnapshotPipelineInputBuilder() {}
@@ -40,11 +41,38 @@ public final class BatfishParsedSnapshotPipelineInputBuilder {
       ValueGraph<BgpPeerConfigId, BgpSessionProperties> bgpTopology,
       Z3RouteGuardFactory guardFactory,
       Iterable<BatfishBgpRedistributionRule> redistributionRules) {
+    return build(
+        configurations,
+        concreteMainRibs,
+        bgpTopology,
+        IsisTopology.EMPTY,
+        guardFactory,
+        redistributionRules);
+  }
+
+  /** Builds connected, numbered-eBGP, and Level-1 IS-IS inputs from normalized Batfish state. */
+  @Nonnull
+  public static BatfishSymbolicRoutePipelineInput build(
+      Map<String, Configuration> configurations,
+      Map<
+              String,
+              ? extends Map<String, ? extends GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
+          concreteMainRibs,
+      ValueGraph<BgpPeerConfigId, BgpSessionProperties> bgpTopology,
+      IsisTopology isisTopology,
+      Z3RouteGuardFactory guardFactory,
+      Iterable<BatfishBgpRedistributionRule> redistributionRules) {
     requireNonNull(configurations, "configurations must be provided");
     requireNonNull(concreteMainRibs, "concreteMainRibs must be provided");
     requireNonNull(bgpTopology, "bgpTopology must be provided");
     TopologyLinkGuards topologyGuards =
         BatfishTopologyGuardInitializer.inferTopology(configurations, guardFactory);
+    BatfishIsisTopologyAdapter.Result isis =
+        BatfishIsisTopologyAdapter.build(
+            configurations,
+            requireNonNull(isisTopology, "isisTopology must be provided"),
+            topologyGuards,
+            guardFactory);
     List<SymbolicRouteSeed<AnnotatedRoute<AbstractRoute>>> mainSeeds = new ArrayList<>();
     for (Configuration configuration : configurations.values()) {
       for (Interface iface : configuration.getAllInterfaces().values()) {
@@ -149,6 +177,9 @@ public final class BatfishParsedSnapshotPipelineInputBuilder {
         redistributionRules,
         edges,
         sessions,
+        isis.getEdges(),
+        isis.getSessions(),
+        isis.getSeeds(),
         normalizedRibs);
   }
 
