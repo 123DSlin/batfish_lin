@@ -1340,3 +1340,19 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   隔离、MPLS/SRv6 tagged values、absolute/index 区分、typed endpoint/prefix、稳定 identity、
   underlay provider API、guard 来源和 recursive dependency 规则。demo 仅作为后续验收 fixture。
 - 本阶段仅形成可审计架构决策，没有修改 parser、datamodel、协议 comparator 或 pipeline 代码。
+
+## Stage 7.1a 通用 SID value、global block 与 binding identity（2026-08-29 21:54 CST）
+
+- 在 Batfish vendor-independent datamodel 新增 `SrSidValue`，以 tagged union 严格区分 resolved
+  `MPLS_LABEL`、SRGB-relative unresolved `MPLS_INDEX` 与 typed SRv6 `Ip6`；typed accessor 防止
+  index 被当作 wire label，JSON schema 仍只暴露显式 union 字段。
+- 新增 `SrLabelRange` 与 ordered multi-range `SrGlobalBlock`。resolver 按配置顺序跨 range
+  解析 index，拒绝空 block、重叠、越界、20-bit 溢出及 reserved label allocation；value object
+  本身仍允许表示协议定义的 reserved label，职责没有混入 block。
+- 新增 IPv4/IPv6 `SrPrefix`、稳定 `SrSidBindingKey` 与 `SrSidBinding`，在 identity 中包含 node、
+  VRF、type、algorithm 和 typed prefix/interface/policy reference；Prefix/Node、Adjacency、
+  Binding 的必填字段互斥，非 prefix SID 不得选择 SPF algorithm。
+- `SrSidValueTest`、`SrGlobalBlockTest`、`SrSidBindingTest` 全部通过，覆盖 JSON 非法组合、
+  边界、range 顺序、跨 VRF/node/algorithm identity 和类型拒绝。完整 common tests 的 13 个
+  失败均来自既有 `FlowDiff` 与 routing-policy JSON/SMT 基线；common PMD 也只报告既有
+  community/prefix/routing-policy 违规，没有 `org.batfish.datamodel.sr` 违规。
