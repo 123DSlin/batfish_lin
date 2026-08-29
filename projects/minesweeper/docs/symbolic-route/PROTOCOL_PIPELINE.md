@@ -52,7 +52,7 @@ the old contribution and descendants before installing the new identity.
 `BatfishSymbolicRoutePipeline.run(input)` now executes one fixed normalized snapshot in this order:
 
 1. converge guarded connected and non-recursive static main-RIB seeds;
-2. resolve recursive next-hop-IP static routes to a symbolic fixed point;
+2. start continuous recursive next-hop-IP static reconciliation at the symbolic least fixed point;
 3. apply configured Batfish redistribution policies to selected connected/static candidates;
 4. originate guarded local BGP candidates;
 5. run directed IPv4 eBGP export, link-guard, import, and dependency propagation to convergence;
@@ -96,3 +96,16 @@ logical equivalence is a true no-op, so a stable cycle terminates without synthe
 The current rules intentionally select connected/static sources only. IS-IS-to-BGP redistribution,
 live configuration/policy mutation, and conditional policy semantics remain out of scope and must
 be added explicitly rather than inferred from this lifecycle.
+
+## Recursive static lifecycle
+
+`BatfishStaticRouteReconciler` observes each stable MAIN state. It excludes its own derived static
+candidates, copies the remaining guarded candidates into a scratch MAIN RIB, and invokes
+`BatfishStaticRouteResolver` to compute the least fixed point from a clean base. This prevents stale
+recursive routes from sustaining one another after their real resolver disappears. Only logically
+changed activation guards are applied back to production MAIN.
+
+The scratch RIB recomputes MAIN preference and symbolic LPM from candidate availability; it does
+not substitute a concrete `Rib.longestPrefixMatch` result for guarded LPM. Batfish's trie and static
+activation helper remain the concrete semantic oracles inside each symbolic round. A reentrancy
+barrier coalesces callbacks caused by static→BGP→MAIN feedback.

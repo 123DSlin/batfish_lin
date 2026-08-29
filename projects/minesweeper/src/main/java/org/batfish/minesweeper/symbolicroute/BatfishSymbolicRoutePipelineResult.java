@@ -28,6 +28,7 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull private final BatfishIsisLevelTransitionReconciler _isisLevelTransitionReconciler;
   @Nonnull private final BatfishMainRibReconciler _mainRibReconciler;
   @Nonnull private final BatfishBgpRedistributionReconciler _bgpRedistributionReconciler;
+  @Nonnull private final BatfishStaticRouteReconciler _staticRouteReconciler;
   @Nonnull private final SymbolicRouteConvergenceResult _mainConvergence;
   @Nonnull private final SymbolicRouteConvergenceResult _bgpConvergence;
   @Nonnull private final SymbolicRouteConvergenceResult _isisL1Convergence;
@@ -42,6 +43,7 @@ public final class BatfishSymbolicRoutePipelineResult {
       BatfishIsisLevelTransitionReconciler isisLevelTransitionReconciler,
       BatfishMainRibReconciler mainRibReconciler,
       BatfishBgpRedistributionReconciler bgpRedistributionReconciler,
+      BatfishStaticRouteReconciler staticRouteReconciler,
       SymbolicRouteConvergenceResult mainConvergence,
       SymbolicRouteConvergenceResult bgpConvergence,
       SymbolicRouteConvergenceResult isisL1Convergence,
@@ -57,6 +59,8 @@ public final class BatfishSymbolicRoutePipelineResult {
     _mainRibReconciler = requireNonNull(mainRibReconciler, "mainRibReconciler must be provided");
     _bgpRedistributionReconciler =
         requireNonNull(bgpRedistributionReconciler, "bgpRedistributionReconciler must be provided");
+    _staticRouteReconciler =
+        requireNonNull(staticRouteReconciler, "staticRouteReconciler must be provided");
     _mainConvergence = requireNonNull(mainConvergence, "mainConvergence must be provided");
     _bgpConvergence = requireNonNull(bgpConvergence, "bgpConvergence must be provided");
     _isisL1Convergence = requireNonNull(isisL1Convergence, "isisL1Convergence must be provided");
@@ -106,6 +110,11 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull
   public BatfishBgpRedistributionReconciler getBgpRedistributionReconciler() {
     return _bgpRedistributionReconciler;
+  }
+
+  @Nonnull
+  public BatfishStaticRouteReconciler getStaticRouteReconciler() {
+    return _staticRouteReconciler;
   }
 
   @Nonnull

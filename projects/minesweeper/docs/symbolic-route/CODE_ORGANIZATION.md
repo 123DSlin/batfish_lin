@@ -45,6 +45,9 @@ their owner already supplies the context.
 - Redistribution lifecycle: `BatfishBgpRedistributionReconciler` scans stable MAIN candidates and
   owns whole-network rule/source identity; generic `BatfishRedistributionReconciler` applies each
   typed Batfish policy result to the target RIB without knowing configuration or rule discovery.
+- Static lifecycle: `BatfishStaticRouteResolver` remains the pure Batfish-backed symbolic LPM/fixed
+  point operation; `BatfishStaticRouteReconciler` owns persistent MAIN observation, scratch least-
+  fixed-point reconstruction, and semantic delta application.
 
 Merging these public types would hide lifecycle boundaries, produce large files, or force callers
 to use deeply nested names without reducing semantic complexity.

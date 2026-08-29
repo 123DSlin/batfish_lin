@@ -32,7 +32,9 @@ public final class BatfishSymbolicRoutePipeline {
         SymbolicRouteNetworkFactory.create(
             routers, ImmutableList.of(), input.getMainSeeds(), new BatfishMainRibRouteAdapter());
     SymbolicRouteConvergenceResult mainConvergence = mainNetwork.converge();
-    BatfishStaticRouteResolver.resolveToFixedPoint(mainNetwork, input.getRecursiveStaticRoutes());
+    BatfishStaticRouteReconciler staticRouteReconciler =
+        new BatfishStaticRouteReconciler(mainNetwork, input.getRecursiveStaticRoutes());
+    staticRouteReconciler.start();
 
     SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisNetwork =
         SymbolicRouteNetworkFactory.create(
@@ -87,6 +89,7 @@ public final class BatfishSymbolicRoutePipeline {
         levelTransitionReconciler,
         mainRibReconciler,
         bgpRedistributionReconciler,
+        staticRouteReconciler,
         mainConvergence,
         bgpConvergence,
         isisConvergence,

@@ -287,9 +287,13 @@ public final class BatfishSymbolicRoutePipelineTest {
     SymbolicRouteContributionId connectedContribution =
         new SymbolicRouteContributionId("a-connected", "a", "a");
     result.getMainRibNetwork().getEngine().withdraw(ImmutableList.of(connectedContribution));
+    assertThat(hasPrefix(result.getMainRibNetwork(), "a", recursive.getNetwork()), equalTo(false));
     assertThat(hasPrefix(result.getBgpRibNetwork(), "a", connected.getNetwork()), equalTo(false));
     assertThat(hasPrefix(result.getBgpRibNetwork(), "b", connected.getNetwork()), equalTo(false));
     assertThat(hasPrefix(result.getMainRibNetwork(), "b", connected.getNetwork()), equalTo(false));
+    assertThat(hasPrefix(result.getBgpRibNetwork(), "a", recursive.getNetwork()), equalTo(false));
+    assertThat(hasPrefix(result.getBgpRibNetwork(), "b", recursive.getNetwork()), equalTo(false));
+    assertThat(hasPrefix(result.getMainRibNetwork(), "b", recursive.getNetwork()), equalTo(false));
 
     RouteGuard updatedConnectedGuard = GUARDS.variable("connected_updated");
     result
@@ -300,6 +304,7 @@ public final class BatfishSymbolicRoutePipelineTest {
                 new SymbolicRouteSeed<>("a-connected", "a", connected, updatedConnectedGuard)
                     .toMessage()));
     assertThat(hasPrefix(result.getBgpRibNetwork(), "a", connected.getNetwork()), equalTo(true));
+    assertThat(hasPrefix(result.getMainRibNetwork(), "a", recursive.getNetwork()), equalTo(true));
     assertThat(
         bgpPrefixAt(result, "b", connected.getNetwork())
             .getAvailabilityGuard()
@@ -309,6 +314,17 @@ public final class BatfishSymbolicRoutePipelineTest {
         mainPrefixAt(result, "b", connected.getNetwork())
             .getAvailabilityGuard()
             .isEquivalentTo(updatedConnectedGuard.and(linkGuard)),
+        equalTo(true));
+    RouteGuard updatedStaticPath = updatedConnectedGuard.and(staticGuard).and(linkGuard);
+    assertThat(
+        bgpPrefixAt(result, "b", recursive.getNetwork())
+            .getAvailabilityGuard()
+            .isEquivalentTo(updatedStaticPath),
+        equalTo(true));
+    assertThat(
+        mainPrefixAt(result, "b", recursive.getNetwork())
+            .getAvailabilityGuard()
+            .isEquivalentTo(updatedStaticPath),
         equalTo(true));
   }
 

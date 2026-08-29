@@ -1308,3 +1308,22 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   `git diff --check` 通过。PMD 只报告既有 `Graph`、`Encoder`、`EncoderSlice`、
   `PropertyChecker` 和旧 SMT symbolic-route 基线违规；本阶段未新增 symbolicroute 包违规，
   也未修改上述关键 SMT 文件。
+
+## Stage 6.6 recursive static 持续生命周期（2026-08-29 20:26 CST）
+
+- 新增 `BatfishStaticRouteReconciler`，替换 pipeline 对 `resolveToFixedPoint` 的一次性调用。
+  每个 MAIN stable state 都会触发语义重算；只有 guard 逻辑变化才向生产 MAIN 发送 delta。
+- 每轮从排除 reconciler 自有 recursive-static candidates 的 MAIN availability 快照建立 scratch
+  MAIN RIB，再调用既有 Batfish-backed symbolic LPM/fixed-point resolver 求最小不动点，避免基础
+  resolver 撤回后旧 recursive routes 相互解析并错误地自我维持。
+- 保留 Batfish `Rib.longestPrefixMatch` 与 `StaticRouteHelper.shouldActivateNextHopIpRoute` 作为
+  concrete oracle；scratch MAIN 重新执行跨协议 preference，不能用一次 concrete LPM 取代
+  “更长前缀可用时遮蔽较短前缀”的 symbolic guard。
+- 新增动态 LPM 测试：不可用于激活的更长前缀存在时遮蔽短前缀，撤回 blocker 后 activation
+  guard 自动扩大。pipeline 端到端测试进一步验证 connected resolver 撤回/恢复会同步删除/
+  重建 recursive static、本地 BGP、远端 BGP 和远端 MAIN，并生成新的完整合取 guard。
+- 当前边界：recursive static 配置集合仍属于固定 snapshot，尚不支持运行中新增、删除或修改
+  static configuration；IS-IS→BGP redistribution 与 live policy/config mutation 仍待后续阶段。
+- 验收：完整 `//projects/minesweeper:minesweeper_tests` 在禁用缓存后通过；Java format 与
+  `git diff --check` 通过。PMD 仍只报告 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker`
+  和旧 SMT symbolic-route 基线违规，本阶段未新增 symbolicroute 包违规，也未修改这些关键文件。

@@ -239,6 +239,44 @@ public final class BatfishProtocolSemanticsTest {
   }
 
   @Test
+  public void testStaticReconcilerRecomputesSymbolicLpmAfterBlockerWithdrawal() {
+    RouteGuard broadGuard = GUARDS.variable("dynamic_broad");
+    RouteGuard blockerGuard = GUARDS.variable("dynamic_blocker");
+    AnnotatedRoute<AbstractRoute> broad =
+        annotate(new ConnectedRoute(Prefix.parse("10.0.0.0/8"), "Ethernet0"));
+    AnnotatedRoute<AbstractRoute> blocker = annotate(staticRoute("10.1.0.0/16", "203.0.113.1"));
+    SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> network =
+        SymbolicRouteNetworkFactory.create(
+            ImmutableList.of(ROUTER),
+            Collections.emptyList(),
+            ImmutableList.of(
+                new SymbolicRouteSeed<>("dynamic-broad", ROUTER, broad, broadGuard),
+                new SymbolicRouteSeed<>("dynamic-blocker", ROUTER, blocker, blockerGuard)),
+            new BatfishMainRibRouteAdapter());
+    network.converge();
+    SymbolicStaticRoute target =
+        new SymbolicStaticRoute(
+            "dynamic-target",
+            ROUTER,
+            new AnnotatedRoute<>(staticRoute("10.1.0.0/16", "10.1.2.3"), VRF),
+            GUARDS.trueGuard());
+    BatfishStaticRouteReconciler reconciler =
+        new BatfishStaticRouteReconciler(network, ImmutableList.of(target));
+    reconciler.start();
+
+    assertThat(
+        reconciler.getActiveGuards().get(target).isEquivalentTo(broadGuard.and(blockerGuard.not())),
+        equalTo(true));
+
+    network
+        .getEngine()
+        .withdraw(
+            ImmutableList.of(new SymbolicRouteContributionId("dynamic-blocker", ROUTER, ROUTER)));
+
+    assertThat(reconciler.getActiveGuards().get(target).isEquivalentTo(broadGuard), equalTo(true));
+  }
+
+  @Test
   public void testSameUserMessageIdIsIsolatedByVrf() {
     RouteGuard blueGuard = GUARDS.variable("blue_connected");
     RouteGuard redGuard = GUARDS.variable("red_connected");
