@@ -2,7 +2,9 @@ package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
 import static org.batfish.datamodel.RoutingProtocol.CONNECTED;
+import static org.batfish.datamodel.RoutingProtocol.ISIS_L2;
 import static org.batfish.datamodel.RoutingProtocol.STATIC;
+import static org.batfish.dataplane.protocols.IsisProtocolHelper.convertRouteLevel1ToLevel2;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
@@ -46,7 +48,19 @@ public final class BatfishSymbolicRoutePipeline {
             input.getIsisSeeds(),
             new BatfishIsisProtocolAdapter(input.getIsisEdges()));
     SymbolicRouteConvergenceResult isisConvergence = isisNetwork.converge();
-    installSelectedIsisRoutesInMainRib(mainNetwork, isisNetwork);
+    List<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> l2Seeds =
+        new ArrayList<>(input.getIsisL2Seeds());
+    l2Seeds.addAll(upgradeSelectedL1Routes(input, isisNetwork));
+    SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL2Network =
+        SymbolicRouteNetworkFactory.create(
+            routers,
+            input.getIsisL2Sessions(),
+            l2Seeds,
+            new BatfishIsisProtocolAdapter(
+                input.getIsisL2Edges(), org.batfish.datamodel.isis.IsisLevel.LEVEL_2));
+    SymbolicRouteConvergenceResult isisL2Convergence = isisL2Network.converge();
+    installSelectedIsisRoutesInMainRib(input, mainNetwork, isisNetwork, "isis-l1-rib");
+    installSelectedIsisRoutesInMainRib(input, mainNetwork, isisL2Network, "isis-l2-rib");
 
     List<SymbolicRouteSeed<AnnotatedRoute<Bgpv4Route>>> bgpSeeds =
         redistributeSelectedMainRoutes(input, mainNetwork);
@@ -62,16 +76,69 @@ public final class BatfishSymbolicRoutePipeline {
         mainNetwork,
         bgpNetwork,
         isisNetwork,
+        isisL2Network,
         mainConvergence,
         bgpConvergence,
         isisConvergence,
+        isisL2Convergence,
         input.getConfigurations());
+  }
+
+  /** Converts selected L1 branches at non-overloaded L1/L2 routers into guarded L2 seeds. */
+  private static List<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> upgradeSelectedL1Routes(
+      BatfishSymbolicRoutePipelineInput input,
+      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL1Network) {
+    List<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> seeds = new ArrayList<>();
+    for (Map.Entry<String, GuardedRib<AnnotatedRoute<IsisRoute>>> routerRib :
+        isisL1Network.getRibs().entrySet()) {
+      String router = routerRib.getKey();
+      Configuration configuration = input.getConfigurations().get(router);
+      for (GuardedRibEntry<AnnotatedRoute<IsisRoute>> entry : routerRib.getValue().getEntries()) {
+        AnnotatedRoute<IsisRoute> annotated = entry.getSymbolicRoute().getRoute();
+        Vrf vrf = configuration.getVrfs().get(annotated.getSourceVrf());
+        if (vrf == null
+            || vrf.getIsisProcess() == null
+            || vrf.getIsisProcess().getLevel1() == null
+            || vrf.getIsisProcess().getLevel2() == null
+            || vrf.getIsisProcess().getOverload()
+            || !entry.getSelectionGuard().isSatisfiable()) {
+          continue;
+        }
+        int l2Admin = ISIS_L2.getDefaultAdministrativeCost(configuration.getConfigurationFormat());
+        java.util.Optional<IsisRoute> upgraded =
+            convertRouteLevel1ToLevel2(annotated.getRoute(), ISIS_L2, l2Admin);
+        if (!upgraded.isPresent()) {
+          continue;
+        }
+        IsisRoute route = upgraded.get();
+        seeds.add(
+            new SymbolicRouteSeed<>(
+                "isis-l1-to-l2:"
+                    + router
+                    + ":"
+                    + annotated.getSourceVrf()
+                    + ":"
+                    + route.getNetwork()
+                    + ":"
+                    + route.getSystemId()
+                    + ":"
+                    + route.getMetric()
+                    + ":"
+                    + route.getNextHopIp(),
+                router,
+                new AnnotatedRoute<>(route, annotated.getSourceVrf()),
+                entry.getSelectionGuard()));
+      }
+    }
+    return seeds;
   }
 
   /** Installs selected, routable IS-IS Level-1 candidates into the main RIB. */
   private static void installSelectedIsisRoutesInMainRib(
+      BatfishSymbolicRoutePipelineInput input,
       SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> mainNetwork,
-      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisNetwork) {
+      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisNetwork,
+      String contributionNamespace) {
     isisNetwork
         .getRibs()
         .values()
@@ -83,7 +150,8 @@ public final class BatfishSymbolicRoutePipeline {
                         entry -> {
                           SymbolicRoute<AnnotatedRoute<IsisRoute>> isis = entry.getSymbolicRoute();
                           if (isis.getRoute().getRoute().getNonRouting()
-                              || !entry.getSelectionGuard().isSatisfiable()) {
+                              || !entry.getSelectionGuard().isSatisfiable()
+                              || rejectAttachedAtL1L2Router(input, isis)) {
                             return;
                           }
                           AnnotatedRoute<AbstractRoute> mainRoute =
@@ -96,7 +164,7 @@ public final class BatfishSymbolicRoutePipeline {
                               .getRib(isis.getKey().getRouter())
                               .putContribution(
                                   new SymbolicRouteContributionId(
-                                      "isis-l1-rib",
+                                      contributionNamespace,
                                       isis.getKey().getRouter(),
                                       isis.getKey().getRouter()),
                                   new SymbolicRoute<>(
@@ -105,6 +173,16 @@ public final class BatfishSymbolicRoutePipeline {
                                       entry.getSelectionGuard(),
                                       isis.getProvenance()));
                         }));
+  }
+
+  private static boolean rejectAttachedAtL1L2Router(
+      BatfishSymbolicRoutePipelineInput input, SymbolicRoute<AnnotatedRoute<IsisRoute>> route) {
+    if (!route.getRoute().getRoute().getAttach()) {
+      return false;
+    }
+    Configuration configuration = input.getConfigurations().get(route.getKey().getRouter());
+    Vrf vrf = configuration.getVrfs().get(route.getKey().getVrf());
+    return vrf != null && vrf.getIsisProcess() != null && vrf.getIsisProcess().getLevel2() != null;
   }
 
   /** Installs selected, routable protocol candidates into the protocol-neutral main RIB. */
@@ -262,16 +340,29 @@ public final class BatfishSymbolicRoutePipeline {
   }
 
   private static void validateIsisInputs(BatfishSymbolicRoutePipelineInput input) {
+    validateIsisLevelInputs(
+        input, input.getIsisEdges(), input.getIsisSessions(), input.getIsisSeeds(), "L1");
+    validateIsisLevelInputs(
+        input, input.getIsisL2Edges(), input.getIsisL2Sessions(), input.getIsisL2Seeds(), "L2");
+  }
+
+  private static void validateIsisLevelInputs(
+      BatfishSymbolicRoutePipelineInput input,
+      Iterable<BatfishIsisEdge> levelEdges,
+      Iterable<SymbolicRouteSession> levelSessions,
+      Iterable<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> levelSeeds,
+      String levelName) {
     Map<String, BatfishIsisEdge> edges = new LinkedHashMap<>();
-    for (BatfishIsisEdge edge : input.getIsisEdges()) {
+    for (BatfishIsisEdge edge : levelEdges) {
       if (edges.put(edge.getSessionId(), edge) != null) {
-        throw new IllegalArgumentException("duplicate IS-IS edge identity");
+        throw new IllegalArgumentException("duplicate IS-IS " + levelName + " edge identity");
       }
     }
     Set<String> sessions = new HashSet<>();
-    for (SymbolicRouteSession session : input.getIsisSessions()) {
+    for (SymbolicRouteSession session : levelSessions) {
       if (!sessions.add(session.getSessionId())) {
-        throw new IllegalArgumentException("duplicate symbolic IS-IS session identity");
+        throw new IllegalArgumentException(
+            "duplicate symbolic IS-IS " + levelName + " session identity");
       }
       BatfishIsisEdge edge = edges.get(session.getSessionId());
       if (edge == null
@@ -281,11 +372,13 @@ public final class BatfishSymbolicRoutePipeline {
       }
     }
     if (!edges.keySet().equals(sessions)) {
-      throw new IllegalArgumentException("IS-IS edges and symbolic sessions must match exactly");
+      throw new IllegalArgumentException(
+          "IS-IS " + levelName + " edges and symbolic sessions must match exactly");
     }
-    for (SymbolicRouteSeed<AnnotatedRoute<IsisRoute>> seed : input.getIsisSeeds()) {
+    for (SymbolicRouteSeed<AnnotatedRoute<IsisRoute>> seed : levelSeeds) {
       if (!input.getConfigurations().containsKey(seed.getOriginRouter())) {
-        throw new IllegalArgumentException("IS-IS seed router must be configured");
+        throw new IllegalArgumentException(
+            "IS-IS " + levelName + " seed router must be configured");
       }
     }
   }

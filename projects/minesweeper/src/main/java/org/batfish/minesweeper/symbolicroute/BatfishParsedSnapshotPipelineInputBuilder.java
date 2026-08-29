@@ -180,6 +180,9 @@ public final class BatfishParsedSnapshotPipelineInputBuilder {
         isis.getEdges(),
         isis.getSessions(),
         isis.getSeeds(),
+        isis.getL2Edges(),
+        isis.getL2Sessions(),
+        isis.getL2Seeds(),
         normalizedRibs);
   }
 

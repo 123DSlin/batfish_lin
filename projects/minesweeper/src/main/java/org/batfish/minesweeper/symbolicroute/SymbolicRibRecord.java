@@ -17,7 +17,8 @@ public final class SymbolicRibRecord {
   public enum Plane {
     MAIN,
     BGP,
-    ISIS_L1
+    ISIS_L1,
+    ISIS_L2
   }
 
   @Nonnull private final Plane _plane;

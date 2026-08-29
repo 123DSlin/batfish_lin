@@ -4,7 +4,6 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 import static java.util.Objects.requireNonNull;
 import static org.batfish.datamodel.IsisRoute.DEFAULT_METRIC;
 import static org.batfish.datamodel.isis.IsisInterfaceMode.ACTIVE;
-import static org.batfish.datamodel.isis.IsisLevel.LEVEL_1;
 
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -15,29 +14,39 @@ import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.ConcreteInterfaceAddress;
 import org.batfish.datamodel.IsisRoute;
 import org.batfish.datamodel.isis.IsisInterfaceLevelSettings;
+import org.batfish.datamodel.isis.IsisLevel;
 import org.batfish.dataplane.rib.IsisRib;
 
-/** HoYAN Algorithm 2 adapter for parser-derived IPv4 IS-IS Level-1 point-to-point circuits. */
+/** HoYAN Algorithm 2 adapter for one parser-derived IPv4 IS-IS level. */
 public final class BatfishIsisProtocolAdapter
     implements SymbolicRouteProtocolAdapter<AnnotatedRoute<IsisRoute>> {
 
   @Nonnull private final Map<String, BatfishIsisEdge> _edges;
   @Nonnull private final Map<String, Map<SymbolicRouteKey, String>> _exportIdentities;
   @Nonnull private final Map<String, Map<SymbolicRouteKey, AnnotatedRoute<IsisRoute>>> _exports;
+  @Nonnull private final IsisLevel _level;
 
   public BatfishIsisProtocolAdapter(Iterable<BatfishIsisEdge> edges) {
+    this(edges, IsisLevel.LEVEL_1);
+  }
+
+  public BatfishIsisProtocolAdapter(Iterable<BatfishIsisEdge> edges, IsisLevel level) {
     _edges = new LinkedHashMap<>();
     _exportIdentities = new LinkedHashMap<>();
     _exports = new LinkedHashMap<>();
+    _level = requireNonNull(level, "level must be provided");
+    if (_level == IsisLevel.LEVEL_1_2) {
+      throw new IllegalArgumentException("one guarded RIB adapter requires one IS-IS level");
+    }
     for (BatfishIsisEdge edge : requireNonNull(edges, "edges must be provided")) {
-      if (!edge.getEdge().getCircuitType().includes(LEVEL_1)) {
-        throw new IllegalArgumentException("initial IS-IS adapter supports only Level-1 circuits");
+      if (!edge.getEdge().getCircuitType().includes(_level)) {
+        throw new IllegalArgumentException("IS-IS circuit does not carry adapter level");
       }
       if (_edges.put(edge.getSessionId(), edge) != null) {
         throw new IllegalArgumentException("duplicate IS-IS edge session identity");
       }
-      requireActiveLevel1(edge.getSenderInterface());
-      requireActiveLevel1(edge.getReceiverInterface());
+      requireActiveLevel(edge.getSenderInterface(), _level);
+      requireActiveLevel(edge.getReceiverInterface(), _level);
       _exportIdentities.put(edge.getSessionId(), new LinkedHashMap<>());
       _exports.put(edge.getSessionId(), new LinkedHashMap<>());
     }
@@ -55,7 +64,7 @@ public final class BatfishIsisProtocolAdapter
   public Optional<AnnotatedRoute<IsisRoute>> processImport(
       SymbolicRouteMessage<AnnotatedRoute<IsisRoute>> message) {
     if (message.getSessionId() == null) {
-      return message.getRoute().getRoute().getLevel() == LEVEL_1
+      return message.getRoute().getRoute().getLevel() == _level
           ? Optional.of(message.getRoute())
           : Optional.empty();
     }
@@ -69,10 +78,10 @@ public final class BatfishIsisProtocolAdapter
       return Optional.empty();
     }
     IsisRoute neighborRoute = message.getRoute().getRoute();
-    if (neighborRoute.getLevel() != LEVEL_1) {
+    if (neighborRoute.getLevel() != _level) {
       return Optional.empty();
     }
-    IsisInterfaceLevelSettings settings = edge.getReceiverInterface().getIsis().getLevel1();
+    IsisInterfaceLevelSettings settings = levelSettings(edge.getReceiverInterface(), _level);
     long incrementalMetric = firstNonNull(settings.getCost(), DEFAULT_METRIC);
     ConcreteInterfaceAddress senderAddress = edge.getSenderInterface().getConcreteAddress();
     if (senderAddress == null) {
@@ -108,7 +117,7 @@ public final class BatfishIsisProtocolAdapter
         || !session.getReceiver().equals(edge.getReceiverConfiguration().getHostname())) {
       throw new IllegalArgumentException("IS-IS session endpoints do not match parsed edge");
     }
-    return selectedRoute.getRoute().getLevel() == LEVEL_1
+    return selectedRoute.getRoute().getLevel() == _level
             && selectedRoute.getSourceVrf().equals(edge.getSenderInterface().getVrfName())
         ? Optional.of(selectedRoute)
         : Optional.empty();
@@ -131,7 +140,7 @@ public final class BatfishIsisProtocolAdapter
           "IS-IS export changed within one fixed snapshot; use atomic route replacement");
     }
     return identities.computeIfAbsent(
-        candidateKey, unused -> "isis-l1-candidate-" + identities.size());
+        candidateKey, unused -> "isis-" + levelName(_level) + "-candidate-" + identities.size());
   }
 
   private BatfishIsisEdge edge(String sessionId) {
@@ -150,11 +159,22 @@ public final class BatfishIsisProtocolAdapter
     }
   }
 
-  private static void requireActiveLevel1(org.batfish.datamodel.Interface iface) {
-    if (iface.getIsis() == null
-        || iface.getIsis().getLevel1() == null
-        || iface.getIsis().getLevel1().getMode() != ACTIVE) {
-      throw new IllegalArgumentException("IS-IS Level-1 point-to-point interface must be active");
+  private static void requireActiveLevel(org.batfish.datamodel.Interface iface, IsisLevel level) {
+    IsisInterfaceLevelSettings settings = levelSettings(iface, level);
+    if (settings == null || settings.getMode() != ACTIVE) {
+      throw new IllegalArgumentException("IS-IS point-to-point interface level must be active");
     }
+  }
+
+  private static IsisInterfaceLevelSettings levelSettings(
+      org.batfish.datamodel.Interface iface, IsisLevel level) {
+    if (iface.getIsis() == null) {
+      return null;
+    }
+    return level == IsisLevel.LEVEL_1 ? iface.getIsis().getLevel1() : iface.getIsis().getLevel2();
+  }
+
+  private static String levelName(IsisLevel level) {
+    return level == IsisLevel.LEVEL_1 ? "l1" : "l2";
   }
 }

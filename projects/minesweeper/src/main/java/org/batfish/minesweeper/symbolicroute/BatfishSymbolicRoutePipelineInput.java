@@ -24,6 +24,9 @@ public final class BatfishSymbolicRoutePipelineInput {
   @Nonnull private final ImmutableList<BatfishIsisEdge> _isisEdges;
   @Nonnull private final ImmutableList<SymbolicRouteSession> _isisSessions;
   @Nonnull private final ImmutableList<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> _isisSeeds;
+  @Nonnull private final ImmutableList<BatfishIsisEdge> _isisL2Edges;
+  @Nonnull private final ImmutableList<SymbolicRouteSession> _isisL2Sessions;
+  @Nonnull private final ImmutableList<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> _isisL2Seeds;
 
   @Nonnull
   private final ImmutableMap<String, Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
@@ -63,6 +66,37 @@ public final class BatfishSymbolicRoutePipelineInput {
       Iterable<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> isisSeeds,
       Map<String, Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
           concreteMainRibs) {
+    this(
+        configurations,
+        mainSeeds,
+        recursiveStaticRoutes,
+        redistributionRules,
+        bgpEdges,
+        bgpSessions,
+        isisEdges,
+        isisSessions,
+        isisSeeds,
+        ImmutableList.of(),
+        ImmutableList.of(),
+        ImmutableList.of(),
+        concreteMainRibs);
+  }
+
+  public BatfishSymbolicRoutePipelineInput(
+      Map<String, Configuration> configurations,
+      Iterable<SymbolicRouteSeed<AnnotatedRoute<AbstractRoute>>> mainSeeds,
+      Iterable<SymbolicStaticRoute> recursiveStaticRoutes,
+      Iterable<BatfishBgpRedistributionRule> redistributionRules,
+      Iterable<BatfishBgpEdge> bgpEdges,
+      Iterable<SymbolicRouteSession> bgpSessions,
+      Iterable<BatfishIsisEdge> isisEdges,
+      Iterable<SymbolicRouteSession> isisSessions,
+      Iterable<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> isisSeeds,
+      Iterable<BatfishIsisEdge> isisL2Edges,
+      Iterable<SymbolicRouteSession> isisL2Sessions,
+      Iterable<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> isisL2Seeds,
+      Map<String, Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
+          concreteMainRibs) {
     _configurations =
         ImmutableMap.copyOf(requireNonNull(configurations, "configurations must be provided"));
     _mainSeeds = ImmutableList.copyOf(requireNonNull(mainSeeds, "mainSeeds must be provided"));
@@ -79,6 +113,12 @@ public final class BatfishSymbolicRoutePipelineInput {
     _isisSessions =
         ImmutableList.copyOf(requireNonNull(isisSessions, "isisSessions must be provided"));
     _isisSeeds = ImmutableList.copyOf(requireNonNull(isisSeeds, "isisSeeds must be provided"));
+    _isisL2Edges =
+        ImmutableList.copyOf(requireNonNull(isisL2Edges, "isisL2Edges must be provided"));
+    _isisL2Sessions =
+        ImmutableList.copyOf(requireNonNull(isisL2Sessions, "isisL2Sessions must be provided"));
+    _isisL2Seeds =
+        ImmutableList.copyOf(requireNonNull(isisL2Seeds, "isisL2Seeds must be provided"));
     ImmutableMap.Builder<String, Map<String, GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
         ribs = ImmutableMap.builder();
     requireNonNull(concreteMainRibs, "concreteMainRibs must be provided")
@@ -129,6 +169,21 @@ public final class BatfishSymbolicRoutePipelineInput {
   @Nonnull
   public ImmutableList<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> getIsisSeeds() {
     return _isisSeeds;
+  }
+
+  @Nonnull
+  public ImmutableList<BatfishIsisEdge> getIsisL2Edges() {
+    return _isisL2Edges;
+  }
+
+  @Nonnull
+  public ImmutableList<SymbolicRouteSession> getIsisL2Sessions() {
+    return _isisL2Sessions;
+  }
+
+  @Nonnull
+  public ImmutableList<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> getIsisL2Seeds() {
+    return _isisL2Seeds;
   }
 
   @Nonnull

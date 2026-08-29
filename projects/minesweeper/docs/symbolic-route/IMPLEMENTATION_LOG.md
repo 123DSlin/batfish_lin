@@ -1222,3 +1222,26 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   命中，仍只因 Graph/Encoder/EncoderSlice/PropertyChecker 等已记录基线违规失败。
 - Stage 6.1 明确不声称支持 L2、L1/L2 leaking、overload/attach/down、redistribution、broadcast
   pseudonode、iBGP-over-IS-IS、SR 或 k-failure pruning；后续边界记录于 `ISIS_TODO.md`。
+
+## Stage 6.2 IS-IS L2 与 L1/L2 guarded transition（2026-08-29 17:28 CST）
+
+- `BatfishIsisTopologyAdapter.Result` 扩展为 level-separated inputs：保留兼容的 L1 getter，
+  新增 L2 edges/sessions/seeds；同一物理线路的 L1、L2 session 使用不同稳定 session ID，但
+  共同引用同一个 topology-derived `LinkFailureKey`。
+- `BatfishIsisProtocolAdapter` 改为 one-level-per-instance，L1/L2 均复用 Batfish 接收侧 cost、
+  管理距离、next-hop 和 `IsisRib.routePreferenceComparator`，拒绝 LEVEL_1_2 混合 RIB。
+- pipeline 先收敛 `ISIS_L1`，再在非 overload 的 L1/L2 router 上调用 Batfish
+  `IsisProtocolHelper.convertRouteLevel1ToLevel2()`；转换后的稳定 contribution 继承原 L1
+  `selectionGuard`，随后与原生 L2 seeds 一起收敛独立 `ISIS_L2` RIB。
+- 实现 Batfish-compatible attached default：L1/L2 router 向 L1 宣告 attach default；L1-only
+  邻居可将其装入 MAIN，L1/L2 起源设备的 MAIN 和整个 L2 RIB 均拒绝该 route。Batfish helper
+  同时拒绝 attach/down route 的 L1→L2 upgrade。
+- 输出 API、JSON/readable txt 增加 `ISIS_L2` plane、network、convergence result 和独立表格；
+  L1/L2 selected candidates 分别通过 Batfish MAIN RIB comparator 参与跨协议选择。
+- 新增 `BatfishIsisLevel2PipelineTest`：验证 L1-only→L1/L2→L2-only parser-normalized 拓扑、
+  跨 level guard、L2 metric、attached 边界、MAIN 安装，以及 L2 三档 metric/ECMP。
+- 对尚未实现的 overload、export policy/generated route、非 point-to-point circuit 显式
+  fail closed，避免生成表面成功但协议语义不完整的 RIB。
+- 当前 level transition 是 fixed-snapshot orchestration；如果调用者在返回结果后增量撤回
+  L1 contribution，尚不会自动跨层 reconcile L2 contribution，必须重新运行完整 pipeline。
+  固定配置 symbolic RIB 不受此限制，增量生命周期留到 Stage 6.3。

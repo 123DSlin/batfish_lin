@@ -29,8 +29,29 @@ canonical `LinkFailureKey`。active 接口起源路由和 IS-IS session 共享�
 接口使用 `true`。路径重复进入同一路由器时拒绝导入。等 metric 候选互不抑制，较高 metric
 候选受所有更优候选 availability 的否定约束。
 
-The parsed pipeline now accepts an `IsisTopology`, converges a dedicated `ISIS_L1` guarded RIB,
-installs selected candidates into `MAIN`, and emits an `IS-IS LEVEL-1 RIB` report section.
+The parsed pipeline accepts an `IsisTopology`, converges dedicated `ISIS_L1` and `ISIS_L2` guarded
+RIBs, installs selected candidates into `MAIN`, and emits separate protocol-detail report sections.
+
+## Stage 6.2 L2 and level transition / L2 与层级转换
+
+Stage 6.2 adds native Level-2 interface routes and sessions. At a non-overloaded L1/L2 router,
+selected L1 branches are converted with Batfish
+`IsisProtocolHelper.convertRouteLevel1ToLevel2`; their `selectionGuard` becomes the availability
+guard of a stable L2 contribution. Attach and down-bit routes are rejected by that Batfish helper.
+
+Stage 6.2 新增原生 L2 interface route、L2 session 和独立 `ISIS_L2` Guarded RIB。对于非
+overload 的 L1/L2 路由器，pipeline 使用 Batfish `convertRouteLevel1ToLevel2()` 将已选择的
+L1 branch 转换成 L2 contribution，并将原 L1 `selectionGuard` 作为其 L2 availability guard。
+attach/down 路由由 Batfish helper 拒绝升级。
+
+An L1/L2 router originates Batfish-compatible attached default into L1. The route is advertised to
+L1-only neighbors and may enter their MAIN RIB, but is not upgraded to L2 and is rejected from the
+originating L1/L2 router's MAIN RIB, matching Batfish `IsisRib` behavior.
+
+The cross-level conversion currently belongs to one fixed-snapshot pipeline run: L1 converges,
+guarded transition contributions are derived, then L2 converges. Incremental mutation after the
+returned result does not yet reconcile withdrawals across the L1/L2 boundary; callers must rerun
+the whole pipeline. This limitation does not affect fixed-configuration symbolic-RIB computation.
 
 ## Verified behavior / 已验证行为
 
@@ -45,14 +66,22 @@ installs selected candidates into `MAIN`, and emits an `IS-IS LEVEL-1 RIB` repor
 - recursive withdrawal of an origin and all descendants;
 - installation into MAIN and protocol-plane reporting.
 
+`BatfishIsisLevel2PipelineTest` additionally checks:
+
+- parser-normalized L1-only, L1/L2, and L2-only domains;
+- native L2 sessions and receiver-side metric accumulation;
+- an L1 prefix upgraded and propagated through L2 with one combined guard;
+- attached-default acceptance at an L1-only neighbor and rejection at L2/the L1L2 origin MAIN;
+- three L2 metric tiers and equal-cost candidates;
+- explicit fail-closed rejection of unsupported overload semantics.
+
 ## Remaining stages / 后续阶段
 
 Stage 6.1 is not complete IS-IS support. The following remain unsupported and must not be silently
 accepted:
 
-- Level-2 and separate L1/L2 guarded RIBs;
-- L1-to-L2 leaking and down-bit handling;
-- overload and attached default behavior;
+- overload behavior;
+- incremental cross-level reconciliation after a returned pipeline result;
 - external L1/L2 routes and export/redistribution policy;
 - broadcast LAN pseudonodes and parallel-link failure identities;
 - concrete Batfish differential tests over enumerated failure assignments;
@@ -60,5 +89,6 @@ accepted:
 - iBGP session guards derived from IS-IS reachability;
 - SR-MPLS/SRv6 advertisements, SID database, policy selection, or traffic execution.
 
-These items belong to Stage 6.2 and later. SR work must begin only after the IS-IS reachability
+Attached-default behavior is implemented; overload remains fail-closed. The remaining items belong
+to Stage 6.3 and later. SR work must begin only after the IS-IS reachability
 guards on which its Node-SID and adjacency-SID semantics depend are complete.
