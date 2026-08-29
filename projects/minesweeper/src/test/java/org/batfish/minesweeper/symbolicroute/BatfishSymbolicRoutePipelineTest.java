@@ -234,12 +234,7 @@ public final class BatfishSymbolicRoutePipelineTest {
                         staticGuard)),
                 ImmutableList.of(
                     new BatfishBgpRedistributionRule(
-                        "a-redist",
-                        "a",
-                        DEFAULT_VRF_NAME,
-                        DEFAULT_VRF_NAME,
-                        "redistribute",
-                        BGP)),
+                        "a-redist", "a", DEFAULT_VRF_NAME, DEFAULT_VRF_NAME, "redistribute", BGP)),
                 ImmutableList.of(edge),
                 ImmutableList.of(new SymbolicRouteSession("a-b", "a", "b", linkGuard)),
                 mainRibs(aMainRib, bMainRib, new Rib())));
@@ -288,6 +283,55 @@ public final class BatfishSymbolicRoutePipelineTest {
     assertThat(unknownRouterRejected, equalTo(true));
     assertThat(result.toJson(), containsString("\"availabilityGuard\""));
     assertThat(result.toJson(), containsString("connected_enabled"));
+
+    SymbolicRouteContributionId connectedContribution =
+        new SymbolicRouteContributionId("a-connected", "a", "a");
+    result.getMainRibNetwork().getEngine().withdraw(ImmutableList.of(connectedContribution));
+    assertThat(hasPrefix(result.getBgpRibNetwork(), "a", connected.getNetwork()), equalTo(false));
+    assertThat(hasPrefix(result.getBgpRibNetwork(), "b", connected.getNetwork()), equalTo(false));
+    assertThat(hasPrefix(result.getMainRibNetwork(), "b", connected.getNetwork()), equalTo(false));
+
+    RouteGuard updatedConnectedGuard = GUARDS.variable("connected_updated");
+    result
+        .getMainRibNetwork()
+        .getEngine()
+        .converge(
+            ImmutableList.of(
+                new SymbolicRouteSeed<>("a-connected", "a", connected, updatedConnectedGuard)
+                    .toMessage()));
+    assertThat(hasPrefix(result.getBgpRibNetwork(), "a", connected.getNetwork()), equalTo(true));
+    assertThat(
+        bgpPrefixAt(result, "b", connected.getNetwork())
+            .getAvailabilityGuard()
+            .isEquivalentTo(updatedConnectedGuard.and(linkGuard)),
+        equalTo(true));
+    assertThat(
+        mainPrefixAt(result, "b", connected.getNetwork())
+            .getAvailabilityGuard()
+            .isEquivalentTo(updatedConnectedGuard.and(linkGuard)),
+        equalTo(true));
+  }
+
+  private static <R extends org.batfish.datamodel.AbstractRouteDecorator> boolean hasPrefix(
+      SymbolicRouteNetwork<R> network, String router, Prefix prefix) {
+    return network.getRib(router).getEntries().stream()
+        .anyMatch(entry -> entry.getSymbolicRoute().getKey().getNetwork().equals(prefix));
+  }
+
+  private static GuardedRibEntry<AnnotatedRoute<org.batfish.datamodel.Bgpv4Route>> bgpPrefixAt(
+      BatfishSymbolicRoutePipelineResult result, String router, Prefix prefix) {
+    return result.getBgpRibNetwork().getRib(router).getEntries().stream()
+        .filter(entry -> entry.getSymbolicRoute().getKey().getNetwork().equals(prefix))
+        .findFirst()
+        .get();
+  }
+
+  private static GuardedRibEntry<AnnotatedRoute<AbstractRoute>> mainPrefixAt(
+      BatfishSymbolicRoutePipelineResult result, String router, Prefix prefix) {
+    return result.getMainRibNetwork().getRib(router).getEntries().stream()
+        .filter(entry -> entry.getSymbolicRoute().getKey().getNetwork().equals(prefix))
+        .findFirst()
+        .get();
   }
 
   private static BgpProcess process(String routerId) {

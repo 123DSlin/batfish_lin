@@ -174,7 +174,7 @@ public final class BatfishRoutingPolicyProcessorTest {
             org.batfish.datamodel.RoutingProtocol.STATIC,
             "symbolic-export");
 
-    new BatfishRedistributionReconciler(network).reconcile(key, policyResult, guard);
+    new BatfishRedistributionReconciler<AbstractRoute>(network).reconcile(key, policyResult, guard);
 
     assertThat(network.getRib("r1").getEntries().size(), equalTo(1));
     assertThat(

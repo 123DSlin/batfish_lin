@@ -42,6 +42,9 @@ their owner already supplies the context.
 - Cross-protocol lifecycle: `BatfishMainRibReconciler` owns stable protocol-plane candidate to MAIN
   contribution identities and the semantic diff that converts protocol RIB stable states into
   MAIN advertisements, guard updates, replacements, and withdrawals.
+- Redistribution lifecycle: `BatfishBgpRedistributionReconciler` scans stable MAIN candidates and
+  owns whole-network rule/source identity; generic `BatfishRedistributionReconciler` applies each
+  typed Batfish policy result to the target RIB without knowing configuration or rule discovery.
 
 Merging these public types would hide lifecycle boundaries, produce large files, or force callers
 to use deeply nested names without reducing semantic complexity.
@@ -72,14 +75,9 @@ If physical subpackages are introduced later, use these groups:
 Such a move must be a dedicated mechanical commit after public/package-private boundaries are
 explicit. It must not be mixed with route semantics changes.
 
-## Known boundary requiring later unification
-
-The protocol-to-MAIN path is now unified behind `BatfishMainRibReconciler`. The remaining
-MAIN-to-BGP fixed-snapshot production path uses `BatfishBgpRedistribution`. The separate
-`BatfishRoutingPolicyProcessor` / `BatfishRedistributionKey` / `BatfishRedistributionReconciler`
-group implements an incremental lifecycle but is not called by the production pipeline. See
-`PROTOCOL_PIPELINE.md`. Before incremental configuration changes are supported, both paths must
-share one conversion/policy implementation or the unused incremental API must be removed.
+The protocol-to-MAIN path is unified behind `BatfishMainRibReconciler`; MAIN-to-BGP uses
+`BatfishBgpRedistributionReconciler`. Both initial and incremental paths therefore call the same
+`BatfishBgpRedistribution` conversion/policy implementation. See `PROTOCOL_PIPELINE.md`.
 
 ## Review rules for future files
 

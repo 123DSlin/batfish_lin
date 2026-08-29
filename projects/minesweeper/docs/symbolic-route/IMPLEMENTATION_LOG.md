@@ -1288,3 +1288,23 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   与 `git diff --check` 通过。主源码 PMD 仍只报告 `Graph`、`Encoder`、`EncoderSlice`、
   `PropertyChecker` 和旧 SMT symbolic-route 文件的仓库基线违规，本阶段未新增
   `org/batfish/minesweeper/symbolicroute` 违规，也未修改上述关键 SMT 文件。
+
+## Stage 6.5 MAIN→BGP 持续 redistribution（2026-08-29 20:14 CST）
+
+- 新增 `BatfishBgpRedistributionReconciler`，在 MAIN stable-state 边界扫描配置的
+  connected/static redistribution 关系，并复用唯一的 `BatfishBgpRedistribution` Batfish
+  conversion/policy 实现生成 typed `Bgpv4Route` policy result。
+- 将组件级 `BatfishRedistributionReconciler` 泛型化，使生产 BGP pipeline 直接使用其稳定
+  contribution、guard update、deny/withdraw 和 transformed-route replacement 生命周期；删除
+  pipeline 原有的一次性 BGP seed 构造路径。
+- 增加 guard 逻辑等价 no-op 与 reentrancy barrier，避免 BGP→MAIN→redistribution 的同步
+  stable-state listener 环产生无效消息或递归不终止。
+- 动态端到端测试撤回 MAIN connected contribution，验证本地 BGP、远端 BGP 和远端 MAIN
+  后代全部消失；以同 identity 和新 guard 恢复后，验证新 guard 与 session guard 的合取贯穿
+  远端 BGP 和 MAIN。组件测试另行验证逻辑等价 guard 不产生任何 message/withdrawal/RIB update。
+- 当前边界：只支持既有 connected/static→BGP rules；IS-IS redistribution、运行中修改配置或
+  policy，以及 recursive static resolver 自身的持续增量生命周期仍未实现。
+- 验收：完整 `//projects/minesweeper:minesweeper_tests` 在禁用缓存后通过，Java format 与
+  `git diff --check` 通过。PMD 只报告既有 `Graph`、`Encoder`、`EncoderSlice`、
+  `PropertyChecker` 和旧 SMT symbolic-route 基线违规；本阶段未新增 symbolicroute 包违规，
+  也未修改上述关键 SMT 文件。

@@ -79,24 +79,20 @@ unsatisfiable or disappearing withdraws its MAIN contribution recursively, a log
 guard updates the same contribution, and a changed concrete route is handled as replacement.
 Connected and static routes remain native MAIN seeds and are not owned by this reconciler.
 
-This lifecycle stops at MAIN. A post-return MAIN change does not yet trigger fresh redistribution
-into BGP because the production MAIN-to-BGP conversion remains the fixed-snapshot path described
-below. This boundary does not affect the initial complete symbolic RIB, but it must be resolved
-before configuration/policy changes are supported incrementally across redistribution.
+`BatfishBgpRedistributionReconciler` continues the lifecycle from selected connected/static MAIN
+branches into local BGP. It reuses `BatfishBgpRedistribution` for Batfish conversion and policy,
+then drives typed `Bgpv4Route` contributions through the global BGP engine. MAIN withdrawal and
+guard update therefore propagate through local BGP, remote BGP descendants, and remote MAIN before
+the initiating engine call returns.
 
 ## Redistribution implementation boundary
 
-There are currently two deliberately distinct redistribution paths:
+The production pipeline has one redistribution path. `BatfishBgpRedistributionReconciler` discovers
+the rule/source relationships, `BatfishBgpRedistribution` performs concrete Batfish conversion and
+policy evaluation, and generic `BatfishRedistributionReconciler<Bgpv4Route>` owns contribution
+lifecycle. A reentrancy barrier coalesces callbacks caused by the BGP-to-MAIN feedback edge; guard
+logical equivalence is a true no-op, so a stable cycle terminates without synthetic updates.
 
-1. The fixed-snapshot production pipeline calls `BatfishBgpRedistribution` while constructing its
-   initial local BGP seeds. This path computes one stable Symbolic RIB from an empty state and is
-   the path exercised by `BatfishSymbolicRoutePipeline.run`.
-2. `BatfishRoutingPolicyProcessor`, `BatfishRedistributionKey`, and
-   `BatfishRedistributionReconciler` implement and test an incremental advertise/deny/withdraw/
-   atomic-replacement lifecycle. They are not called by the current fixed-snapshot pipeline.
-
-Keeping both paths permanently would risk semantic drift (for example next-hop, `nonRouting`, or
-missing-policy behavior). Until incremental configuration/policy updates are in scope, the direct
-fixed-snapshot BGP path remains the only production entry. Before incremental updates are enabled,
-the two paths must be unified behind one conversion/policy implementation rather than exposed as
-parallel production APIs.
+The current rules intentionally select connected/static sources only. IS-IS-to-BGP redistribution,
+live configuration/policy mutation, and conditional policy semantics remain out of scope and must
+be added explicitly rather than inferred from this lifecycle.

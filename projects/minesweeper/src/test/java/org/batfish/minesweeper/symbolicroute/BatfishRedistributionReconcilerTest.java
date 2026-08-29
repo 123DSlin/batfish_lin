@@ -46,7 +46,8 @@ public final class BatfishRedistributionReconcilerTest {
   @Test
   public void testGuardUpdateKeepsContributionIdentity() {
     SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> network = network();
-    BatfishRedistributionReconciler reconciler = new BatfishRedistributionReconciler(network);
+    BatfishRedistributionReconciler<AbstractRoute> reconciler =
+        new BatfishRedistributionReconciler<>(network);
     BatfishRedistributionKey key = key();
     RouteGuard firstGuard = GUARDS.variable("first_guard");
     RouteGuard secondGuard = GUARDS.variable("second_guard");
@@ -65,9 +66,29 @@ public final class BatfishRedistributionReconcilerTest {
   }
 
   @Test
+  public void testEquivalentGuardIsNoOp() {
+    SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> network = network();
+    BatfishRedistributionReconciler<AbstractRoute> reconciler =
+        new BatfishRedistributionReconciler<>(network);
+    BatfishRedistributionKey key = key();
+    RouteGuard guard = GUARDS.variable("guard");
+    BatfishRoutingPolicyResult<StaticRoute> accepted =
+        BatfishRoutingPolicyResult.accepted(new AnnotatedRoute<>(route(10L), "target"));
+    reconciler.reconcile(key, accepted, guard);
+
+    SymbolicRouteConvergenceResult result =
+        reconciler.reconcile(key, accepted, guard.and(GUARDS.trueGuard()));
+
+    assertThat(result.getProcessedMessages(), equalTo(0));
+    assertThat(result.getProcessedWithdrawals(), equalTo(0));
+    assertThat(result.getRibUpdates(), equalTo(0));
+  }
+
+  @Test
   public void testTransformedRouteUsesAtomicReplacementAndNewIdentity() {
     SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> network = network();
-    BatfishRedistributionReconciler reconciler = new BatfishRedistributionReconciler(network);
+    BatfishRedistributionReconciler<AbstractRoute> reconciler =
+        new BatfishRedistributionReconciler<>(network);
     BatfishRedistributionKey key = key();
     reconciler.reconcile(
         key,
@@ -99,7 +120,8 @@ public final class BatfishRedistributionReconcilerTest {
   @Test
   public void testDenyWithdrawsPreviouslyAcceptedContribution() {
     SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> network = network();
-    BatfishRedistributionReconciler reconciler = new BatfishRedistributionReconciler(network);
+    BatfishRedistributionReconciler<AbstractRoute> reconciler =
+        new BatfishRedistributionReconciler<>(network);
     BatfishRedistributionKey key = key();
     reconciler.reconcile(
         key,
@@ -117,7 +139,8 @@ public final class BatfishRedistributionReconcilerTest {
   @Test
   public void testWrongTargetVrfIsRejectedWithoutReplacingInstalledRoute() {
     SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> network = network();
-    BatfishRedistributionReconciler reconciler = new BatfishRedistributionReconciler(network);
+    BatfishRedistributionReconciler<AbstractRoute> reconciler =
+        new BatfishRedistributionReconciler<>(network);
     BatfishRedistributionKey key = key();
     BatfishRoutingPolicyResult<StaticRoute> original =
         BatfishRoutingPolicyResult.accepted(new AnnotatedRoute<>(route(10L), "target"));

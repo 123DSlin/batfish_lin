@@ -27,6 +27,7 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull private final SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> _isisL2RibNetwork;
   @Nonnull private final BatfishIsisLevelTransitionReconciler _isisLevelTransitionReconciler;
   @Nonnull private final BatfishMainRibReconciler _mainRibReconciler;
+  @Nonnull private final BatfishBgpRedistributionReconciler _bgpRedistributionReconciler;
   @Nonnull private final SymbolicRouteConvergenceResult _mainConvergence;
   @Nonnull private final SymbolicRouteConvergenceResult _bgpConvergence;
   @Nonnull private final SymbolicRouteConvergenceResult _isisL1Convergence;
@@ -40,6 +41,7 @@ public final class BatfishSymbolicRoutePipelineResult {
       SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL2RibNetwork,
       BatfishIsisLevelTransitionReconciler isisLevelTransitionReconciler,
       BatfishMainRibReconciler mainRibReconciler,
+      BatfishBgpRedistributionReconciler bgpRedistributionReconciler,
       SymbolicRouteConvergenceResult mainConvergence,
       SymbolicRouteConvergenceResult bgpConvergence,
       SymbolicRouteConvergenceResult isisL1Convergence,
@@ -53,6 +55,8 @@ public final class BatfishSymbolicRoutePipelineResult {
         requireNonNull(
             isisLevelTransitionReconciler, "isisLevelTransitionReconciler must be provided");
     _mainRibReconciler = requireNonNull(mainRibReconciler, "mainRibReconciler must be provided");
+    _bgpRedistributionReconciler =
+        requireNonNull(bgpRedistributionReconciler, "bgpRedistributionReconciler must be provided");
     _mainConvergence = requireNonNull(mainConvergence, "mainConvergence must be provided");
     _bgpConvergence = requireNonNull(bgpConvergence, "bgpConvergence must be provided");
     _isisL1Convergence = requireNonNull(isisL1Convergence, "isisL1Convergence must be provided");
@@ -97,6 +101,11 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull
   public BatfishMainRibReconciler getMainRibReconciler() {
     return _mainRibReconciler;
+  }
+
+  @Nonnull
+  public BatfishBgpRedistributionReconciler getBgpRedistributionReconciler() {
+    return _bgpRedistributionReconciler;
   }
 
   @Nonnull

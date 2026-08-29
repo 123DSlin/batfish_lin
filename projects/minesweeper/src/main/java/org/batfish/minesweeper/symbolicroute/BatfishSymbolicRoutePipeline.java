@@ -1,14 +1,10 @@
 package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
-import static org.batfish.datamodel.RoutingProtocol.CONNECTED;
-import static org.batfish.datamodel.RoutingProtocol.STATIC;
 
 import com.google.common.collect.ImmutableList;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nonnull;
@@ -18,7 +14,6 @@ import org.batfish.datamodel.BgpProcess;
 import org.batfish.datamodel.Bgpv4Route;
 import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.IsisRoute;
-import org.batfish.datamodel.RoutingProtocol;
 import org.batfish.datamodel.Vrf;
 
 /** Executes connected/static, IS-IS L1, redistribution, and eBGP to guarded stable state. */
@@ -71,16 +66,19 @@ public final class BatfishSymbolicRoutePipeline {
             nativeL2Convergence.getProcessedWithdrawals()
                 + transitionConvergence.getProcessedWithdrawals(),
             nativeL2Convergence.getRibUpdates() + transitionConvergence.getRibUpdates());
-    List<SymbolicRouteSeed<AnnotatedRoute<Bgpv4Route>>> bgpSeeds =
-        redistributeSelectedMainRoutes(input, mainNetwork);
     SymbolicRouteNetwork<AnnotatedRoute<Bgpv4Route>> bgpNetwork =
         SymbolicRouteNetworkFactory.create(
             routers,
             input.getBgpSessions(),
-            bgpSeeds,
+            ImmutableList.of(),
             new BatfishBgpProtocolAdapter(input.getBgpEdges(), input.getConcreteMainRibs()));
-    SymbolicRouteConvergenceResult bgpConvergence = bgpNetwork.converge();
     mainRibReconciler.registerSource("bgp", bgpNetwork, route -> true);
+    BatfishBgpRedistributionReconciler bgpRedistributionReconciler =
+        new BatfishBgpRedistributionReconciler(
+            input.getConfigurations(), input.getRedistributionRules(), mainNetwork, bgpNetwork);
+    bgpRedistributionReconciler.start();
+    SymbolicRouteConvergenceResult bgpConvergence =
+        bgpRedistributionReconciler.getLastConvergence();
     return new BatfishSymbolicRoutePipelineResult(
         mainNetwork,
         bgpNetwork,
@@ -88,6 +86,7 @@ public final class BatfishSymbolicRoutePipeline {
         isisL2Network,
         levelTransitionReconciler,
         mainRibReconciler,
+        bgpRedistributionReconciler,
         mainConvergence,
         bgpConvergence,
         isisConvergence,
@@ -103,53 +102,6 @@ public final class BatfishSymbolicRoutePipeline {
     Configuration configuration = input.getConfigurations().get(route.getKey().getRouter());
     Vrf vrf = configuration.getVrfs().get(route.getKey().getVrf());
     return vrf != null && vrf.getIsisProcess() != null && vrf.getIsisProcess().getLevel2() != null;
-  }
-
-  private static List<SymbolicRouteSeed<AnnotatedRoute<Bgpv4Route>>> redistributeSelectedMainRoutes(
-      BatfishSymbolicRoutePipelineInput input,
-      SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> mainNetwork) {
-    List<SymbolicRouteSeed<AnnotatedRoute<Bgpv4Route>>> seeds = new ArrayList<>();
-    int identity = 0;
-    for (BatfishBgpRedistributionRule rule : input.getRedistributionRules()) {
-      Configuration configuration = input.getConfigurations().get(rule.getRouter());
-      BgpProcess process = bgpProcess(configuration, rule.getTargetVrf());
-      for (GuardedRibEntry<AnnotatedRoute<AbstractRoute>> entry :
-          mainNetwork.getRib(rule.getRouter()).getEntries()) {
-        SymbolicRoute<AnnotatedRoute<AbstractRoute>> symbolic = entry.getSymbolicRoute();
-        RoutingProtocol sourceProtocol = symbolic.getKey().getProtocol();
-        if (!symbolic.getKey().getVrf().equals(rule.getSourceVrf())
-            || sourceProtocol != CONNECTED && sourceProtocol != STATIC
-            || !entry.getSelectionGuard().isSatisfiable()) {
-          continue;
-        }
-        BatfishRoutingPolicyResult<Bgpv4Route> converted =
-            BatfishBgpRedistribution.redistribute(
-                configuration,
-                process,
-                rule.getPolicyName(),
-                symbolic.getRoute(),
-                rule.getTargetVrf(),
-                rule.getTargetProtocol());
-        if (converted.getOutcome() == BatfishRoutingPolicyResult.Outcome.POLICY_NOT_FOUND) {
-          throw new IllegalArgumentException(
-              "redistribution policy is missing: " + rule.getPolicyName());
-        }
-        if (converted.getOutcome() != BatfishRoutingPolicyResult.Outcome.ACCEPTED) {
-          continue;
-        }
-        String messageId =
-            String.format(
-                "pipeline-redist:%d:%s:%d",
-                rule.getRuleId().length(), rule.getRuleId(), identity++);
-        seeds.add(
-            new SymbolicRouteSeed<>(
-                messageId,
-                rule.getRouter(),
-                converted.getOutputRoute().get(),
-                entry.getSelectionGuard()));
-      }
-    }
-    return seeds;
   }
 
   private static BgpProcess bgpProcess(Configuration configuration, String vrfName) {
