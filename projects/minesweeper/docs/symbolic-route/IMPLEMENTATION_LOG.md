@@ -1327,3 +1327,16 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 验收：完整 `//projects/minesweeper:minesweeper_tests` 在禁用缓存后通过；Java format 与
   `git diff --check` 通过。PMD 仍只报告 `Graph`、`Encoder`、`EncoderSlice`、`PropertyChecker`
   和旧 SMT symbolic-route 基线违规，本阶段未新增 symbolicroute 包违规，也未修改这些关键文件。
+
+## Stage 7.0 通用 SR 架构与 Batfish parser 审计（2026-08-29 21:16 CST）
+
+- 确认 SR 位于 guarded IGP/MAIN 之后，不作为参与 MAIN preference 的新路由协议 RIB；Batfish
+  负责 vendor syntax→vendor-independent SR configuration，Minesweeper 负责 SID guard、依赖和
+  policy resolution，traffic/TE execution 保持独立阶段。
+- 全仓库审计确认当前版本不存在 Prefix/Node/Adjacency SID、SRGB/SRLB、segment list、binding
+  SID、SR policy/candidate path/steering 的结构化 Java model 或 grammar production；通用 MPLS
+  常量不能替代 SR。`traffic_demo` 的 SR 命令当前不会进入 normalized `Configuration`。
+- 新增 `SR_ARCHITECTURE.md`，固定 vendor/IGP-independent ownership：设备级 root config、VRF
+  隔离、MPLS/SRv6 tagged values、absolute/index 区分、typed endpoint/prefix、稳定 identity、
+  underlay provider API、guard 来源和 recursive dependency 规则。demo 仅作为后续验收 fixture。
+- 本阶段仅形成可审计架构决策，没有修改 parser、datamodel、协议 comparator 或 pipeline 代码。
