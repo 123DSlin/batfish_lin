@@ -1356,3 +1356,19 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   边界、range 顺序、跨 VRF/node/algorithm identity 和类型拒绝。完整 common tests 的 13 个
   失败均来自既有 `FlowDiff` 与 routing-policy JSON/SMT 基线；common PMD 也只报告既有
   community/prefix/routing-policy 违规，没有 `org.batfish.datamodel.sr` 违规。
+
+## Stage 7.1b 设备/VRF SR 配置与 Batfish Configuration 集成（2026-08-30 11:42 CST）
+
+- 新增 vendor-independent `SegmentRoutingConfig` 与 `SegmentRoutingVrfConfig`，显式记录设备启用
+  的 SR-MPLS/SRv6 data plane、SRGB、SRLB 以及按 VRF 隔离的 SID bindings；拒绝空 data plane、
+  map-key/VRF 不一致、binding/VRF 不一致、重复 binding identity 和跨设备 owner 混入。
+- 将 SR root config 以可空 typed property 挂接到 Batfish `Configuration`，setter 在 attachment
+  边界验证所有 SID binding 的 node identity 与 configuration hostname 一致；JSON clone 保留
+  完整 SR 配置，后续 vendor conversion 不需要字符串 side channel。
+- 新增独立 `SrLocalBlock` 表示 SRLB allocation pool。它只提供 label membership，不提供
+  SRGB-relative index→label 解析；因此不会把 local adjacency/binding label allocation 错当成
+  global Prefix-SID index 语义。SRGB 继续由 ordered `SrGlobalBlock.resolve` 负责。
+- `SegmentRoutingConfigTest` 覆盖 Configuration JSON round-trip、双 VRF 隔离、duplicate/owner/
+  map-key 拒绝、SR-MPLS capability 约束和 SRLB 边界。与 Stage 7.1a 测试一起禁用缓存运行通过。
+- 当前边界：这是 parser 可写入的通用 normalized model；尚未增加任何 vendor grammar/conversion，
+  也尚未构建 Minesweeper guarded SID database 或 SR policy resolution。

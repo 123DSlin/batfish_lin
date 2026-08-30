@@ -37,6 +37,7 @@ import org.batfish.datamodel.routing_policy.communities.CommunityMatchExpr;
 import org.batfish.datamodel.routing_policy.communities.CommunitySet;
 import org.batfish.datamodel.routing_policy.communities.CommunitySetExpr;
 import org.batfish.datamodel.routing_policy.communities.CommunitySetMatchExpr;
+import org.batfish.datamodel.sr.SegmentRoutingConfig;
 import org.batfish.datamodel.tracking.TrackMethod;
 import org.batfish.datamodel.vendor_family.VendorFamily;
 import org.batfish.referencelibrary.ReferenceBook;
@@ -171,6 +172,7 @@ public final class Configuration implements Serializable {
   private static final String PROP_ROUTE_FILTER_LISTS = "routeFilterLists";
   private static final String PROP_ROUTING_POLICIES = "routingPolicies";
   private static final String PROP_SNMP_SOURCE_INTERFACE = "snmpSourceInterface";
+  private static final String PROP_SEGMENT_ROUTING = "segmentRouting";
   private static final String PROP_SNMP_TRAP_SERVERS = "snmpTrapServers";
   private static final String PROP_TACACS_SERVERS = "tacacsServers";
   private static final String PROP_TACACS_SOURCE_INTERFACE = "tacacsSourceInterface";
@@ -258,6 +260,8 @@ public final class Configuration implements Serializable {
   private Map<String, RouteFilterList> _routeFilterLists;
 
   private Map<String, RoutingPolicy> _routingPolicies;
+
+  @Nullable private SegmentRoutingConfig _segmentRoutingConfig;
 
   private String _snmpSourceInterface;
 
@@ -628,6 +632,12 @@ public final class Configuration implements Serializable {
     return _mlags;
   }
 
+  @Nullable
+  @JsonProperty(PROP_SEGMENT_ROUTING)
+  public SegmentRoutingConfig getSegmentRoutingConfig() {
+    return _segmentRoutingConfig;
+  }
+
   @JsonIgnore
   public SubRange getNormalVlanRange() {
     return _normalVlanRange;
@@ -891,6 +901,14 @@ public final class Configuration implements Serializable {
   @JsonProperty(PROP_MLAGS)
   public void setMlags(Map<String, Mlag> mlags) {
     _mlags = mlags;
+  }
+
+  @JsonProperty(PROP_SEGMENT_ROUTING)
+  public void setSegmentRoutingConfig(@Nullable SegmentRoutingConfig segmentRoutingConfig) {
+    if (segmentRoutingConfig != null) {
+      segmentRoutingConfig.validateOwner(_name);
+    }
+    _segmentRoutingConfig = segmentRoutingConfig;
   }
 
   @JsonIgnore
