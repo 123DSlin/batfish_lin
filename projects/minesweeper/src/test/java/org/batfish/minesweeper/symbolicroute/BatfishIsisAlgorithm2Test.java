@@ -29,7 +29,16 @@ import org.batfish.datamodel.isis.IsisInterfaceSettings;
 import org.batfish.datamodel.isis.IsisLevelSettings;
 import org.batfish.datamodel.isis.IsisProcess;
 import org.batfish.datamodel.isis.IsisTopology;
+import org.batfish.datamodel.sr.SegmentRoutingConfig;
+import org.batfish.datamodel.sr.SegmentRoutingVrfConfig;
+import org.batfish.datamodel.sr.SrGlobalBlock;
+import org.batfish.datamodel.sr.SrLabelRange;
+import org.batfish.datamodel.sr.SrPrefix;
+import org.batfish.datamodel.sr.SrSidBinding;
+import org.batfish.datamodel.sr.SrSidBindingKey;
+import org.batfish.datamodel.sr.SrSidValue;
 import org.batfish.dataplane.rib.Rib;
+import org.batfish.minesweeper.symbolicsr.GuardedSidEntry;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -184,6 +193,20 @@ public final class BatfishIsisAlgorithm2Test {
     assertThat(isisCandidates, equalTo(4L));
     assertThat(mainCandidates, equalTo(4L));
     assertThat(result.toReadableText().contains("IS-IS LEVEL-1 RIB"), equalTo(true));
+
+    List<GuardedSidEntry> r4Sids =
+        result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME);
+    assertThat(r4Sids, hasSize(1));
+    assertThat(r4Sids.get(0).getBinding().getSid(), equalTo(SrSidValue.mplsIndex(7L)));
+    RouteGuard expectedSidGuard = GUARDS.falseGuard();
+    for (GuardedRibEntry<AnnotatedRoute<IsisRoute>> route :
+        result.getIsisL1RibNetwork().getRib("r4").getEntries()) {
+      if (route.getSymbolicRoute().getKey().getNetwork().equals(ORIGIN_PREFIX)) {
+        expectedSidGuard = expectedSidGuard.or(route.getSelectionGuard());
+      }
+    }
+    assertThat(
+        r4Sids.get(0).getAvailabilityGuard().isEquivalentTo(expectedSidGuard), equalTo(true));
   }
 
   private static GuardedRibEntry<AnnotatedRoute<IsisRoute>> routeWithMetric(
@@ -213,6 +236,7 @@ public final class BatfishIsisAlgorithm2Test {
       configurations.put(hostname, configuration);
     }
     addInterface(nf, configurations.get("r1"), "Loopback0", "1.1.1.1/32", 0L, true);
+    attachPrefixSid(configurations.get("r1"));
     addLink(
         nf,
         configurations,
@@ -291,6 +315,29 @@ public final class BatfishIsisAlgorithm2Test {
         "10.0.54.2/30",
         20L);
     return ImmutableMap.copyOf(configurations);
+  }
+
+  private static void attachPrefixSid(Configuration owner) {
+    SrSidBinding binding =
+        new SrSidBinding(
+            new SrSidBindingKey(
+                owner.getHostname(),
+                DEFAULT_VRF_NAME,
+                SrSidBindingKey.Type.PREFIX,
+                0,
+                SrPrefix.ipv4(ORIGIN_PREFIX),
+                null,
+                null),
+            SrSidValue.mplsIndex(7L),
+            com.google.common.collect.ImmutableSet.of());
+    owner.setSegmentRoutingConfig(
+        new SegmentRoutingConfig(
+            com.google.common.collect.ImmutableSet.of(SegmentRoutingConfig.DataPlane.MPLS),
+            SrGlobalBlock.of(ImmutableList.of(SrLabelRange.of(16000L, 23999L))),
+            null,
+            ImmutableMap.of(
+                DEFAULT_VRF_NAME,
+                new SegmentRoutingVrfConfig(DEFAULT_VRF_NAME, ImmutableList.of(binding)))));
   }
 
   private static void addLink(

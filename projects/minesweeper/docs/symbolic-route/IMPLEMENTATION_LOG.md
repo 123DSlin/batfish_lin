@@ -1405,3 +1405,21 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   测试与 resolver 边界测试全部通过。
 - 当前边界：尚未解析 connected-prefix-sid-map、IPv6 Prefix-SID、algorithm、manual adjacency SID
   和其他 vendor grammar；SRGB 已进入 normalized state，但尚未构造 Minesweeper guarded SID DB。
+
+## Stage 7.3a guarded SID database snapshot（2026-08-31 15:31 CST）
+
+- 新建独立 `symbolicsr` 层及 protocol-neutral `SymbolicUnderlayReachability`；首个
+  `IsisUnderlayReachability` adapter 只读取已收敛的 guarded IS-IS L1/L2 RIB，不让 SR 参与
+  MAIN preference、BGP 或 redistribution。
+- Prefix/Node SID reachability 使用 node/VRF/algorithm 隔离的 exact prefix advertisement；同一
+  prefix 的 L1/L2 selected branches 按 guard 析取。覆盖该地址的默认路由不能伪造 Prefix-SID
+  advertisement，IPv6 与非 algorithm 0 当前 fail closed。
+- 新增稳定 `GuardedSidKey(resolver node, resolver VRF, SrSidBindingKey)`、`GuardedSidEntry` 和
+  immutable `GuardedSidDatabase`。数据库遍历任意设备/VRF 名称，不依赖 demo；无 satisfiable
+  underlay guard 的 binding 不进入 active snapshot，重复 typed identity 显式拒绝。
+- pipeline 在 IS-IS fixed point 后构造 SID DB 并通过 result 暴露。Algorithm 2 diamond 测试给 R1
+  的 loopback 配置 index Prefix-SID，验证 R4 SID guard 与所有故障回退 selection guards 的析取
+  逻辑等价，并确认数据库保留原始 `MPLS_INDEX` 而非固定 label。
+- 完整 Minesweeper 测试禁用缓存后通过。当前数据库是本次 fixed snapshot 的正确结果；pipeline
+  返回后若直接调用 IS-IS engine 做增量 withdrawal/replace，SID snapshot 尚不会自动 reconcile。
+  Stage 7.3b 将增加 underlay stable-state listener 与 typed SID delta lifecycle。

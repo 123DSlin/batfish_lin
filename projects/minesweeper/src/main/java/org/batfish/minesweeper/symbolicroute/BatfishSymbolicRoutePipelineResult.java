@@ -16,6 +16,7 @@ import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.Bgpv4Route;
 import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.IsisRoute;
+import org.batfish.minesweeper.symbolicsr.GuardedSidDatabase;
 
 /** Final stable state produced by one complete symbolic route pipeline run. */
 public final class BatfishSymbolicRoutePipelineResult {
@@ -33,6 +34,7 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull private final SymbolicRouteConvergenceResult _bgpConvergence;
   @Nonnull private final SymbolicRouteConvergenceResult _isisL1Convergence;
   @Nonnull private final SymbolicRouteConvergenceResult _isisL2Convergence;
+  @Nonnull private final GuardedSidDatabase _guardedSidDatabase;
   @Nonnull private final ImmutableMap<String, ImmutableList<String>> _vrfsByRouter;
 
   BatfishSymbolicRoutePipelineResult(
@@ -48,6 +50,7 @@ public final class BatfishSymbolicRoutePipelineResult {
       SymbolicRouteConvergenceResult bgpConvergence,
       SymbolicRouteConvergenceResult isisL1Convergence,
       SymbolicRouteConvergenceResult isisL2Convergence,
+      GuardedSidDatabase guardedSidDatabase,
       Map<String, Configuration> configurations) {
     _mainRibNetwork = requireNonNull(mainRibNetwork, "mainRibNetwork must be provided");
     _bgpRibNetwork = requireNonNull(bgpRibNetwork, "bgpRibNetwork must be provided");
@@ -65,6 +68,7 @@ public final class BatfishSymbolicRoutePipelineResult {
     _bgpConvergence = requireNonNull(bgpConvergence, "bgpConvergence must be provided");
     _isisL1Convergence = requireNonNull(isisL1Convergence, "isisL1Convergence must be provided");
     _isisL2Convergence = requireNonNull(isisL2Convergence, "isisL2Convergence must be provided");
+    _guardedSidDatabase = requireNonNull(guardedSidDatabase, "guardedSidDatabase must be provided");
     ImmutableMap.Builder<String, ImmutableList<String>> vrfs = ImmutableMap.builder();
     requireNonNull(configurations, "configurations must be provided")
         .forEach(
@@ -135,6 +139,11 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull
   public SymbolicRouteConvergenceResult getIsisL2Convergence() {
     return _isisL2Convergence;
+  }
+
+  @Nonnull
+  public GuardedSidDatabase getGuardedSidDatabase() {
+    return _guardedSidDatabase;
   }
 
   /** Returns every main, BGP, and IS-IS L1 candidate in deterministic router/VRF order. */

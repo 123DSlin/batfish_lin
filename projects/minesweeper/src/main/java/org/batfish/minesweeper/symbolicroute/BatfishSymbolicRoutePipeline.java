@@ -15,6 +15,8 @@ import org.batfish.datamodel.Bgpv4Route;
 import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.IsisRoute;
 import org.batfish.datamodel.Vrf;
+import org.batfish.minesweeper.symbolicsr.GuardedSidDatabase;
+import org.batfish.minesweeper.symbolicsr.IsisUnderlayReachability;
 
 /** Executes connected/static, IS-IS L1, redistribution, and eBGP to guarded stable state. */
 public final class BatfishSymbolicRoutePipeline {
@@ -81,6 +83,9 @@ public final class BatfishSymbolicRoutePipeline {
     bgpRedistributionReconciler.start();
     SymbolicRouteConvergenceResult bgpConvergence =
         bgpRedistributionReconciler.getLastConvergence();
+    GuardedSidDatabase sidDatabase =
+        GuardedSidDatabase.build(
+            input.getConfigurations(), new IsisUnderlayReachability(isisNetwork, isisL2Network));
     return new BatfishSymbolicRoutePipelineResult(
         mainNetwork,
         bgpNetwork,
@@ -94,6 +99,7 @@ public final class BatfishSymbolicRoutePipeline {
         bgpConvergence,
         isisConvergence,
         isisL2Convergence,
+        sidDatabase,
         input.getConfigurations());
   }
 

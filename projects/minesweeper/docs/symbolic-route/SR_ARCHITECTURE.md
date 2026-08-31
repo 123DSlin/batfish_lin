@@ -62,10 +62,14 @@ The `symbolicsr` layer consumes a protocol-independent interface:
 
 ```java
 interface SymbolicUnderlayReachability {
-  RouteGuard prefixReachability(String node, String vrf, SrPrefix prefix, int algorithm);
-  RouteGuard adjacencyAvailability(String node, String vrf, String interfaceName);
+  Optional<RouteGuard> prefixReachability(String node, String vrf, SrPrefix prefix, int algorithm);
+  Optional<RouteGuard> adjacencyAvailability(String node, String vrf, String interfaceName);
 }
 ```
+
+An empty prefix result means that the converged underlay contains no satisfiable exact
+advertisement for that SR prefix. Prefix-SID discovery is exact-prefix based: a covering default
+route does not manufacture an IGP Prefix-SID advertisement. Forwarding LPM is a later operation.
 
 The initial IS-IS provider reads guarded L1/L2 and MAIN state plus canonical `LinkFailureKey`.
 Future OSPF support implements the same interface; no `IsisRoute` appears in the general SID or
@@ -81,6 +85,10 @@ Guard ownership is:
 | Segment list | ordered conjunction of segment resolution guards |
 | Candidate path | configuration guard AND referenced segment-list guard |
 | SR policy | selection over candidate preference, with ECMP/weight retained as data |
+
+An MPLS index remains unresolved in the SID database. Its on-wire label is selected hop-by-hop
+using the SRGB of the forwarding next hop; resolving it once against the source, ingress, or SID
+owner and storing that label globally is incorrect.
 
 The SID database maintains typed contribution and dependency identities. Route text, `toString()`,
 list position, or generated report strings are never identities. Withdrawal of an underlay prefix
