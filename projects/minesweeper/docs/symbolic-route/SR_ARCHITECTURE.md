@@ -96,6 +96,25 @@ Guard ownership is:
 | Candidate path | configuration guard AND referenced segment-list guard |
 | SR policy | selection over candidate preference, with ECMP/weight retained as data |
 
+The Stage 7.7 policy database evaluates all candidates against one stable SID/underlay snapshot.
+For candidate `c`, `availability(c)` is the disjunction of its satisfiable numeric forwarding
+branches. Its selection condition is:
+
+```text
+selection(c) = availability(c) AND NOT(OR availability(higher-preference candidates))
+```
+
+Candidates in the same preference group do not suppress one another; their configured weights are
+retained but are not interpreted as traffic load at this layer. Each selected branch keeps typed
+SID and canonical link dependencies. A stable candidate key excludes preference, weight, guards,
+and report text. A concrete payload change under that key is `REPLACED`; logical guard change is
+`GUARD_CHANGED`; a missing dependency recursively removes the candidate and its child forwarding
+contributions.
+
+Policy reconciliation runs after every stable underlay snapshot, not only after a nonempty SID
+delta. This distinction is required because ECMP/next-hop branches can change while their aggregate
+prefix availability formula remains logically equivalent.
+
 An MPLS index remains unresolved in the SID database. A global Prefix/Node-SID index is resolved
 against the SRGB of the concrete forwarding next hop; symbolic ECMP/failure branches may therefore
 produce different wire labels for the same index. Resolving it once against the source, ingress, or

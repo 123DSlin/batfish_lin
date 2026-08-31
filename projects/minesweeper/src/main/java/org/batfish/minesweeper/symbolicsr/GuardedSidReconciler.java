@@ -4,8 +4,11 @@ import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.IsisRoute;
@@ -19,6 +22,8 @@ public final class GuardedSidReconciler {
   private final SymbolicUnderlayReachability _underlay;
   private GuardedSidDatabase _database;
   private GuardedSidDelta _lastDelta;
+  private final List<Consumer<GuardedSidDelta>> _deltaListeners;
+  private final List<Runnable> _stableStateListeners;
 
   public GuardedSidReconciler(
       Map<String, Configuration> configurations,
@@ -26,17 +31,26 @@ public final class GuardedSidReconciler {
       SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> l2,
       Iterable<BatfishIsisEdge> edges,
       Iterable<SymbolicRouteSession> sessions) {
-    _configurations = ImmutableMap.copyOf(requireNonNull(configurations));
-    _underlay =
+    this(
+        configurations,
         new IsisUnderlayReachability(
             requireNonNull(l1),
             requireNonNull(l2),
             requireNonNull(edges),
-            requireNonNull(sessions));
-    _database = GuardedSidDatabase.build(_configurations, _underlay);
-    _lastDelta = new GuardedSidDelta(ImmutableList.of());
+            requireNonNull(sessions)));
     l1.getEngine().addStableStateListener(this::reconcile);
     l2.getEngine().addStableStateListener(this::reconcile);
+  }
+
+  /** Protocol-neutral stable-underlay wiring, also used by adapter integration tests. */
+  public GuardedSidReconciler(
+      Map<String, Configuration> configurations, SymbolicUnderlayReachability underlay) {
+    _configurations = ImmutableMap.copyOf(requireNonNull(configurations));
+    _underlay = requireNonNull(underlay);
+    _database = GuardedSidDatabase.build(_configurations, _underlay);
+    _lastDelta = new GuardedSidDelta(ImmutableList.of());
+    _deltaListeners = new ArrayList<>();
+    _stableStateListeners = new ArrayList<>();
   }
 
   public GuardedSidDelta reconcile() {
@@ -66,7 +80,9 @@ public final class GuardedSidReconciler {
     GuardedSidDelta delta = new GuardedSidDelta(updates.build());
     if (!delta.isEmpty()) {
       _lastDelta = delta;
+      _deltaListeners.forEach(listener -> listener.accept(delta));
     }
+    _stableStateListeners.forEach(Runnable::run);
     return delta;
   }
 
@@ -76,5 +92,18 @@ public final class GuardedSidReconciler {
 
   public GuardedSidDelta getLastDelta() {
     return _lastDelta;
+  }
+
+  public SymbolicUnderlayReachability getUnderlay() {
+    return _underlay;
+  }
+
+  public void addDeltaListener(Consumer<GuardedSidDelta> listener) {
+    _deltaListeners.add(requireNonNull(listener));
+  }
+
+  /** Runs after every stable underlay reconciliation, including an empty SID delta. */
+  public void addStableStateListener(Runnable listener) {
+    _stableStateListeners.add(requireNonNull(listener));
   }
 }

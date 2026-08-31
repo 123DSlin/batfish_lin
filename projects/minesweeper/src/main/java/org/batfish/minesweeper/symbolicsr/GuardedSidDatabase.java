@@ -15,6 +15,7 @@ import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.sr.SegmentRoutingConfig;
 import org.batfish.datamodel.sr.SrSidBinding;
 import org.batfish.datamodel.sr.SrSidBindingKey;
+import org.batfish.datamodel.sr.SrSidValue;
 import org.batfish.minesweeper.symbolicroute.RouteGuard;
 
 /** Immutable snapshot of guarded SID reachability after underlay convergence. */
@@ -107,7 +108,7 @@ public final class GuardedSidDatabase {
         + (key.getInterfaceName() == null ? "" : key.getInterfaceName());
   }
 
-  private GuardedSidDatabase(List<GuardedSidEntry> entries) {
+  GuardedSidDatabase(List<GuardedSidEntry> entries) {
     _entries = ImmutableList.copyOf(entries);
   }
 
@@ -130,6 +131,20 @@ public final class GuardedSidDatabase {
                     && entry.getResolverVrf().equals(resolverVrf)
                     && entry.getBinding().getKey().equals(bindingKey))
         .findFirst();
+  }
+
+  /** Returns a binding only when an explicit SID has one unambiguous meaning at this resolver. */
+  public Optional<GuardedSidEntry> getUniqueEntryBySid(
+      String resolverNode, String resolverVrf, SrSidValue sid) {
+    List<GuardedSidEntry> matches =
+        _entries.stream()
+            .filter(
+                entry ->
+                    entry.getResolverNode().equals(resolverNode)
+                        && entry.getResolverVrf().equals(resolverVrf)
+                        && entry.getBinding().getSid().equals(sid))
+            .collect(ImmutableList.toImmutableList());
+    return matches.size() == 1 ? Optional.of(matches.get(0)) : Optional.empty();
   }
 
   ImmutableMap<GuardedSidKey, GuardedSidEntry> asMap() {

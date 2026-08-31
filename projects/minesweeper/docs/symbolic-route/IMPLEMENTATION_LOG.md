@@ -1574,3 +1574,32 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 当前 parser subset 只接受 explicit MPLS label list 和 explicit local candidate。dynamic/PCEP、
   adjacency syntax、binding SID、SRv6 以及其他 vendor grammar 未被静默解释，将在独立 adapter
   阶段扩展；下一步 Stage 7.7 是 guarded candidate selection 与增量生命周期。
+
+## Stage 7.7 guarded SR policy resolution/lifecycle（2026-08-31 21:35 CST）
+
+- `GuardedSegmentListResolver` 可直接消费公共 `SrSegmentList`。typed binding reference 按完整 key
+  查找；explicit SID 只有在当前 resolver node/VRF 唯一对应一个 guarded binding 时才接受，同值
+  多义、缺失、Binding-SID、非法 local adjacency 或不可满足 guard 全部 fail closed。
+- 新增 `GuardedSrCandidate`，稳定 identity 为 `(SrPolicyKey, candidateName)`，明确排除 preference、
+  weight、guard 和 forwarding payload。candidate availability 是所有合法 numeric MPLS branch guard
+  的析取；selection 为自身 availability 与所有更高 preference availability 的否定合取。
+- preference 分组三层测试覆盖 high、两个等优先级 middle 和 low：两个 middle 不互相抑制，但都受
+  high 抑制；low 同时受 high 和两个 middle 抑制。candidate weight 仅保留为配置数据，本阶段不做
+  traffic/load execution。
+- 新增 `GuardedSrPolicyContribution`，每个选中 forwarding branch 保留 numeric label stack、terminal、
+  typed next-hop、canonical `LinkFailureKey` 和全部 `GuardedSidKey` 依赖。branch identity 不使用 route/
+  report string；同 identity 的 label/terminal/dependency payload 改变为 `REPLACED`，仅公式改变为
+  `GUARD_CHANGED`。
+- 新增 `GuardedSrPolicyDatabase`/`GuardedSrPolicyReconciler`/`GuardedSrPolicyDelta`。SID 依赖消失时，
+  candidate 与其 child contributions 在同一 stable reconciliation 中产生 `REMOVED`，低优先级 guard
+  随即扩大；binding payload 原子变化会产生 forwarding output replacement。
+- 初版只监听非空 SID delta，审计发现 ECMP/next-hop branch 可变化而 aggregate SID guard 逻辑等价，
+  会漏掉 output 更新。已增加每次 stable underlay reconciliation 通知；专项测试验证 SID delta 为空
+  时 policy 仍产生旧 branch `REMOVED` 和新 branch `ADDED`。
+- 新增测试覆盖 explicit SID 歧义拒绝、三层 preference、同 preference、guard update、SID dependency
+  recursive withdrawal、低优先级恢复、payload replacement 和等价 aggregate guard 下的 next-hop
+  replacement。完整 Minesweeper tests 禁用缓存通过；Minesweeper PMD 仍只报告 Graph/Encoder/EncoderSlice/
+  PropertyChecker 及旧 SMT symbolic-route 文件的 34 条基线违规，没有新增 `symbolicsr` 违规。
+- Stage 7.7 的边界是固定配置 + stable underlay snapshot。下一步 Stage 7.8 将把数据库接入顶层
+  pipeline/result report，并用 Batfish parser 产生的 Cisco SR-TE 配置做端到端验收；不进入 symbolic
+  traffic execution。

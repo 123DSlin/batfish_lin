@@ -5,6 +5,8 @@ import static java.util.Objects.requireNonNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.batfish.datamodel.sr.SrSegment;
+import org.batfish.datamodel.sr.SrSegmentList;
 import org.batfish.datamodel.sr.SrSidBinding;
 import org.batfish.datamodel.sr.SrSidBindingKey;
 import org.batfish.minesweeper.symbolicroute.RouteGuard;
@@ -63,5 +65,69 @@ public final class GuardedSegmentListResolver {
     }
     assert guard != null;
     return Optional.of(new GuardedSegmentList(resolved, guard.simplify(), currentNode, currentVrf));
+  }
+
+  /** Resolves a configured segment list, including unambiguous explicit SID values. */
+  public Optional<GuardedSegmentList> resolve(
+      String ingressNode, String ingressVrf, SrSegmentList segmentList) {
+    requireNonNull(segmentList, "segment list must be provided");
+    if (!segmentList.getKey().getNode().equals(ingressNode)
+        || !segmentList.getKey().getVrf().equals(ingressVrf)) {
+      return Optional.empty();
+    }
+    String currentNode = ingressNode;
+    String currentVrf = ingressVrf;
+    RouteGuard guard = null;
+    List<GuardedSidEntry> resolved = new ArrayList<>();
+    for (SrSegment segment : segmentList.getSegments()) {
+      Optional<GuardedSidEntry> candidate =
+          segment.getBindingKey() != null
+              ? _database.getEntry(currentNode, currentVrf, segment.getBindingKey())
+              : _database.getUniqueEntryBySid(currentNode, currentVrf, segment.getSid());
+      if (!candidate.isPresent()) {
+        return Optional.empty();
+      }
+      GuardedSidEntry entry = candidate.get();
+      if (!append(entry, currentNode, currentVrf, resolved)) {
+        return Optional.empty();
+      }
+      guard =
+          guard == null ? entry.getAvailabilityGuard() : guard.and(entry.getAvailabilityGuard());
+      if (!guard.isSatisfiable()) {
+        return Optional.empty();
+      }
+      SrSidBindingKey key = entry.getBinding().getKey();
+      if (key.getType() == SrSidBindingKey.Type.ADJACENCY) {
+        SymbolicAdjacencyEndpoint target = entry.getAdjacencyTarget();
+        assert target != null;
+        currentNode = target.getNode();
+        currentVrf = target.getVrf();
+      } else {
+        currentNode = key.getNode();
+        currentVrf = key.getVrf();
+      }
+    }
+    assert guard != null;
+    return Optional.of(new GuardedSegmentList(resolved, guard.simplify(), currentNode, currentVrf));
+  }
+
+  private static boolean append(
+      GuardedSidEntry entry,
+      String currentNode,
+      String currentVrf,
+      List<GuardedSidEntry> resolved) {
+    SrSidBindingKey key = entry.getBinding().getKey();
+    if (key.getType() == SrSidBindingKey.Type.BINDING) {
+      return false;
+    }
+    if (key.getType() == SrSidBindingKey.Type.ADJACENCY
+        && (!entry.getBinding().getFlags().contains(SrSidBinding.Flag.LOCAL)
+            || !currentNode.equals(key.getNode())
+            || !currentVrf.equals(key.getVrf())
+            || entry.getAdjacencyTarget() == null)) {
+      return false;
+    }
+    resolved.add(entry);
+    return true;
   }
 }
