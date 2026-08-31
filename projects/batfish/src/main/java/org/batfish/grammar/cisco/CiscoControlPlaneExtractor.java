@@ -579,6 +579,7 @@ import org.batfish.grammar.cisco.CiscoParser.If_ip_verifyContext;
 import org.batfish.grammar.cisco.CiscoParser.If_ip_vrf_forwardingContext;
 import org.batfish.grammar.cisco.CiscoParser.If_ip_vrf_sitemapContext;
 import org.batfish.grammar.cisco.CiscoParser.If_ipv6_traffic_filterContext;
+import org.batfish.grammar.cisco.CiscoParser.If_isis_adjacency_sidContext;
 import org.batfish.grammar.cisco.CiscoParser.If_isis_metricContext;
 import org.batfish.grammar.cisco.CiscoParser.If_isis_prefix_sidContext;
 import org.batfish.grammar.cisco.CiscoParser.If_member_interfaceContext;
@@ -5184,6 +5185,14 @@ public class CiscoControlPlaneExtractor extends CiscoParserBaseListener
     for (Interface iface : _currentInterfaces) {
       iface.setIsisCost(metric);
     }
+  }
+
+  @Override
+  public void exitIf_isis_adjacency_sid(If_isis_adjacency_sidContext ctx) {
+    long sid = toLong(ctx.value);
+    boolean absolute = ctx.INDEX() == null;
+    boolean protectedSid = ctx.PROTECTED() != null;
+    _currentInterfaces.forEach(iface -> iface.setIsisAdjacencySid(sid, absolute, protectedSid));
   }
 
   @Override

@@ -197,8 +197,14 @@ public final class BatfishIsisAlgorithm2Test {
 
     List<GuardedSidEntry> r4Sids =
         result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME);
-    assertThat(r4Sids, hasSize(1));
-    assertThat(r4Sids.get(0).getBinding().getSid(), equalTo(SrSidValue.mplsIndex(7L)));
+    assertThat(r4Sids, hasSize(2));
+    GuardedSidEntry prefixSid = sidOfType(r4Sids, SrSidBindingKey.Type.PREFIX);
+    GuardedSidEntry adjacencySid = sidOfType(r4Sids, SrSidBindingKey.Type.ADJACENCY);
+    assertThat(prefixSid.getBinding().getSid(), equalTo(SrSidValue.mplsIndex(7L)));
+    assertThat(
+        adjacencySid.getAvailabilityGuard().isEquivalentTo(GUARDS.variable("r1_r2")),
+        equalTo(true));
+    assertThat(adjacencySid.getLinkFailureDependency(), equalTo(LinkFailureKey.of("r1", "r2")));
     RouteGuard expectedSidGuard = GUARDS.falseGuard();
     for (GuardedRibEntry<AnnotatedRoute<IsisRoute>> route :
         result.getIsisL1RibNetwork().getRib("r4").getEntries()) {
@@ -206,8 +212,7 @@ public final class BatfishIsisAlgorithm2Test {
         expectedSidGuard = expectedSidGuard.or(route.getSelectionGuard());
       }
     }
-    assertThat(
-        r4Sids.get(0).getAvailabilityGuard().isEquivalentTo(expectedSidGuard), equalTo(true));
+    assertThat(prefixSid.getAvailabilityGuard().isEquivalentTo(expectedSidGuard), equalTo(true));
 
     result
         .getIsisL1RibNetwork()
@@ -216,7 +221,7 @@ public final class BatfishIsisAlgorithm2Test {
             ImmutableList.of(
                 new SymbolicRouteContributionId(
                     "isis-l1-origin:r1:default:Loopback0:1.1.1.1/32", "r1", "r1")));
-    assertThat(result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME), hasSize(0));
+    assertThat(result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME), hasSize(1));
     assertThat(result.getGuardedSidReconciler().getLastDelta().getUpdates(), hasSize(5));
     assertThat(
         result.getGuardedSidReconciler().getLastDelta().getUpdates().stream()
@@ -233,7 +238,7 @@ public final class BatfishIsisAlgorithm2Test {
         .getIsisL1RibNetwork()
         .getEngine()
         .converge(ImmutableList.of(withGuard(origin, GUARDS.variable("sid_restore"))));
-    assertThat(result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME), hasSize(1));
+    assertThat(result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME), hasSize(2));
     assertThat(
         result.getGuardedSidReconciler().getLastDelta().getUpdates().stream()
             .allMatch(update -> update.getType() == GuardedSidUpdate.Type.ADDED),
@@ -255,13 +260,21 @@ public final class BatfishIsisAlgorithm2Test {
             .allMatch(update -> update.getType() == GuardedSidUpdate.Type.REPLACED),
         equalTo(true));
     assertThat(
-        result
-            .getGuardedSidDatabase()
-            .getEntries("r4", DEFAULT_VRF_NAME)
-            .get(0)
+        result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME).stream()
+            .filter(entry -> entry.getBinding().getKey().getType() == SrSidBindingKey.Type.PREFIX)
+            .findFirst()
+            .get()
             .getBinding()
             .getSid(),
         equalTo(SrSidValue.mplsIndex(8L)));
+  }
+
+  private static GuardedSidEntry sidOfType(
+      List<GuardedSidEntry> entries, SrSidBindingKey.Type type) {
+    return entries.stream()
+        .filter(entry -> entry.getBinding().getKey().getType() == type)
+        .findFirst()
+        .get();
   }
 
   private static SymbolicRouteMessage<AnnotatedRoute<IsisRoute>> withGuard(
@@ -397,6 +410,18 @@ public final class BatfishIsisAlgorithm2Test {
                 null),
             SrSidValue.mplsIndex(index),
             com.google.common.collect.ImmutableSet.of());
+    SrSidBinding adjacency =
+        new SrSidBinding(
+            new SrSidBindingKey(
+                owner.getHostname(),
+                DEFAULT_VRF_NAME,
+                SrSidBindingKey.Type.ADJACENCY,
+                0,
+                null,
+                "Ethernet12",
+                null),
+            SrSidValue.mplsIndex(4L),
+            com.google.common.collect.ImmutableSet.of(SrSidBinding.Flag.PROTECTED));
     owner.setSegmentRoutingConfig(
         new SegmentRoutingConfig(
             com.google.common.collect.ImmutableSet.of(SegmentRoutingConfig.DataPlane.MPLS),
@@ -404,7 +429,8 @@ public final class BatfishIsisAlgorithm2Test {
             null,
             ImmutableMap.of(
                 DEFAULT_VRF_NAME,
-                new SegmentRoutingVrfConfig(DEFAULT_VRF_NAME, ImmutableList.of(binding)))));
+                new SegmentRoutingVrfConfig(
+                    DEFAULT_VRF_NAME, ImmutableList.of(binding, adjacency)))));
   }
 
   private static void addLink(

@@ -2,6 +2,7 @@ package org.batfish.minesweeper.symbolicsr;
 
 import static java.util.Objects.requireNonNull;
 
+import java.util.Objects;
 import javax.annotation.Nullable;
 
 /** One semantic change between two stable guarded SID snapshots. */
@@ -27,7 +28,11 @@ public final class GuardedSidUpdate {
 
   static GuardedSidUpdate changed(GuardedSidEntry oldEntry, GuardedSidEntry newEntry) {
     Type type =
-        oldEntry.getBinding().equals(newEntry.getBinding()) ? Type.GUARD_CHANGED : Type.REPLACED;
+        oldEntry.getBinding().equals(newEntry.getBinding())
+                && Objects.equals(
+                    oldEntry.getLinkFailureDependency(), newEntry.getLinkFailureDependency())
+            ? Type.GUARD_CHANGED
+            : Type.REPLACED;
     return new GuardedSidUpdate(type, requireNonNull(oldEntry), requireNonNull(newEntry));
   }
 

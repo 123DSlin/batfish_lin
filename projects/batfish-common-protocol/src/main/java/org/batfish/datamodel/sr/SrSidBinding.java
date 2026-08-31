@@ -18,7 +18,8 @@ public final class SrSidBinding implements Serializable {
     EXPLICIT_NULL,
     NO_PHP,
     PERSISTENT,
-    LOCAL
+    LOCAL,
+    PROTECTED
   }
 
   private static final String PROP_KEY = "key";
@@ -38,6 +39,9 @@ public final class SrSidBinding implements Serializable {
     _key = key;
     _sid = sid;
     _flags = flags == null ? ImmutableSet.of() : ImmutableSet.copyOf(flags);
+    checkArgument(
+        !_flags.contains(Flag.PROTECTED) || _key.getType() == SrSidBindingKey.Type.ADJACENCY,
+        "PROTECTED is only valid for an adjacency SID");
   }
 
   @JsonProperty(PROP_KEY)

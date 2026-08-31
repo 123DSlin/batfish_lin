@@ -610,6 +610,11 @@ if_isis_circuit_type
    ) NEWLINE
 ;
 
+if_isis_adjacency_sid
+:
+   ISIS ADJACENCY_SID (ABSOLUTE | INDEX)? value = dec PROTECTED? NEWLINE
+;
+
 if_isis_enable
 :
    ISIS ENABLE num = dec NEWLINE
@@ -1826,6 +1831,7 @@ if_inner
    | if_ip_vrf_forwarding
    | if_ipv6
    | if_isis_circuit_type
+   | if_isis_adjacency_sid
    | if_isis_enable
    | if_isis_hello_interval
    | if_isis_metric

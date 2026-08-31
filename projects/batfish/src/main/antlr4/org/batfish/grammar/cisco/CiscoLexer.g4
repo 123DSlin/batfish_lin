@@ -162,6 +162,8 @@ ADDRGROUP: 'addrgroup';
 
 ADJACENCY: 'adjacency';
 
+ADJACENCY_SID: 'adjacency-sid';
+
 ADJACENCY_CHECK: 'adjacency-check';
 
 ADJACENCY_STALE_TIMER: 'adjacency-stale-timer';
@@ -4318,6 +4320,8 @@ PREFERRED_PATH: 'preferred-path';
 PREFIX: 'prefix';
 
 PREFIX_SID: 'prefix-sid';
+
+PROTECTED: 'protected';
 
 PREFIX_LENGTH: 'prefix-length';
 

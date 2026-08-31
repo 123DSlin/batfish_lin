@@ -53,6 +53,19 @@ public final class SrLocalBlock implements Serializable {
     return _ranges.stream().anyMatch(range -> range.getStart() <= label && label <= range.getEnd());
   }
 
+  /** Resolves an SRLB-relative local index without using the device SRGB. */
+  SrSidValue resolve(SrSidValue unresolved) {
+    checkArgument(unresolved.getType() == SrSidValue.Type.MPLS_INDEX, "SID must be an MPLS index");
+    long remaining = unresolved.getMplsIndex();
+    for (SrLabelRange range : _ranges) {
+      if (remaining < range.size()) {
+        return SrSidValue.mplsLabel(Math.addExact(range.getStart(), remaining));
+      }
+      remaining -= range.size();
+    }
+    throw new IllegalArgumentException("MPLS index is outside the SR local block");
+  }
+
   @Override
   public boolean equals(Object object) {
     return this == object

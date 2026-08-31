@@ -35,6 +35,15 @@ public final class SrSidResolverTest {
     assertThrows(() -> SrSidResolver.resolveMpls(SrSidValue.srv6(Ip6.parse("2001:db8::1")), SRGB));
   }
 
+  @Test
+  public void testLocalIndexUsesSrlbNotSrgb() {
+    SrLocalBlock srlb = SrLocalBlock.of(ImmutableList.of(SrLabelRange.of(15000L, 15999L)));
+    assertThat(
+        SrSidResolver.resolveLocalMpls(SrSidValue.mplsIndex(4L), srlb),
+        equalTo(SrSidValue.mplsLabel(15004L)));
+    assertThrows(() -> SrSidResolver.resolveLocalMpls(SrSidValue.mplsIndex(1000L), srlb));
+  }
+
   private interface ThrowingRunnable {
     void run() throws Exception;
   }

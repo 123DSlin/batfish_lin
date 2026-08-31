@@ -3362,11 +3362,33 @@ public final class CiscoConfiguration extends VendorConfiguration {
       ImmutableList.Builder<SrSidBinding> bindings = ImmutableList.builder();
       _interfaces.values().stream()
           .filter(iface -> iface.getVrf().equals(vrfName))
-          .filter(iface -> iface.getIsisPrefixSid() != null)
+          .filter(iface -> iface.getIsisPrefixSid() != null || iface.getIsisAdjacencySid() != null)
           .forEach(
               iface -> {
+                if (iface.getIsisAdjacencySid() != null) {
+                  SrSidValue adjacencySid =
+                      iface.getIsisAdjacencySidAbsolute()
+                          ? SrSidValue.mplsLabel(iface.getIsisAdjacencySid())
+                          : SrSidValue.mplsIndex(iface.getIsisAdjacencySid());
+                  bindings.add(
+                      new SrSidBinding(
+                          new SrSidBindingKey(
+                              _hostname,
+                              vrfName,
+                              SrSidBindingKey.Type.ADJACENCY,
+                              0,
+                              null,
+                              iface.getName(),
+                              null),
+                          adjacencySid,
+                          iface.getIsisAdjacencySidProtected()
+                              ? ImmutableSet.of(SrSidBinding.Flag.PROTECTED)
+                              : ImmutableSet.of()));
+                }
                 Long sid = iface.getIsisPrefixSid();
-                assert sid != null;
+                if (sid == null) {
+                  return;
+                }
                 SrSidValue value =
                     iface.getIsisPrefixSidAbsolute()
                         ? SrSidValue.mplsLabel(sid)

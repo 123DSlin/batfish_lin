@@ -375,6 +375,7 @@ import org.batfish.datamodel.routing_policy.statement.SetEigrpMetric;
 import org.batfish.datamodel.routing_policy.statement.Statements;
 import org.batfish.datamodel.sr.SegmentRoutingConfig;
 import org.batfish.datamodel.sr.SrSidBinding;
+import org.batfish.datamodel.sr.SrSidBindingKey;
 import org.batfish.datamodel.sr.SrSidResolver;
 import org.batfish.datamodel.sr.SrSidValue;
 import org.batfish.datamodel.tracking.DecrementPriority;
@@ -1504,15 +1505,35 @@ public final class CiscoGrammarTest {
     assertThat(sr.getVrfs().keySet(), contains(Configuration.DEFAULT_VRF_NAME));
 
     List<SrSidBinding> bindings = sr.getVrfs().get(Configuration.DEFAULT_VRF_NAME).getSidBindings();
-    assertThat(bindings, hasSize(2));
-    assertThat(bindings.get(0).getSid(), equalTo(SrSidValue.mplsLabel(16001L)));
-    assertThat(bindings.get(1).getSid(), equalTo(SrSidValue.mplsIndex(2L)));
+    assertThat(bindings, hasSize(3));
+    SrSidBinding absolutePrefix =
+        bindings.stream()
+            .filter(binding -> binding.getSid().equals(SrSidValue.mplsLabel(16001L)))
+            .findFirst()
+            .get();
+    SrSidBinding indexedPrefix =
+        bindings.stream()
+            .filter(binding -> binding.getSid().equals(SrSidValue.mplsIndex(2L)))
+            .filter(binding -> binding.getKey().getType() == SrSidBindingKey.Type.PREFIX)
+            .findFirst()
+            .get();
+    SrSidBinding adjacency =
+        bindings.stream()
+            .filter(binding -> binding.getKey().getType() == SrSidBindingKey.Type.ADJACENCY)
+            .findFirst()
+            .get();
+    assertThat(adjacency.getKey().getInterfaceName(), equalTo("GigabitEthernet0/0"));
+    assertThat(adjacency.getSid(), equalTo(SrSidValue.mplsIndex(4L)));
+    assertThat(adjacency.getFlags(), contains(SrSidBinding.Flag.PROTECTED));
     assertThat(
-        SrSidResolver.resolveMpls(bindings.get(0).getSid(), sr.getSrgb()),
+        SrSidResolver.resolveMpls(absolutePrefix.getSid(), sr.getSrgb()),
         equalTo(SrSidValue.mplsLabel(16001L)));
     assertThat(
-        SrSidResolver.resolveMpls(bindings.get(1).getSid(), sr.getSrgb()),
+        SrSidResolver.resolveMpls(indexedPrefix.getSid(), sr.getSrgb()),
         equalTo(SrSidValue.mplsLabel(45002L)));
+    assertThat(
+        SrSidResolver.resolveLocalMpls(adjacency.getSid(), sr.getSrlb()),
+        equalTo(SrSidValue.mplsLabel(15004L)));
     assertThat(sr.getSrlb().contains(15000L), equalTo(true));
     assertThat(sr.getSrlb().contains(16000L), equalTo(false));
   }

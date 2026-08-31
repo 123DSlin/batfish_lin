@@ -41,6 +41,24 @@ public final class GuardedSidDatabase {
                   }
                   for (SrSidBinding binding : vrfConfig.getSidBindings()) {
                     SrSidBindingKey key = binding.getKey();
+                    if (key.getType() == SrSidBindingKey.Type.ADJACENCY) {
+                      underlay
+                          .adjacencyAvailability(
+                              key.getNode(), key.getVrf(), key.getInterfaceName())
+                          .filter(value -> value.getGuard().isSatisfiable())
+                          .ifPresent(
+                              value ->
+                                  add(
+                                      entries,
+                                      identities,
+                                      new GuardedSidEntry(
+                                          resolver.getKey(),
+                                          vrf,
+                                          binding,
+                                          value.getGuard().simplify(),
+                                          value.getFailureKey())));
+                      continue;
+                    }
                     if ((key.getType() != SrSidBindingKey.Type.PREFIX
                             && key.getType() != SrSidBindingKey.Type.NODE)
                         || key.getPrefix() == null) {
@@ -56,11 +74,7 @@ public final class GuardedSidDatabase {
                               GuardedSidEntry entry =
                                   new GuardedSidEntry(
                                       resolver.getKey(), vrf, binding, value.simplify());
-                              if (!identities.add(entry.getKey())) {
-                                throw new IllegalArgumentException(
-                                    "duplicate guarded SID identity");
-                              }
-                              entries.add(entry);
+                              add(entries, identities, entry);
                             });
                   }
                 });
@@ -70,9 +84,26 @@ public final class GuardedSidDatabase {
         Comparator.comparing(GuardedSidEntry::getResolverNode)
             .thenComparing(GuardedSidEntry::getResolverVrf)
             .thenComparing(entry -> entry.getBinding().getKey().getNode())
-            .thenComparing(entry -> entry.getBinding().getKey().getPrefix().toString())
+            .thenComparing(GuardedSidDatabase::bindingSortKey)
             .thenComparing(entry -> entry.getBinding().getKey().getAlgorithm()));
     return new GuardedSidDatabase(entries);
+  }
+
+  private static void add(
+      List<GuardedSidEntry> entries, Set<GuardedSidKey> identities, GuardedSidEntry entry) {
+    if (!identities.add(entry.getKey())) {
+      throw new IllegalArgumentException("duplicate guarded SID identity");
+    }
+    entries.add(entry);
+  }
+
+  private static String bindingSortKey(GuardedSidEntry entry) {
+    SrSidBindingKey key = entry.getBinding().getKey();
+    return key.getType()
+        + ":"
+        + (key.getPrefix() == null ? "" : key.getPrefix())
+        + ":"
+        + (key.getInterfaceName() == null ? "" : key.getInterfaceName());
   }
 
   private GuardedSidDatabase(List<GuardedSidEntry> entries) {

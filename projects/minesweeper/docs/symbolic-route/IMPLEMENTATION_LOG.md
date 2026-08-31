@@ -1440,3 +1440,26 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   `GUARD_CHANGED`；固定 binding key 下把 SID index 7 改为 8 产生 `REPLACED`。
 - 完整 Minesweeper 测试禁用缓存后通过。当前 reconciler 维护 Prefix/Node SID；Adjacency-SID
   parser、canonical link dependency 与 policy/segment-list 后代仍属于后续阶段。
+
+## Stage 7.4 Cisco IOS manual Adj-SID 与 canonical link dependency（2026-08-31 16:18 CST）
+
+- Cisco IOS interface grammar 结构化解析 `isis adjacency-sid [absolute|index] <value>
+  [protected]`，vendor representation 与 conversion 生成 `ADJACENCY` typed binding；identity
+  使用真实 node、VRF、interface，不使用配置文本、route 字符串或 demo 映射。省略模式按 Cisco
+  语义视为 absolute，`PROTECTED` 只允许出现在 adjacency binding。
+- 明确修正 Stage 7.1b 的早期边界：SRLB 不只是 membership pool。手工配置的 local Adj-SID
+  `MPLS_INDEX` 是 SRLB-relative index，因此新增独立 `resolveLocalMpls`；它不能调用 Prefix/Node
+  SID 使用的 SRGB resolver。parser fixture 验证 index 4 在 SRLB `15000–15999` 中解析为 label
+  15004，同时 guarded database 仍保留原始 typed index。
+- `SymbolicUnderlayReachability.adjacencyAvailability` 返回 typed
+  `SymbolicAdjacencyAvailability(LinkFailureKey, RouteGuard)`。首个 IS-IS adapter 从 Batfish parser
+  构造的 directed edge 与 symbolic session 对齐 node/VRF/interface，并拒绝同 identity 的冲突
+  session 或冲突 dependency；不再用拼接字符串充当 endpoint key。
+- guarded SID snapshot 为 Adj-SID 记录 canonical、方向无关的物理 `LinkFailureKey` 与同一个
+  link-up guard。Prefix/Node SID withdrawal 不会错误删除独立 Adj-SID；binding payload、guard 或
+  dependency key 的变化仍分别进入 typed reconciliation lifecycle。
+- common SR tests、Cisco parser-driven normalized-model test 和 Minesweeper Algorithm 2 集成测试
+  以及完整 Minesweeper tests 均禁用缓存通过。Minesweeper PMD 仍只报告未修改的 Graph、旧 SMT
+  Encoder/EncoderSlice/PropertyChecker/SymbolicRoute/TransferSSA 等基线违规，没有 Stage 7.4 或
+  `symbolicsr` 新违规。当前尚未实现从任意 ingress 到 Adj-SID owner 的 segment resolution；该
+  路径 guard 必须在后续 segment-list 层与本阶段 link guard 相与，不能提前混入 SID database。

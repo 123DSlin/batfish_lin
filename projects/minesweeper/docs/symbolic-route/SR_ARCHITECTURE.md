@@ -63,7 +63,8 @@ The `symbolicsr` layer consumes a protocol-independent interface:
 ```java
 interface SymbolicUnderlayReachability {
   Optional<RouteGuard> prefixReachability(String node, String vrf, SrPrefix prefix, int algorithm);
-  Optional<RouteGuard> adjacencyAvailability(String node, String vrf, String interfaceName);
+  Optional<SymbolicAdjacencyAvailability> adjacencyAvailability(
+      String node, String vrf, String interfaceName);
 }
 ```
 
@@ -86,9 +87,17 @@ Guard ownership is:
 | Candidate path | configuration guard AND referenced segment-list guard |
 | SR policy | selection over candidate preference, with ECMP/weight retained as data |
 
-An MPLS index remains unresolved in the SID database. Its on-wire label is selected hop-by-hop
-using the SRGB of the forwarding next hop; resolving it once against the source, ingress, or SID
-owner and storing that label globally is incorrect.
+An MPLS index remains unresolved in the SID database. A global Prefix/Node-SID index is resolved
+against the SRGB selected for the relevant forwarding node; resolving it once against the source
+or ingress and storing that label globally is incorrect. A locally configured Adjacency-SID index
+is a different namespace and resolves only against the advertising node's SRLB. The two resolver
+APIs are deliberately separate.
+
+Adjacency availability carries both the symbolic up-guard and the parser-derived canonical
+`LinkFailureKey`. The Adj-SID database entry depends only on that directed interface's physical
+adjacency; a later segment resolver additionally conjoins reachability from the current resolver
+to the Adj-SID owner. This avoids incorrectly baking an arbitrary source-to-owner path into the
+SID binding itself.
 
 The SID database maintains typed contribution and dependency identities. Route text, `toString()`,
 list position, or generated report strings are never identities. Withdrawal of an underlay prefix

@@ -54,6 +54,19 @@ public final class SrSidBindingTest {
         () -> new SrSidBindingKey("r1", "blue", SrSidBindingKey.Type.BINDING, 0, null, null, ""));
   }
 
+  @Test
+  public void testProtectedFlagRequiresAdjacencyBinding() {
+    SrSidBindingKey prefixKey = key("r1", "blue", SrPrefix.ipv4(Prefix.parse("10.0.0.0/24")), 0);
+    assertThrows(
+        () ->
+            new SrSidBinding(
+                prefixKey, SrSidValue.mplsIndex(7L), ImmutableSet.of(SrSidBinding.Flag.PROTECTED)));
+    SrSidBindingKey adjacencyKey =
+        new SrSidBindingKey("r1", "blue", SrSidBindingKey.Type.ADJACENCY, 0, null, "Eth0", null);
+    new SrSidBinding(
+        adjacencyKey, SrSidValue.mplsIndex(7L), ImmutableSet.of(SrSidBinding.Flag.PROTECTED));
+  }
+
   private static SrSidBinding binding(SrSidBindingKey key) {
     return new SrSidBinding(
         key, SrSidValue.mplsIndex(7L), ImmutableSet.of(SrSidBinding.Flag.NO_PHP));

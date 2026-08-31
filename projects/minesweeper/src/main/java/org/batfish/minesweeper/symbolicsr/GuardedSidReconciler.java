@@ -5,10 +5,13 @@ import static java.util.Objects.requireNonNull;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.util.Map;
+import java.util.Objects;
 import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.IsisRoute;
+import org.batfish.minesweeper.symbolicroute.BatfishIsisEdge;
 import org.batfish.minesweeper.symbolicroute.SymbolicRouteNetwork;
+import org.batfish.minesweeper.symbolicroute.SymbolicRouteSession;
 
 /** Keeps the guarded SID snapshot synchronized with stable IS-IS L1/L2 state. */
 public final class GuardedSidReconciler {
@@ -20,9 +23,16 @@ public final class GuardedSidReconciler {
   public GuardedSidReconciler(
       Map<String, Configuration> configurations,
       SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> l1,
-      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> l2) {
+      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> l2,
+      Iterable<BatfishIsisEdge> edges,
+      Iterable<SymbolicRouteSession> sessions) {
     _configurations = ImmutableMap.copyOf(requireNonNull(configurations));
-    _underlay = new IsisUnderlayReachability(requireNonNull(l1), requireNonNull(l2));
+    _underlay =
+        new IsisUnderlayReachability(
+            requireNonNull(l1),
+            requireNonNull(l2),
+            requireNonNull(edges),
+            requireNonNull(sessions));
     _database = GuardedSidDatabase.build(_configurations, _underlay);
     _lastDelta = new GuardedSidDelta(ImmutableList.of());
     l1.getEngine().addStableStateListener(this::reconcile);
@@ -40,6 +50,7 @@ public final class GuardedSidReconciler {
           if (old == null) {
             updates.add(GuardedSidUpdate.added(entry));
           } else if (!old.getBinding().equals(entry.getBinding())
+              || !Objects.equals(old.getLinkFailureDependency(), entry.getLinkFailureDependency())
               || !old.getAvailabilityGuard().isEquivalentTo(entry.getAvailabilityGuard())) {
             updates.add(GuardedSidUpdate.changed(old, entry));
           }

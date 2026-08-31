@@ -83,7 +83,18 @@ public final class BatfishSymbolicRoutePipeline {
     SymbolicRouteConvergenceResult bgpConvergence =
         bgpRedistributionReconciler.getLastConvergence();
     GuardedSidReconciler sidReconciler =
-        new GuardedSidReconciler(input.getConfigurations(), isisNetwork, isisL2Network);
+        new GuardedSidReconciler(
+            input.getConfigurations(),
+            isisNetwork,
+            isisL2Network,
+            ImmutableList.<BatfishIsisEdge>builder()
+                .addAll(input.getIsisEdges())
+                .addAll(input.getIsisL2Edges())
+                .build(),
+            ImmutableList.<SymbolicRouteSession>builder()
+                .addAll(input.getIsisSessions())
+                .addAll(input.getIsisL2Sessions())
+                .build());
     return new BatfishSymbolicRoutePipelineResult(
         mainNetwork,
         bgpNetwork,

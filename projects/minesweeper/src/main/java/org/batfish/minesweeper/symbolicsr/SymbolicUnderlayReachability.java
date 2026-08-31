@@ -10,7 +10,7 @@ public interface SymbolicUnderlayReachability {
   Optional<RouteGuard> prefixReachability(String node, String vrf, SrPrefix prefix, int algorithm);
 
   /** Returns a canonical adjacency/link guard; unsupported providers fail closed. */
-  default Optional<RouteGuard> adjacencyAvailability(
+  default Optional<SymbolicAdjacencyAvailability> adjacencyAvailability(
       String node, String vrf, String interfaceName) {
     return Optional.empty();
   }

@@ -174,6 +174,12 @@ public class Interface implements Serializable {
 
   @Nullable private Long _isisCost;
 
+  @Nullable private Long _isisAdjacencySid;
+
+  private boolean _isisAdjacencySidAbsolute;
+
+  private boolean _isisAdjacencySidProtected;
+
   @Nullable private IsisInterfaceMode _isisInterfaceMode;
 
   @Nullable private Long _isisPrefixSid;
@@ -399,6 +405,19 @@ public class Interface implements Serializable {
     return _isisCost;
   }
 
+  @Nullable
+  public Long getIsisAdjacencySid() {
+    return _isisAdjacencySid;
+  }
+
+  public boolean getIsisAdjacencySidAbsolute() {
+    return _isisAdjacencySidAbsolute;
+  }
+
+  public boolean getIsisAdjacencySidProtected() {
+    return _isisAdjacencySidProtected;
+  }
+
   public IsisInterfaceMode getIsisInterfaceMode() {
     return _isisInterfaceMode;
   }
@@ -590,6 +609,12 @@ public class Interface implements Serializable {
 
   public void setIsisCost(Long isisCost) {
     _isisCost = isisCost;
+  }
+
+  public void setIsisAdjacencySid(long sid, boolean absolute, boolean protectedSid) {
+    _isisAdjacencySid = sid;
+    _isisAdjacencySidAbsolute = absolute;
+    _isisAdjacencySidProtected = protectedSid;
   }
 
   public void setIsisInterfaceMode(IsisInterfaceMode mode) {
