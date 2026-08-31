@@ -49,6 +49,13 @@ Each VRF configuration owns typed collections of:
 - SR policies and candidate paths;
 - steering entries.
 
+Policy identity is `(node, VRF, color, typed IPv4/IPv6 endpoint)`. Candidate identity is a stable
+configured name within that policy; preference and weight are payload used for selection, not
+identity. Segment-list identity is `(node, VRF, name)`, and segment order is an explicit unsigned
+sequence value rather than Java list position. A segment either references a typed SID binding or
+contains an explicit absolute MPLS/SRv6 SID. An unscoped raw `MPLS_INDEX` is rejected because no
+SRGB/SRLB namespace can be selected correctly from that value alone.
+
 SID values are a tagged union. MPLS labels and indexes are bounded integers; SRv6 SIDs are IPv6
 values. A numeric index is not silently converted to an absolute label until an allocation block
 is selected and validated.

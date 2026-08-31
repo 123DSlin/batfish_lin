@@ -79,6 +79,20 @@ public final class SegmentRoutingConfig implements Serializable {
                 checkArgument(
                     binding.getKey().getNode().equals(hostname),
                     "SID binding owner does not match Configuration hostname"));
+    _vrfs.values().stream()
+        .flatMap(vrf -> vrf.getSegmentLists().stream())
+        .forEach(
+            segmentList ->
+                checkArgument(
+                    segmentList.getKey().getNode().equals(hostname),
+                    "Segment-list owner does not match Configuration hostname"));
+    _vrfs.values().stream()
+        .flatMap(vrf -> vrf.getPolicies().stream())
+        .forEach(
+            policy ->
+                checkArgument(
+                    policy.getKey().getNode().equals(hostname),
+                    "SR policy owner does not match Configuration hostname"));
   }
 
   @Override

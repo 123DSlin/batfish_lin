@@ -9,8 +9,8 @@ SR must consume the stable guarded IGP topology produced by OSPF/IS-IS adapters.
 prefix/node/adjacency SID semantics separately from symbolic traffic execution and must not infer
 SR reachability before the underlying guarded IGP state is available.
 
-Ordered typed segment resolution, deferred MPLS planning, guarded underlay next-hop extraction, and
-per-branch numeric stacks are implemented. Next: add the vendor-independent SR policy/segment-list/
-candidate-path model and parser adapter, then guarded candidate selection/lifecycle and top-level
-output acceptance. OSPF and additional vendor parser adapters remain independent follow-up work
-behind the protocol-neutral underlay interface.
+Ordered typed segment resolution, per-branch numeric stacks, and the vendor-independent SR policy/
+segment-list/candidate-path model are implemented. Next: add the Cisco IOS vendor representation,
+grammar, and normalized conversion, then guarded candidate selection/lifecycle and top-level output
+acceptance. OSPF and additional vendor parser adapters remain independent follow-up work behind the
+protocol-neutral underlay interface.

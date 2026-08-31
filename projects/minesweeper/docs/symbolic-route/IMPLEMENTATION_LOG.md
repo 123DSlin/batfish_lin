@@ -1529,3 +1529,27 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - Stage 7 现已完成 SID/segment/MPLS branch 核心。剩余 Stage 7.6 policy model/parser、Stage 7.7
   guarded candidate selection 与生命周期、Stage 7.8 顶层输出及 parser-driven 验收；不包含后续
   symbolic traffic/load execution。
+
+## Stage 7.6a vendor-independent SR policy model（2026-08-31 17:48 CST）
+
+- 新增 typed IPv4/IPv6 `SrPolicyEndpoint` 与稳定 `SrPolicyKey(node, VRF, color, endpoint)`；color
+  使用 unsigned 32-bit 范围。policy display name 不参与 protocol identity，避免改名或显示文本
+  变化破坏 withdrawal/replacement 对齐。
+- 新增 `SrSegmentListKey(node, VRF, name)`、按显式 unsigned order 排序的 `SrSegmentList` 和 tagged
+  `SrSegment`。segment 必须恰好包含 typed binding reference 或 explicit SID；重复 order、跨 VRF
+  binding reference 和无 namespace 的 explicit `MPLS_INDEX` 均拒绝。后者只能通过 binding key
+  找到正确的 SRGB/SRLB scope。
+- 新增 `SrCandidatePath` 与 `SrPolicy`。candidate 稳定名称是 contribution identity；preference 与
+  positive weight 是 unsigned 32-bit selection payload，segment-list name 是本 VRF 强引用。policy
+  拒绝空 candidate、重复 candidate identity；VRF config 拒绝重复 list/policy identity、重复 policy
+  name 和 undefined segment-list reference。
+- `SegmentRoutingVrfConfig` 向后兼容原二参数构造器，同时 JSON schema 增加 segment lists/policies；
+  `SegmentRoutingConfig.validateOwner` 扩展到 SID、segment list 和 policy 三类 node ownership。
+- 新增 `SrPolicyTest` 覆盖 Configuration JSON round-trip、乱序 segment canonical ordering、IPv4/
+  IPv6 identity、union/order/范围、跨 VRF、重复 identity、undefined reference 与 owner 拒绝。
+  policy/common focused tests、已有 Cisco SR parser 与 Minesweeper Algorithm 2 compatibility tests
+  全部禁用缓存通过。common PMD 仍只报告 community/prefix/routing-policy 基线文件，没有新增
+  `org.batfish.datamodel.sr` 违规。
+- 当前仅完成 parser 可写入的通用配置模型。explicit absolute SID 可以无损保存，但若不能唯一映射
+  到 guarded binding，后续 symbolic resolver 必须 fail closed；Stage 7.6b 将增加 Cisco IOS
+  policy/segment-list vendor representation、grammar 与 conversion。
