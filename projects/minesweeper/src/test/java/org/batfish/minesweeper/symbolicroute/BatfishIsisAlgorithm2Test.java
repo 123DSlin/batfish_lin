@@ -33,6 +33,7 @@ import org.batfish.datamodel.sr.SegmentRoutingConfig;
 import org.batfish.datamodel.sr.SegmentRoutingVrfConfig;
 import org.batfish.datamodel.sr.SrGlobalBlock;
 import org.batfish.datamodel.sr.SrLabelRange;
+import org.batfish.datamodel.sr.SrLocalBlock;
 import org.batfish.datamodel.sr.SrPrefix;
 import org.batfish.datamodel.sr.SrSidBinding;
 import org.batfish.datamodel.sr.SrSidBindingKey;
@@ -42,6 +43,9 @@ import org.batfish.minesweeper.symbolicsr.GuardedSegmentList;
 import org.batfish.minesweeper.symbolicsr.GuardedSegmentListResolver;
 import org.batfish.minesweeper.symbolicsr.GuardedSidEntry;
 import org.batfish.minesweeper.symbolicsr.GuardedSidUpdate;
+import org.batfish.minesweeper.symbolicsr.MplsLabelInstruction;
+import org.batfish.minesweeper.symbolicsr.MplsLabelPlan;
+import org.batfish.minesweeper.symbolicsr.MplsLabelPlanResolver;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -233,6 +237,35 @@ public final class BatfishIsisAlgorithm2Test {
             .getAvailabilityGuard()
             .isEquivalentTo(expectedSidGuard.and(GUARDS.variable("r1_r2"))),
         equalTo(true));
+    MplsLabelPlan labelPlan =
+        new MplsLabelPlanResolver(configurations).resolve(resolvedSegments).get();
+    assertThat(labelPlan.getTopFirstInstructions(), hasSize(2));
+    MplsLabelInstruction prefixLabel = labelPlan.getTopFirstInstructions().get(0);
+    MplsLabelInstruction adjacencyLabel = labelPlan.getTopFirstInstructions().get(1);
+    assertThat(prefixLabel.getScope(), equalTo(MplsLabelInstruction.Scope.NEXT_HOP_SRGB));
+    assertThat(prefixLabel.getResolvedLabel(), equalTo(null));
+    assertThat(
+        prefixLabel.resolveForNextHop(configurations.get("r2")),
+        equalTo(SrSidValue.mplsLabel(20007L)));
+    assertThat(
+        prefixLabel.resolveForNextHop(configurations.get("r3")),
+        equalTo(SrSidValue.mplsLabel(30007L)));
+    assertIllegalArgument(() -> prefixLabel.resolveForNextHop(configurations.get("r4")));
+    assertThat(adjacencyLabel.getScope(), equalTo(MplsLabelInstruction.Scope.OWNER_SRLB));
+    assertThat(adjacencyLabel.getOwnerNode(), equalTo("r1"));
+    assertThat(adjacencyLabel.getResolvedLabel(), equalTo(SrSidValue.mplsLabel(15004L)));
+    assertThat(
+        labelPlan.getAvailabilityGuard().isEquivalentTo(resolvedSegments.getAvailabilityGuard()),
+        equalTo(true));
+    SegmentRoutingConfig r1Sr = configurations.get("r1").getSegmentRoutingConfig();
+    configurations
+        .get("r1")
+        .setSegmentRoutingConfig(
+            new SegmentRoutingConfig(r1Sr.getDataPlanes(), r1Sr.getSrgb(), null, r1Sr.getVrfs()));
+    assertThat(
+        new MplsLabelPlanResolver(configurations).resolve(resolvedSegments).isPresent(),
+        equalTo(false));
+    configurations.get("r1").setSegmentRoutingConfig(r1Sr);
     assertThat(
         segmentResolver
             .resolve("r4", DEFAULT_VRF_NAME, ImmutableList.of(adjacencySid.getBinding().getKey()))
@@ -359,6 +392,8 @@ public final class BatfishIsisAlgorithm2Test {
     }
     addInterface(nf, configurations.get("r1"), "Loopback0", "1.1.1.1/32", 0L, true);
     attachPrefixSid(configurations.get("r1"), 7L);
+    attachMplsBlocks(configurations.get("r2"), 20000L);
+    attachMplsBlocks(configurations.get("r3"), 30000L);
     addLink(
         nf,
         configurations,
@@ -469,11 +504,20 @@ public final class BatfishIsisAlgorithm2Test {
         new SegmentRoutingConfig(
             com.google.common.collect.ImmutableSet.of(SegmentRoutingConfig.DataPlane.MPLS),
             SrGlobalBlock.of(ImmutableList.of(SrLabelRange.of(16000L, 23999L))),
-            null,
+            SrLocalBlock.of(ImmutableList.of(SrLabelRange.of(15000L, 15999L))),
             ImmutableMap.of(
                 DEFAULT_VRF_NAME,
                 new SegmentRoutingVrfConfig(
                     DEFAULT_VRF_NAME, ImmutableList.of(binding, adjacency)))));
+  }
+
+  private static void attachMplsBlocks(Configuration configuration, long srgbStart) {
+    configuration.setSegmentRoutingConfig(
+        new SegmentRoutingConfig(
+            com.google.common.collect.ImmutableSet.of(SegmentRoutingConfig.DataPlane.MPLS),
+            SrGlobalBlock.of(ImmutableList.of(SrLabelRange.of(srgbStart, srgbStart + 999L))),
+            SrLocalBlock.of(ImmutableList.of(SrLabelRange.of(15000L, 15999L))),
+            ImmutableMap.of()));
   }
 
   private static void addLink(
@@ -489,6 +533,15 @@ public final class BatfishIsisAlgorithm2Test {
       long rightCost) {
     addInterface(nf, configurations.get(left), leftInterface, leftAddress, leftCost, false);
     addInterface(nf, configurations.get(right), rightInterface, rightAddress, rightCost, false);
+  }
+
+  private static void assertIllegalArgument(Runnable operation) {
+    try {
+      operation.run();
+      throw new AssertionError("Expected IllegalArgumentException");
+    } catch (IllegalArgumentException expected) {
+      // Expected.
+    }
   }
 
   private static void addInterface(

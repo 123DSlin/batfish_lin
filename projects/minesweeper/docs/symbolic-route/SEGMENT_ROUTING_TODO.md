@@ -9,7 +9,9 @@ SR must consume the stable guarded IGP topology produced by OSPF/IS-IS adapters.
 prefix/node/adjacency SID semantics separately from symbolic traffic execution and must not infer
 SR reachability before the underlying guarded IGP state is available.
 
-Ordered typed segment guard/endpoint resolution is implemented. Next: derive the ingress MPLS label
-stack and per-hop SRGB/SRLB label interpretation without collapsing an index into one global label,
-then add SR policy candidate selection. OSPF and additional vendor parser adapters remain
-independent follow-up work behind the protocol-neutral underlay interface.
+Ordered typed segment guard/endpoint resolution and deferred MPLS label planning are implemented.
+Absolute/owner-local labels resolve immediately; Prefix/Node indexes retain a typed next-hop-SRGB
+dependency. Next: expose guarded next-hop branches from the underlay forwarding transition and
+materialize one numeric ingress stack per branch, then add SR policy candidate selection. OSPF and
+additional vendor parser adapters remain independent follow-up work behind the protocol-neutral
+underlay interface.

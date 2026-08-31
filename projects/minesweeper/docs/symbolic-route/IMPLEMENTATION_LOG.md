@@ -1482,5 +1482,26 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 聚焦测试与完整 Minesweeper tests 禁用缓存通过；PMD 输出与 Stage 7.4 完全相同，只包含未修改
   的 Graph 和旧 SMT 基线文件，没有新增 `symbolicsr` 违规。
 - 当前结果是 segment guard 与 endpoint resolution，还没有输出 ingress MPLS label stack。下一步
-  必须分别使用当前 forwarding node 的 SRGB 解析 Prefix/Node index、使用 Adj-SID owner 的 SRLB
-  解析 local index，并保留每跳 label-swap 语义；不能把一个全局固定 label 写回 SID database。
+  必须分别使用具体 forwarding next hop 的 SRGB 解析 Prefix/Node index、使用 Adj-SID owner 的
+  SRLB 解析 local index，并保留每跳 label-swap 语义；不能把一个全局固定 label 写回 SID
+  database。
+
+## Stage 7.5b deferred MPLS label plan（2026-08-31 17:06 CST）
+
+- 新增 top-first `MplsLabelPlan` 与 `MplsLabelInstruction`，显式区分 `FIXED_LABEL`、
+  `NEXT_HOP_SRGB` 和 `OWNER_SRLB` 三种解析 scope。plan 保留原始 typed SID、binding identity、
+  segment guard 与 terminal endpoint，不修改 guarded SID database。
+- Prefix/Node absolute label 可直接进入 fixed instruction；Prefix/Node index 在具体 symbolic
+  next-hop branch 尚未选择时保持 deferred。`resolveForNextHop` 只接受启用 SR-MPLS 且具有 SRGB
+  的 Batfish `Configuration`，使用该邻居的 parsed SRGB 解析，而不是 ingress、SID owner 或任意
+  固定设备的 block。
+- Local Adj-SID absolute/index 由 binding owner 的 SRLB 解析并记录 owner scope；缺失 SRLB、越界、
+  SRv6 SID、local Prefix/Node SID、non-local Adj-SID 和 Binding-SID 均 fail closed。这里不让
+  concrete dataplane 替代 symbolic guard，仅复用 Batfish normalized SR block 数据和精确 resolver。
+- diamond 集成测试使用不同的下一跳 SRGB：同一 Prefix-SID index 7 对 R2 解析为 20007、对 R3
+  解析为 30007；后续 local Adj-SID index 4 由 R1 SRLB 解析为 15004。另有独立边界测试覆盖
+  absolute Prefix-SID、SRv6/local-prefix 拒绝和缺失 owner SRLB。
+- 完整 Minesweeper tests 禁用缓存通过。PMD 仍只报告 Graph 与旧 SMT 基线文件，没有新增
+  `MplsLabel*`/`symbolicsr` 违规。下一步需要让 underlay forwarding transition 输出 guarded
+  next-hop 分支，再把 deferred instruction 分区解析为每个分支的具体 ingress label stack；在此
+  之前不能宣称已有一个唯一 numeric stack。

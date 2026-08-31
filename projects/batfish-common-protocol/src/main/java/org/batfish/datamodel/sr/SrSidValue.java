@@ -15,9 +15,10 @@ import org.batfish.datamodel.Ip6;
  * Vendor-independent, typed Segment Routing SID value.
  *
  * <p>{@link Type#MPLS_LABEL} is a resolved 20-bit label that may appear on the wire. {@link
- * Type#MPLS_INDEX} is an unresolved, nonnegative index relative to an owner's SRGB; it is not a
- * label and must be resolved by an SR global-block resolver before forwarding. This value object
- * deliberately does not select an SRGB or perform index-to-label resolution.
+ * Type#MPLS_INDEX} is an unresolved, nonnegative allocation index; it is not a label. Prefix/Node
+ * SID forwarding resolves it against the relevant next hop's SRGB, while local SID types use their
+ * explicitly selected local block. This value object deliberately selects neither namespace nor
+ * block.
  */
 @ParametersAreNonnullByDefault
 public final class SrSidValue implements Serializable {

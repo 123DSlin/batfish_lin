@@ -88,10 +88,16 @@ Guard ownership is:
 | SR policy | selection over candidate preference, with ECMP/weight retained as data |
 
 An MPLS index remains unresolved in the SID database. A global Prefix/Node-SID index is resolved
-against the SRGB selected for the relevant forwarding node; resolving it once against the source
-or ingress and storing that label globally is incorrect. A locally configured Adjacency-SID index
-is a different namespace and resolves only against the advertising node's SRLB. The two resolver
-APIs are deliberately separate.
+against the SRGB of the concrete forwarding next hop; symbolic ECMP/failure branches may therefore
+produce different wire labels for the same index. Resolving it once against the source, ingress, or
+SID owner and storing that label globally is incorrect. A locally configured Adjacency-SID index is
+a different namespace and resolves only against the advertising node's SRLB. The two resolver APIs
+are deliberately separate.
+
+Before a concrete next-hop branch is selected, the MPLS output is a typed label plan rather than a
+fully numeric stack. Absolute labels and owner-local SRLB values are resolved; Prefix/Node indexes
+remain `NEXT_HOP_SRGB` instructions. Symbolic forwarding later partitions the plan by guarded next
+hop and resolves each instruction against that neighbor's parsed SRGB.
 
 Adjacency availability carries both the symbolic up-guard and the parser-derived canonical
 `LinkFailureKey`, plus the directed neighbor endpoint. The Adj-SID database entry depends only on
