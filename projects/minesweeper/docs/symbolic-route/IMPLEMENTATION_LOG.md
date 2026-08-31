@@ -1372,3 +1372,19 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   map-key 拒绝、SR-MPLS capability 约束和 SRLB 边界。与 Stage 7.1a 测试一起禁用缓存运行通过。
 - 当前边界：这是 parser 可写入的通用 normalized model；尚未增加任何 vendor grammar/conversion，
   也尚未构建 Minesweeper guarded SID database 或 SR policy resolution。
+
+## Stage 7.2a Cisco IOS ISIS-SR parser integration（2026-08-31 14:28 CST）
+
+- 扩展 Cisco IOS lexer/parser，结构化识别 ISIS process 下的 `segment-routing mpls`，以及
+  interface 下的 `isis prefix-sid absolute <label>` 和 `isis prefix-sid index <index>`；没有使用
+  配置文本扫描或 demo-specific hostname/interface 映射。
+- Cisco vendor representation 分别保存 ISIS SR-MPLS capability 与接口 Prefix-SID value/type；
+  conversion 仅在对应 VRF 的 ISIS process 启用 SR-MPLS 时生成 normalized SR 配置。
+- conversion 从接口的真实 `ConcreteInterfaceAddress` 构造 typed IPv4 prefix binding，保留 node、
+  VRF、algorithm 0 和 PREFIX identity；absolute 值进入 `MPLS_LABEL`，index 值进入
+  `MPLS_INDEX`，不会提前把 index 当作 wire label。
+- 新增 `ios-segment-routing` parser fixture 和端到端断言，验证配置经过 grammar、extractor、
+  vendor conversion 后实际进入 `Configuration.segmentRouting`；新增测试和既有 IOS ISIS parser
+  回归测试均通过。
+- 当前边界：本阶段尚未解析显式 SRGB/SRLB，因此 index 保持 unresolved typed value；IPv6
+  Prefix-SID、multi-topology/algorithm syntax、adjacency SID 和其他 vendor grammar 后续分别扩展。

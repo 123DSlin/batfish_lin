@@ -178,6 +178,12 @@ import org.batfish.datamodel.routing_policy.statement.SetOrigin;
 import org.batfish.datamodel.routing_policy.statement.SetOspfMetricType;
 import org.batfish.datamodel.routing_policy.statement.Statement;
 import org.batfish.datamodel.routing_policy.statement.Statements;
+import org.batfish.datamodel.sr.SegmentRoutingConfig;
+import org.batfish.datamodel.sr.SegmentRoutingVrfConfig;
+import org.batfish.datamodel.sr.SrPrefix;
+import org.batfish.datamodel.sr.SrSidBinding;
+import org.batfish.datamodel.sr.SrSidBindingKey;
+import org.batfish.datamodel.sr.SrSidValue;
 import org.batfish.datamodel.tracking.TrackMethod;
 import org.batfish.datamodel.transformation.Transformation;
 import org.batfish.datamodel.vendor_family.cisco.Aaa;
@@ -3301,7 +3307,56 @@ public final class CiscoConfiguration extends VendorConfiguration {
         CiscoStructureType.BGP_UNDECLARED_PEER_GROUP,
         CiscoStructureUsage.BGP_PEER_GROUP_REFERENCED_BEFORE_DEFINED);
 
+    convertSegmentRouting(c);
     return ImmutableList.of(c);
+  }
+
+  private void convertSegmentRouting(Configuration configuration) {
+    ImmutableMap.Builder<String, SegmentRoutingVrfConfig> vrfs = ImmutableMap.builder();
+    boolean enabled = false;
+    for (Entry<String, Vrf> entry : _vrfs.entrySet()) {
+      IsisProcess isis = entry.getValue().getIsisProcess();
+      if (isis == null || !isis.getSegmentRoutingMpls()) {
+        continue;
+      }
+      enabled = true;
+      String vrfName = entry.getKey();
+      ImmutableList.Builder<SrSidBinding> bindings = ImmutableList.builder();
+      _interfaces.values().stream()
+          .filter(iface -> iface.getVrf().equals(vrfName))
+          .filter(iface -> iface.getIsisPrefixSid() != null)
+          .forEach(
+              iface -> {
+                Long sid = iface.getIsisPrefixSid();
+                assert sid != null;
+                SrSidValue value =
+                    iface.getIsisPrefixSidAbsolute()
+                        ? SrSidValue.mplsLabel(sid)
+                        : SrSidValue.mplsIndex(sid);
+                iface
+                    .getAllAddresses()
+                    .forEach(
+                        address ->
+                            bindings.add(
+                                new SrSidBinding(
+                                    new SrSidBindingKey(
+                                        _hostname,
+                                        vrfName,
+                                        SrSidBindingKey.Type.PREFIX,
+                                        0,
+                                        SrPrefix.ipv4(address.getPrefix()),
+                                        null,
+                                        null),
+                                    value,
+                                    ImmutableSet.of())));
+              });
+      vrfs.put(vrfName, new SegmentRoutingVrfConfig(vrfName, bindings.build()));
+    }
+    if (enabled) {
+      configuration.setSegmentRoutingConfig(
+          new SegmentRoutingConfig(
+              ImmutableSet.of(SegmentRoutingConfig.DataPlane.MPLS), null, null, vrfs.build()));
+    }
   }
 
   private void createInspectClassMapAcls(Configuration c) {

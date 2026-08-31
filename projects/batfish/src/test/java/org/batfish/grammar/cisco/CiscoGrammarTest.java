@@ -373,6 +373,9 @@ import org.batfish.datamodel.routing_policy.expr.NamedPrefixSet;
 import org.batfish.datamodel.routing_policy.statement.If;
 import org.batfish.datamodel.routing_policy.statement.SetEigrpMetric;
 import org.batfish.datamodel.routing_policy.statement.Statements;
+import org.batfish.datamodel.sr.SegmentRoutingConfig;
+import org.batfish.datamodel.sr.SrSidBinding;
+import org.batfish.datamodel.sr.SrSidValue;
 import org.batfish.datamodel.tracking.DecrementPriority;
 import org.batfish.datamodel.tracking.TrackInterface;
 import org.batfish.datamodel.transformation.Transformation;
@@ -1489,6 +1492,20 @@ public final class CiscoGrammarTest {
 
     assertThat(c, hasInterface("Loopback0", hasIsis(hasLevel2(notNullValue()))));
     assertThat(c, hasInterface("Loopback100", hasIsis(nullValue())));
+  }
+
+  @Test
+  public void testIosSegmentRoutingNormalizedModel() throws IOException {
+    Configuration configuration = parseConfig("ios-segment-routing");
+    SegmentRoutingConfig sr = configuration.getSegmentRoutingConfig();
+    assertThat(sr, notNullValue());
+    assertThat(sr.getDataPlanes(), contains(SegmentRoutingConfig.DataPlane.MPLS));
+    assertThat(sr.getVrfs().keySet(), contains(Configuration.DEFAULT_VRF_NAME));
+
+    List<SrSidBinding> bindings = sr.getVrfs().get(Configuration.DEFAULT_VRF_NAME).getSidBindings();
+    assertThat(bindings, hasSize(2));
+    assertThat(bindings.get(0).getSid(), equalTo(SrSidValue.mplsLabel(16001L)));
+    assertThat(bindings.get(1).getSid(), equalTo(SrSidValue.mplsIndex(2L)));
   }
 
   @Test

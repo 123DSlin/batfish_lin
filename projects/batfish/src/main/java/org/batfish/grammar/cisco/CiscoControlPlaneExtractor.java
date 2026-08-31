@@ -580,6 +580,7 @@ import org.batfish.grammar.cisco.CiscoParser.If_ip_vrf_forwardingContext;
 import org.batfish.grammar.cisco.CiscoParser.If_ip_vrf_sitemapContext;
 import org.batfish.grammar.cisco.CiscoParser.If_ipv6_traffic_filterContext;
 import org.batfish.grammar.cisco.CiscoParser.If_isis_metricContext;
+import org.batfish.grammar.cisco.CiscoParser.If_isis_prefix_sidContext;
 import org.batfish.grammar.cisco.CiscoParser.If_member_interfaceContext;
 import org.batfish.grammar.cisco.CiscoParser.If_mtuContext;
 import org.batfish.grammar.cisco.CiscoParser.If_service_policyContext;
@@ -913,6 +914,7 @@ import org.batfish.grammar.cisco.CiscoParser.S_zoneContext;
 import org.batfish.grammar.cisco.CiscoParser.S_zone_pairContext;
 import org.batfish.grammar.cisco.CiscoParser.Sd_switchport_blankContext;
 import org.batfish.grammar.cisco.CiscoParser.Sd_switchport_shutdownContext;
+import org.batfish.grammar.cisco.CiscoParser.Segment_routing_mpls_is_stanzaContext;
 import org.batfish.grammar.cisco.CiscoParser.Send_community_bgp_tailContext;
 import org.batfish.grammar.cisco.CiscoParser.Service_group_protocolContext;
 import org.batfish.grammar.cisco.CiscoParser.Service_specifier_icmpContext;
@@ -5182,6 +5184,13 @@ public class CiscoControlPlaneExtractor extends CiscoParserBaseListener
   }
 
   @Override
+  public void exitIf_isis_prefix_sid(If_isis_prefix_sidContext ctx) {
+    long sid = toLong(ctx.value);
+    boolean absolute = ctx.ABSOLUTE() != null;
+    _currentInterfaces.forEach(iface -> iface.setIsisPrefixSid(sid, absolute));
+  }
+
+  @Override
   public void exitIf_mtu(If_mtuContext ctx) {
     int mtu = toInteger(ctx.dec());
     for (Interface currentInterface : _currentInterfaces) {
@@ -8218,6 +8227,11 @@ public class CiscoControlPlaneExtractor extends CiscoParserBaseListener
   @Override
   public void exitRouter_isis_stanza(Router_isis_stanzaContext ctx) {
     _currentIsisProcess = null;
+  }
+
+  @Override
+  public void exitSegment_routing_mpls_is_stanza(Segment_routing_mpls_is_stanzaContext ctx) {
+    _currentIsisProcess.setSegmentRoutingMpls(!_no);
   }
 
   @Override

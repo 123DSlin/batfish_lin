@@ -61,6 +61,8 @@ AAL5SNAP: 'aal5snap';
 
 ABSOLUTE_TIMEOUT: 'absolute-timeout';
 
+ABSOLUTE: 'absolute';
+
 ACAP: 'acap';
 
 ACCEPT_DIALIN: 'accept-dialin';
@@ -4311,6 +4313,8 @@ PREFERRED_PATH: 'preferred-path';
 
 PREFIX: 'prefix';
 
+PREFIX_SID: 'prefix-sid';
+
 PREFIX_LENGTH: 'prefix-length';
 
 PREFIX_LIST
@@ -4328,6 +4332,8 @@ PREFIX_LIST
 PREFIX_PRIORITY: 'prefix-priority';
 
 PREFIX_SET: 'prefix-set';
+
+SEGMENT_ROUTING: 'segment-routing';
 
 PREPEND: 'prepend';
 
@@ -8432,4 +8438,3 @@ M_Words_WS
 :
    F_Whitespace+ -> channel ( HIDDEN )
 ;
-

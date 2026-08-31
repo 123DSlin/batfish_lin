@@ -176,6 +176,10 @@ public class Interface implements Serializable {
 
   @Nullable private IsisInterfaceMode _isisInterfaceMode;
 
+  @Nullable private Long _isisPrefixSid;
+
+  private boolean _isisPrefixSidAbsolute;
+
   private final @Nonnull Set<String> _memberInterfaces;
 
   @Nullable private Integer _mlagId;
@@ -399,6 +403,15 @@ public class Interface implements Serializable {
     return _isisInterfaceMode;
   }
 
+  @Nullable
+  public Long getIsisPrefixSid() {
+    return _isisPrefixSid;
+  }
+
+  public boolean getIsisPrefixSidAbsolute() {
+    return _isisPrefixSidAbsolute;
+  }
+
   public @Nonnull Set<String> getMemberInterfaces() {
     return _memberInterfaces;
   }
@@ -581,6 +594,11 @@ public class Interface implements Serializable {
 
   public void setIsisInterfaceMode(IsisInterfaceMode mode) {
     _isisInterfaceMode = mode;
+  }
+
+  public void setIsisPrefixSid(long isisPrefixSid, boolean absolute) {
+    _isisPrefixSid = isisPrefixSid;
+    _isisPrefixSidAbsolute = absolute;
   }
 
   public void setMlagId(Integer mlagId) {

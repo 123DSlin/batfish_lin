@@ -643,6 +643,11 @@ if_isis_passive
    ISIS PASSIVE NEWLINE
 ;
 
+if_isis_prefix_sid
+:
+   ISIS PREFIX_SID (ABSOLUTE | INDEX)? value = dec NEWLINE
+;
+
 if_isis_tag
 :
    ISIS TAG tag = dec NEWLINE
@@ -1826,6 +1831,7 @@ if_inner
    | if_isis_metric
    | if_isis_network
    | if_isis_passive
+   | if_isis_prefix_sid
    | if_isis_tag
    | if_load_interval
    | if_member_interface

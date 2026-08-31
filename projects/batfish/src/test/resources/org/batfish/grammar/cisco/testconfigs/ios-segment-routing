@@ -1,0 +1,16 @@
+hostname ios-segment-routing
+!
+interface Loopback0
+ ip address 1.1.1.1 255.255.255.255
+ ip router isis 1
+ isis prefix-sid absolute 16001
+!
+interface Loopback1
+ ip address 2.2.2.2 255.255.255.255
+ ip router isis 1
+ isis prefix-sid index 2
+!
+router isis 1
+ net 49.0001.0000.0000.0001.00
+ segment-routing mpls
+!

@@ -15,6 +15,8 @@ public class IsisProcess implements Serializable {
 
   private Map<RoutingProtocol, IsisRedistributionPolicy> _redistributionPolicies;
 
+  private boolean _segmentRoutingMpls;
+
   public IsisProcess() {
     _redistributionPolicies = new TreeMap<>();
   }
@@ -31,11 +33,19 @@ public class IsisProcess implements Serializable {
     return _redistributionPolicies;
   }
 
+  public boolean getSegmentRoutingMpls() {
+    return _segmentRoutingMpls;
+  }
+
   public void setLevel(IsisLevel level) {
     _level = level;
   }
 
   public void setNetAddress(IsoAddress netAddress) {
     _netAddress = netAddress;
+  }
+
+  public void setSegmentRoutingMpls(boolean segmentRoutingMpls) {
+    _segmentRoutingMpls = segmentRoutingMpls;
   }
 }
