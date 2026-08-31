@@ -39,10 +39,16 @@ public final class MplsLabelPlanResolver {
             if (binding.getFlags().contains(SrSidBinding.Flag.LOCAL)) {
               return Optional.empty();
             }
+            if (entry.getResolverNode().equals(key.getNode())
+                && entry.getResolverVrf().equals(key.getVrf())) {
+              break;
+            }
             instructions.add(
                 sid.getType() == SrSidValue.Type.MPLS_LABEL
-                    ? MplsLabelInstruction.fixed(key, sid)
-                    : MplsLabelInstruction.nextHopSrgb(key, sid));
+                    ? MplsLabelInstruction.fixed(
+                        key, sid, entry.getResolverNode(), entry.getResolverVrf())
+                    : MplsLabelInstruction.nextHopSrgb(
+                        key, sid, entry.getResolverNode(), entry.getResolverVrf()));
             break;
           case ADJACENCY:
             if (!binding.getFlags().contains(SrSidBinding.Flag.LOCAL)) {

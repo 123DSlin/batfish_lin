@@ -1505,3 +1505,27 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   `MplsLabel*`/`symbolicsr` 违规。下一步需要让 underlay forwarding transition 输出 guarded
   next-hop 分支，再把 deferred instruction 分区解析为每个分支的具体 ingress label stack；在此
   之前不能宣称已有一个唯一 numeric stack。
+
+## Stage 7.5c guarded next-hop numeric stacks（2026-08-31 17:32 CST）
+
+- 将 protocol-neutral underlay API 扩展为输出 `SymbolicNextHopBranch`：typed next-hop node/VRF/
+  interface、RIB `selectionGuard` 和 canonical `LinkFailureKey`。IS-IS adapter 通过 Batfish
+  `IsisRoute.getNextHop()` 的 IP 与 parser-derived directed edge 对齐，不解析 route 字符串或报告
+  文本；同一 target 的 L1/L2 contribution guard 按逻辑析取。
+- 修正并测试两个方向概念：Adj-SID 从 edge sender interface 执行后到 receiver；receiver RIB 中的
+  next-hop IP 则反向识别 advertisement sender。二者共享物理 failure key，但 directed endpoint
+  不可互换。首轮测试正是因此得到零分支，修正后与真实拓扑一致。
+- 新增 `MplsNumericStackResolver`，对 ordered plan 中每个 Prefix/Node instruction 枚举 guarded
+  next-hop，并对多个 segment 做 guard conjunction/branch expansion；每个结果保留 top-first numeric
+  labels、next-hop decisions 和依赖 guard。没有 SRGB、标签越界或 guard 不可满足的单独分支被
+  fail closed，不影响其他合法分支。
+- absolute Prefix/Node label 虽不需要 SRGB，仍必须保留 next-hop branch 与 failure dependency；
+  Prefix/Node segment 的当前 node 已是 owner 时作为 no-op elide，允许产生合法 empty MPLS stack，
+  而不是伪造本地转发标签。
+- Algorithm 2 集成测试得到三个真实分支：R4 直连 R1 为 `[16007,15004]`、经 R2 为
+  `[20007,15004]`、经 R3 为 `[30007,15004]`，分别持有 `r1_r4`、`r2_r4`、`r3_r4` canonical
+  dependency；无 SRGB 的 R5 分支被拒绝。完整 Minesweeper tests 禁用缓存通过，PMD 仍无新增
+  `symbolicsr` 违规。
+- Stage 7 现已完成 SID/segment/MPLS branch 核心。剩余 Stage 7.6 policy model/parser、Stage 7.7
+  guarded candidate selection 与生命周期、Stage 7.8 顶层输出及 parser-driven 验收；不包含后续
+  symbolic traffic/load execution。

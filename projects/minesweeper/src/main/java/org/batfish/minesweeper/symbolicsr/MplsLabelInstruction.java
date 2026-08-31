@@ -22,19 +22,26 @@ public final class MplsLabelInstruction {
   private final SrSidValue _configuredSid;
   private final Scope _scope;
   @Nullable private final String _ownerNode;
+  @Nullable private final String _forwardingNode;
+  @Nullable private final String _forwardingVrf;
   @Nullable private final SrSidValue _resolvedLabel;
 
-  static MplsLabelInstruction fixed(SrSidBindingKey key, SrSidValue label) {
-    return new MplsLabelInstruction(key, label, Scope.FIXED_LABEL, null, label);
+  static MplsLabelInstruction fixed(
+      SrSidBindingKey key, SrSidValue label, String forwardingNode, String forwardingVrf) {
+    return new MplsLabelInstruction(
+        key, label, Scope.FIXED_LABEL, null, forwardingNode, forwardingVrf, label);
   }
 
-  static MplsLabelInstruction nextHopSrgb(SrSidBindingKey key, SrSidValue index) {
-    return new MplsLabelInstruction(key, index, Scope.NEXT_HOP_SRGB, null, null);
+  static MplsLabelInstruction nextHopSrgb(
+      SrSidBindingKey key, SrSidValue index, String forwardingNode, String forwardingVrf) {
+    return new MplsLabelInstruction(
+        key, index, Scope.NEXT_HOP_SRGB, null, forwardingNode, forwardingVrf, null);
   }
 
   static MplsLabelInstruction ownerSrlb(
       SrSidBindingKey key, SrSidValue configuredSid, String ownerNode, SrSidValue label) {
-    return new MplsLabelInstruction(key, configuredSid, Scope.OWNER_SRLB, ownerNode, label);
+    return new MplsLabelInstruction(
+        key, configuredSid, Scope.OWNER_SRLB, ownerNode, null, null, label);
   }
 
   private MplsLabelInstruction(
@@ -42,11 +49,15 @@ public final class MplsLabelInstruction {
       SrSidValue configuredSid,
       Scope scope,
       @Nullable String ownerNode,
+      @Nullable String forwardingNode,
+      @Nullable String forwardingVrf,
       @Nullable SrSidValue resolvedLabel) {
     _bindingKey = requireNonNull(bindingKey);
     _configuredSid = requireNonNull(configuredSid);
     _scope = requireNonNull(scope);
     _ownerNode = ownerNode;
+    _forwardingNode = forwardingNode;
+    _forwardingVrf = forwardingVrf;
     _resolvedLabel = resolvedLabel;
     checkArgument(
         (_scope == Scope.NEXT_HOP_SRGB) == (_resolvedLabel == null),
@@ -54,6 +65,12 @@ public final class MplsLabelInstruction {
     checkArgument(
         (_scope == Scope.OWNER_SRLB) == (_ownerNode != null),
         "Only an owner-SRLB instruction has an owner node");
+    boolean prefixOrNode =
+        _bindingKey.getType() == SrSidBindingKey.Type.PREFIX
+            || _bindingKey.getType() == SrSidBindingKey.Type.NODE;
+    checkArgument(
+        prefixOrNode == (_forwardingNode != null && _forwardingVrf != null),
+        "Prefix/Node instruction must have exactly one forwarding source");
     checkArgument(
         _configuredSid.getType() != SrSidValue.Type.SRV6,
         "MPLS instruction cannot contain an SRv6 SID");
@@ -62,9 +79,7 @@ public final class MplsLabelInstruction {
         "Fixed instruction requires an absolute MPLS label");
     checkArgument(
         _scope != Scope.NEXT_HOP_SRGB
-            || ((_bindingKey.getType() == SrSidBindingKey.Type.PREFIX
-                    || _bindingKey.getType() == SrSidBindingKey.Type.NODE)
-                && _configuredSid.getType() == SrSidValue.Type.MPLS_INDEX),
+            || (prefixOrNode && _configuredSid.getType() == SrSidValue.Type.MPLS_INDEX),
         "Next-hop SRGB instruction requires a Prefix/Node SID index");
     checkArgument(
         _scope != Scope.OWNER_SRLB || _bindingKey.getType() == SrSidBindingKey.Type.ADJACENCY,
@@ -89,6 +104,16 @@ public final class MplsLabelInstruction {
   @Nullable
   public String getOwnerNode() {
     return _ownerNode;
+  }
+
+  @Nullable
+  public String getForwardingNode() {
+    return _forwardingNode;
+  }
+
+  @Nullable
+  public String getForwardingVrf() {
+    return _forwardingVrf;
   }
 
   /** Returns a label when no next-hop-dependent resolution remains. */

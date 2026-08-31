@@ -39,13 +39,16 @@ import org.batfish.datamodel.sr.SrSidBinding;
 import org.batfish.datamodel.sr.SrSidBindingKey;
 import org.batfish.datamodel.sr.SrSidValue;
 import org.batfish.dataplane.rib.Rib;
+import org.batfish.minesweeper.symbolicsr.GuardedMplsStackBranch;
 import org.batfish.minesweeper.symbolicsr.GuardedSegmentList;
 import org.batfish.minesweeper.symbolicsr.GuardedSegmentListResolver;
 import org.batfish.minesweeper.symbolicsr.GuardedSidEntry;
 import org.batfish.minesweeper.symbolicsr.GuardedSidUpdate;
+import org.batfish.minesweeper.symbolicsr.IsisUnderlayReachability;
 import org.batfish.minesweeper.symbolicsr.MplsLabelInstruction;
 import org.batfish.minesweeper.symbolicsr.MplsLabelPlan;
 import org.batfish.minesweeper.symbolicsr.MplsLabelPlanResolver;
+import org.batfish.minesweeper.symbolicsr.MplsNumericStackResolver;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -257,6 +260,37 @@ public final class BatfishIsisAlgorithm2Test {
     assertThat(
         labelPlan.getAvailabilityGuard().isEquivalentTo(resolvedSegments.getAvailabilityGuard()),
         equalTo(true));
+    IsisUnderlayReachability underlay =
+        new IsisUnderlayReachability(
+            result.getIsisL1RibNetwork(),
+            result.getIsisL2RibNetwork(),
+            isis.getEdges(),
+            isis.getSessions());
+    List<GuardedMplsStackBranch> numericStacks =
+        new MplsNumericStackResolver(configurations, underlay).resolve(labelPlan);
+    assertThat(numericStacks, hasSize(3));
+    GuardedMplsStackBranch r1Stack = stackVia(numericStacks, "r1");
+    GuardedMplsStackBranch r2Stack = stackVia(numericStacks, "r2");
+    GuardedMplsStackBranch r3Stack = stackVia(numericStacks, "r3");
+    assertThat(r1Stack.getTerminalNode(), equalTo("r2"));
+    assertThat(
+        r1Stack.getTopFirstLabels(),
+        equalTo(ImmutableList.of(SrSidValue.mplsLabel(16007L), SrSidValue.mplsLabel(15004L))));
+    assertThat(
+        r2Stack.getTopFirstLabels(),
+        equalTo(ImmutableList.of(SrSidValue.mplsLabel(20007L), SrSidValue.mplsLabel(15004L))));
+    assertThat(
+        r3Stack.getTopFirstLabels(),
+        equalTo(ImmutableList.of(SrSidValue.mplsLabel(30007L), SrSidValue.mplsLabel(15004L))));
+    assertThat(
+        r1Stack.getNextHopDecisions().get(0).getLinkFailureDependency(),
+        equalTo(LinkFailureKey.of("r1", "r4")));
+    assertThat(
+        r2Stack.getNextHopDecisions().get(0).getLinkFailureDependency(),
+        equalTo(LinkFailureKey.of("r2", "r4")));
+    assertThat(
+        r3Stack.getNextHopDecisions().get(0).getLinkFailureDependency(),
+        equalTo(LinkFailureKey.of("r3", "r4")));
     SegmentRoutingConfig r1Sr = configurations.get("r1").getSegmentRoutingConfig();
     configurations
         .get("r1")
@@ -348,6 +382,16 @@ public final class BatfishIsisAlgorithm2Test {
       List<GuardedSidEntry> entries, SrSidBindingKey.Type type) {
     return entries.stream()
         .filter(entry -> entry.getBinding().getKey().getType() == type)
+        .findFirst()
+        .get();
+  }
+
+  private static GuardedMplsStackBranch stackVia(
+      List<GuardedMplsStackBranch> branches, String nextHopNode) {
+    return branches.stream()
+        .filter(
+            branch ->
+                branch.getNextHopDecisions().get(0).getNextHop().getNode().equals(nextHopNode))
         .findFirst()
         .get();
   }

@@ -63,6 +63,8 @@ The `symbolicsr` layer consumes a protocol-independent interface:
 ```java
 interface SymbolicUnderlayReachability {
   Optional<RouteGuard> prefixReachability(String node, String vrf, SrPrefix prefix, int algorithm);
+  ImmutableList<SymbolicNextHopBranch> prefixNextHops(
+      String node, String vrf, SrPrefix prefix, int algorithm);
   Optional<SymbolicAdjacencyAvailability> adjacencyAvailability(
       String node, String vrf, String interfaceName);
 }
@@ -98,6 +100,12 @@ Before a concrete next-hop branch is selected, the MPLS output is a typed label 
 fully numeric stack. Absolute labels and owner-local SRLB values are resolved; Prefix/Node indexes
 remain `NEXT_HOP_SRGB` instructions. Symbolic forwarding later partitions the plan by guarded next
 hop and resolves each instruction against that neighbor's parsed SRGB.
+
+The IS-IS provider derives each next-hop identity from the selected Batfish `IsisRoute` next-hop IP
+and the matching parser-derived directed edge. The branch retains the RIB selection guard and the
+same canonical `LinkFailureKey` used by adjacency availability. Adjacency execution direction
+(sender to receiver) and route lookup direction (receiver identifies sender) are deliberately
+separate typed mappings.
 
 Adjacency availability carries both the symbolic up-guard and the parser-derived canonical
 `LinkFailureKey`, plus the directed neighbor endpoint. The Adj-SID database entry depends only on

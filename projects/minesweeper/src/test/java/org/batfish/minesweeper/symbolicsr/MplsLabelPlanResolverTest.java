@@ -45,6 +45,22 @@ public final class MplsLabelPlanResolverTest {
   }
 
   @Test
+  public void testPrefixSegmentAtOwnerIsElided() {
+    SrSidBinding binding = prefixBinding(SrSidValue.mplsIndex(7L), ImmutableSet.of());
+    GuardedSegmentList segments =
+        segments(new GuardedSidEntry("r1", "default", binding, GUARDS.trueGuard()));
+    MplsLabelPlan plan = new MplsLabelPlanResolver(ImmutableMap.of()).resolve(segments).get();
+    assertThat(plan.getTopFirstInstructions(), hasSize(0));
+    assertThat(
+        new MplsNumericStackResolver(
+                ImmutableMap.of(), (node, vrf, prefix, algorithm) -> java.util.Optional.empty())
+            .resolve(plan)
+            .get(0)
+            .getTopFirstLabels(),
+        hasSize(0));
+  }
+
+  @Test
   public void testSrv6AndLocalPrefixFailClosed() {
     assertThat(
         new MplsLabelPlanResolver(ImmutableMap.of())

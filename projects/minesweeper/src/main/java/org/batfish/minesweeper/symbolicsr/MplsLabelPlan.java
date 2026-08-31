@@ -1,6 +1,5 @@
 package org.batfish.minesweeper.symbolicsr;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
@@ -20,7 +19,6 @@ public final class MplsLabelPlan {
       String terminalNode,
       String terminalVrf) {
     _topFirstInstructions = ImmutableList.copyOf(requireNonNull(topFirstInstructions));
-    checkArgument(!_topFirstInstructions.isEmpty(), "MPLS label plan must not be empty");
     _availabilityGuard = requireNonNull(availabilityGuard);
     _terminalNode = requireNonNull(terminalNode);
     _terminalVrf = requireNonNull(terminalVrf);
