@@ -1524,7 +1524,9 @@ public final class CiscoGrammarTest {
             .get();
     assertThat(adjacency.getKey().getInterfaceName(), equalTo("GigabitEthernet0/0"));
     assertThat(adjacency.getSid(), equalTo(SrSidValue.mplsIndex(4L)));
-    assertThat(adjacency.getFlags(), contains(SrSidBinding.Flag.PROTECTED));
+    assertThat(
+        adjacency.getFlags(),
+        containsInAnyOrder(SrSidBinding.Flag.LOCAL, SrSidBinding.Flag.PROTECTED));
     assertThat(
         SrSidResolver.resolveMpls(absolutePrefix.getSid(), sr.getSrgb()),
         equalTo(SrSidValue.mplsLabel(16001L)));

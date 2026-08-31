@@ -38,6 +38,8 @@ import org.batfish.datamodel.sr.SrSidBinding;
 import org.batfish.datamodel.sr.SrSidBindingKey;
 import org.batfish.datamodel.sr.SrSidValue;
 import org.batfish.dataplane.rib.Rib;
+import org.batfish.minesweeper.symbolicsr.GuardedSegmentList;
+import org.batfish.minesweeper.symbolicsr.GuardedSegmentListResolver;
 import org.batfish.minesweeper.symbolicsr.GuardedSidEntry;
 import org.batfish.minesweeper.symbolicsr.GuardedSidUpdate;
 import org.junit.Test;
@@ -205,6 +207,7 @@ public final class BatfishIsisAlgorithm2Test {
         adjacencySid.getAvailabilityGuard().isEquivalentTo(GUARDS.variable("r1_r2")),
         equalTo(true));
     assertThat(adjacencySid.getLinkFailureDependency(), equalTo(LinkFailureKey.of("r1", "r2")));
+    assertThat(adjacencySid.getAdjacencyTarget().getNode(), equalTo("r2"));
     RouteGuard expectedSidGuard = GUARDS.falseGuard();
     for (GuardedRibEntry<AnnotatedRoute<IsisRoute>> route :
         result.getIsisL1RibNetwork().getRib("r4").getEntries()) {
@@ -213,6 +216,36 @@ public final class BatfishIsisAlgorithm2Test {
       }
     }
     assertThat(prefixSid.getAvailabilityGuard().isEquivalentTo(expectedSidGuard), equalTo(true));
+    GuardedSegmentListResolver segmentResolver =
+        new GuardedSegmentListResolver(result.getGuardedSidDatabase());
+    GuardedSegmentList resolvedSegments =
+        segmentResolver
+            .resolve(
+                "r4",
+                DEFAULT_VRF_NAME,
+                ImmutableList.of(
+                    prefixSid.getBinding().getKey(), adjacencySid.getBinding().getKey()))
+            .get();
+    assertThat(resolvedSegments.getSegments(), hasSize(2));
+    assertThat(resolvedSegments.getTerminalNode(), equalTo("r2"));
+    assertThat(
+        resolvedSegments
+            .getAvailabilityGuard()
+            .isEquivalentTo(expectedSidGuard.and(GUARDS.variable("r1_r2"))),
+        equalTo(true));
+    assertThat(
+        segmentResolver
+            .resolve("r4", DEFAULT_VRF_NAME, ImmutableList.of(adjacencySid.getBinding().getKey()))
+            .isPresent(),
+        equalTo(false));
+    GuardedSegmentList localAdjacency =
+        segmentResolver
+            .resolve("r1", DEFAULT_VRF_NAME, ImmutableList.of(adjacencySid.getBinding().getKey()))
+            .get();
+    assertThat(localAdjacency.getTerminalNode(), equalTo("r2"));
+    assertThat(
+        localAdjacency.getAvailabilityGuard().isEquivalentTo(GUARDS.variable("r1_r2")),
+        equalTo(true));
 
     result
         .getIsisL1RibNetwork()
@@ -222,6 +255,15 @@ public final class BatfishIsisAlgorithm2Test {
                 new SymbolicRouteContributionId(
                     "isis-l1-origin:r1:default:Loopback0:1.1.1.1/32", "r1", "r1")));
     assertThat(result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME), hasSize(1));
+    assertThat(
+        new GuardedSegmentListResolver(result.getGuardedSidDatabase())
+            .resolve(
+                "r4",
+                DEFAULT_VRF_NAME,
+                ImmutableList.of(
+                    prefixSid.getBinding().getKey(), adjacencySid.getBinding().getKey()))
+            .isPresent(),
+        equalTo(false));
     assertThat(result.getGuardedSidReconciler().getLastDelta().getUpdates(), hasSize(5));
     assertThat(
         result.getGuardedSidReconciler().getLastDelta().getUpdates().stream()
@@ -421,7 +463,8 @@ public final class BatfishIsisAlgorithm2Test {
                 "Ethernet12",
                 null),
             SrSidValue.mplsIndex(4L),
-            com.google.common.collect.ImmutableSet.of(SrSidBinding.Flag.PROTECTED));
+            com.google.common.collect.ImmutableSet.of(
+                SrSidBinding.Flag.LOCAL, SrSidBinding.Flag.PROTECTED));
     owner.setSegmentRoutingConfig(
         new SegmentRoutingConfig(
             com.google.common.collect.ImmutableSet.of(SegmentRoutingConfig.DataPlane.MPLS),

@@ -4,6 +4,7 @@ import static java.util.Objects.requireNonNull;
 
 import javax.annotation.Nullable;
 import org.batfish.datamodel.sr.SrSidBinding;
+import org.batfish.datamodel.sr.SrSidBindingKey;
 import org.batfish.minesweeper.symbolicroute.LinkFailureKey;
 import org.batfish.minesweeper.symbolicroute.RouteGuard;
 
@@ -13,10 +14,11 @@ public final class GuardedSidEntry {
   private final SrSidBinding _binding;
   private final RouteGuard _availabilityGuard;
   @Nullable private final LinkFailureKey _linkFailureDependency;
+  @Nullable private final SymbolicAdjacencyEndpoint _adjacencyTarget;
 
   GuardedSidEntry(
       String resolverNode, String resolverVrf, SrSidBinding binding, RouteGuard availabilityGuard) {
-    this(resolverNode, resolverVrf, binding, availabilityGuard, null);
+    this(resolverNode, resolverVrf, binding, availabilityGuard, null, null);
   }
 
   GuardedSidEntry(
@@ -24,11 +26,18 @@ public final class GuardedSidEntry {
       String resolverVrf,
       SrSidBinding binding,
       RouteGuard availabilityGuard,
-      @Nullable LinkFailureKey linkFailureDependency) {
+      @Nullable LinkFailureKey linkFailureDependency,
+      @Nullable SymbolicAdjacencyEndpoint adjacencyTarget) {
     _binding = requireNonNull(binding, "binding must be provided");
     _key = new GuardedSidKey(resolverNode, resolverVrf, binding.getKey());
     _availabilityGuard = requireNonNull(availabilityGuard, "guard must be provided");
     _linkFailureDependency = linkFailureDependency;
+    _adjacencyTarget = adjacencyTarget;
+    if ((_binding.getKey().getType() == SrSidBindingKey.Type.ADJACENCY)
+        != (_linkFailureDependency != null && _adjacencyTarget != null)) {
+      throw new IllegalArgumentException(
+          "adjacency SID must have exactly one link dependency and directed target");
+    }
   }
 
   public String getResolverNode() {
@@ -54,5 +63,10 @@ public final class GuardedSidEntry {
   @Nullable
   public LinkFailureKey getLinkFailureDependency() {
     return _linkFailureDependency;
+  }
+
+  @Nullable
+  public SymbolicAdjacencyEndpoint getAdjacencyTarget() {
+    return _adjacencyTarget;
   }
 }

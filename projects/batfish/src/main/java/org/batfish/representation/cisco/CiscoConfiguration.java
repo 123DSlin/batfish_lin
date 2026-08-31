@@ -3370,6 +3370,11 @@ public final class CiscoConfiguration extends VendorConfiguration {
                       iface.getIsisAdjacencySidAbsolute()
                           ? SrSidValue.mplsLabel(iface.getIsisAdjacencySid())
                           : SrSidValue.mplsIndex(iface.getIsisAdjacencySid());
+                  ImmutableSet.Builder<SrSidBinding.Flag> flags = ImmutableSet.builder();
+                  flags.add(SrSidBinding.Flag.LOCAL);
+                  if (iface.getIsisAdjacencySidProtected()) {
+                    flags.add(SrSidBinding.Flag.PROTECTED);
+                  }
                   bindings.add(
                       new SrSidBinding(
                           new SrSidBindingKey(
@@ -3381,9 +3386,7 @@ public final class CiscoConfiguration extends VendorConfiguration {
                               iface.getName(),
                               null),
                           adjacencySid,
-                          iface.getIsisAdjacencySidProtected()
-                              ? ImmutableSet.of(SrSidBinding.Flag.PROTECTED)
-                              : ImmutableSet.of()));
+                          flags.build()));
                 }
                 Long sid = iface.getIsisPrefixSid();
                 if (sid == null) {

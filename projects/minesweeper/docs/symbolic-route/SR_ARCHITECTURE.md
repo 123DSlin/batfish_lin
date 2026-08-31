@@ -94,10 +94,11 @@ is a different namespace and resolves only against the advertising node's SRLB. 
 APIs are deliberately separate.
 
 Adjacency availability carries both the symbolic up-guard and the parser-derived canonical
-`LinkFailureKey`. The Adj-SID database entry depends only on that directed interface's physical
-adjacency; a later segment resolver additionally conjoins reachability from the current resolver
-to the Adj-SID owner. This avoids incorrectly baking an arbitrary source-to-owner path into the
-SID binding itself.
+`LinkFailureKey`, plus the directed neighbor endpoint. The Adj-SID database entry depends only on
+that directed interface's physical adjacency. Ordered segment resolution tracks the current node:
+a local Adj-SID is executable only at its owner, so a remote sequence normally reaches that owner
+with a preceding Prefix/Node SID before applying the adjacency instruction. This avoids incorrectly
+baking an arbitrary source-to-owner path into the SID binding itself.
 
 The SID database maintains typed contribution and dependency identities. Route text, `toString()`,
 list position, or generated report strings are never identities. Withdrawal of an underlay prefix

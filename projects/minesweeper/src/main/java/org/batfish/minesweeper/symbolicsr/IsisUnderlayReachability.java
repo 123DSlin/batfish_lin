@@ -57,11 +57,17 @@ public final class IsisUnderlayReachability implements SymbolicUnderlayReachabil
                       edge.getSenderInterface().getName());
               SymbolicAdjacencyAvailability availability =
                   new SymbolicAdjacencyAvailability(
-                      session.getLinkFailureKey(), session.getLinkGuard());
+                      session.getLinkFailureKey(),
+                      session.getLinkGuard(),
+                      new SymbolicAdjacencyEndpoint(
+                          edge.getReceiverConfiguration().getHostname(),
+                          edge.getReceiverInterface().getVrfName(),
+                          edge.getReceiverInterface().getName()));
               SymbolicAdjacencyAvailability old = _adjacencies.put(endpoint, availability);
               if (old != null
                   && (!old.getFailureKey().equals(availability.getFailureKey())
-                      || !old.getGuard().isEquivalentTo(availability.getGuard()))) {
+                      || !old.getGuard().isEquivalentTo(availability.getGuard())
+                      || !old.getTarget().equals(availability.getTarget()))) {
                 throw new IllegalArgumentException("conflicting canonical adjacency dependency");
               }
             });

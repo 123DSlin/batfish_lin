@@ -31,6 +31,7 @@ public final class GuardedSidUpdate {
         oldEntry.getBinding().equals(newEntry.getBinding())
                 && Objects.equals(
                     oldEntry.getLinkFailureDependency(), newEntry.getLinkFailureDependency())
+                && Objects.equals(oldEntry.getAdjacencyTarget(), newEntry.getAdjacencyTarget())
             ? Type.GUARD_CHANGED
             : Type.REPLACED;
     return new GuardedSidUpdate(type, requireNonNull(oldEntry), requireNonNull(newEntry));

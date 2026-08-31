@@ -1463,3 +1463,24 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   Encoder/EncoderSlice/PropertyChecker/SymbolicRoute/TransferSSA 等基线违规，没有 Stage 7.4 或
   `symbolicsr` 新违规。当前尚未实现从任意 ingress 到 Adj-SID owner 的 segment resolution；该
   路径 guard 必须在后续 segment-list 层与本阶段 link guard 相与，不能提前混入 SID database。
+
+## Stage 7.5a ordered guarded segment resolution（2026-08-31 16:43 CST）
+
+- Adj-SID availability 在 canonical、方向无关的物理 `LinkFailureKey` 之外保留 parser-derived
+  directed neighbor endpoint。二者职责分离：failure counting 对双向链路只计一次，而 segment
+  execution 仍能把当前位置从 owner interface 推进到正确的 receiver node/VRF/interface。
+- Cisco IOS manual Adj-SID 明确标记 `LOCAL`；`PROTECTED` 保持独立行为 flag。resolver 对未知的
+  non-local/global adjacency 语义 fail closed，不会把本地 label 错当成全域可执行的 Node-SID。
+- 新增 `GuardedSegmentListResolver`，按输入顺序解析 typed `SrSidBindingKey`。每一步从“当前
+  node/VRF”的 guarded SID snapshot 取 contribution，并对 availability guards 做逻辑合取；
+  Prefix/Node SID 把当前 endpoint 推进到 binding owner，local Adj-SID 只允许在 owner 执行并推进
+  到 directed neighbor。缺失 binding、不可满足 guard、错误位置或尚未支持的 Binding-SID 均返回
+  unresolved，而不是产生部分成功结果。
+- Algorithm 2 diamond 集成测试验证从 R4 执行 `[R1 Prefix-SID, R1→R2 Adj-SID]` 的 guard 等价于
+  `reach(R4,R1) AND up(R1,R2)`，terminal node 为 R2；从 R4 直接执行 R1 local Adj-SID 被拒绝，
+  从 R1 执行则成功；撤回 R1 Prefix-SID 后同一 ordered list 立即不可解析。
+- 聚焦测试与完整 Minesweeper tests 禁用缓存通过；PMD 输出与 Stage 7.4 完全相同，只包含未修改
+  的 Graph 和旧 SMT 基线文件，没有新增 `symbolicsr` 违规。
+- 当前结果是 segment guard 与 endpoint resolution，还没有输出 ingress MPLS label stack。下一步
+  必须分别使用当前 forwarding node 的 SRGB 解析 Prefix/Node index、使用 Adj-SID owner 的 SRLB
+  解析 local index，并保留每跳 label-swap 语义；不能把一个全局固定 label 写回 SID database。

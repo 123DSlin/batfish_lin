@@ -56,7 +56,8 @@ public final class GuardedSidDatabase {
                                           vrf,
                                           binding,
                                           value.getGuard().simplify(),
-                                          value.getFailureKey())));
+                                          value.getFailureKey(),
+                                          value.getTarget())));
                       continue;
                     }
                     if ((key.getType() != SrSidBindingKey.Type.PREFIX
@@ -118,6 +119,17 @@ public final class GuardedSidDatabase {
     return _entries.stream()
         .filter(entry -> entry.getResolverNode().equals(node) && entry.getResolverVrf().equals(vrf))
         .collect(ImmutableList.toImmutableList());
+  }
+
+  public Optional<GuardedSidEntry> getEntry(
+      String resolverNode, String resolverVrf, SrSidBindingKey bindingKey) {
+    return _entries.stream()
+        .filter(
+            entry ->
+                entry.getResolverNode().equals(resolverNode)
+                    && entry.getResolverVrf().equals(resolverVrf)
+                    && entry.getBinding().getKey().equals(bindingKey))
+        .findFirst();
   }
 
   ImmutableMap<GuardedSidKey, GuardedSidEntry> asMap() {

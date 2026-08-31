@@ -51,6 +51,7 @@ public final class GuardedSidReconciler {
             updates.add(GuardedSidUpdate.added(entry));
           } else if (!old.getBinding().equals(entry.getBinding())
               || !Objects.equals(old.getLinkFailureDependency(), entry.getLinkFailureDependency())
+              || !Objects.equals(old.getAdjacencyTarget(), entry.getAdjacencyTarget())
               || !old.getAvailabilityGuard().isEquivalentTo(entry.getAvailabilityGuard())) {
             updates.add(GuardedSidUpdate.changed(old, entry));
           }
