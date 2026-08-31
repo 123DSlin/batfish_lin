@@ -375,6 +375,7 @@ import org.batfish.datamodel.routing_policy.statement.SetEigrpMetric;
 import org.batfish.datamodel.routing_policy.statement.Statements;
 import org.batfish.datamodel.sr.SegmentRoutingConfig;
 import org.batfish.datamodel.sr.SrSidBinding;
+import org.batfish.datamodel.sr.SrSidResolver;
 import org.batfish.datamodel.sr.SrSidValue;
 import org.batfish.datamodel.tracking.DecrementPriority;
 import org.batfish.datamodel.tracking.TrackInterface;
@@ -1506,6 +1507,25 @@ public final class CiscoGrammarTest {
     assertThat(bindings, hasSize(2));
     assertThat(bindings.get(0).getSid(), equalTo(SrSidValue.mplsLabel(16001L)));
     assertThat(bindings.get(1).getSid(), equalTo(SrSidValue.mplsIndex(2L)));
+    assertThat(
+        SrSidResolver.resolveMpls(bindings.get(0).getSid(), sr.getSrgb()),
+        equalTo(SrSidValue.mplsLabel(16001L)));
+    assertThat(
+        SrSidResolver.resolveMpls(bindings.get(1).getSid(), sr.getSrgb()),
+        equalTo(SrSidValue.mplsLabel(45002L)));
+    assertThat(sr.getSrlb().contains(15000L), equalTo(true));
+    assertThat(sr.getSrlb().contains(16000L), equalTo(false));
+  }
+
+  @Test
+  public void testIosLegacyIsisSrgbNormalizedModel() throws IOException {
+    Configuration configuration = parseConfig("ios-segment-routing-legacy");
+    SegmentRoutingConfig sr = configuration.getSegmentRoutingConfig();
+    assertThat(sr, notNullValue());
+    SrSidBinding binding = sr.getVrfs().get(Configuration.DEFAULT_VRF_NAME).getSidBindings().get(0);
+    assertThat(
+        SrSidResolver.resolveMpls(binding.getSid(), sr.getSrgb()),
+        equalTo(SrSidValue.mplsLabel(30003L)));
   }
 
   @Test

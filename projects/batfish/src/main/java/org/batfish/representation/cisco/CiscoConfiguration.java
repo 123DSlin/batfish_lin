@@ -180,6 +180,9 @@ import org.batfish.datamodel.routing_policy.statement.Statement;
 import org.batfish.datamodel.routing_policy.statement.Statements;
 import org.batfish.datamodel.sr.SegmentRoutingConfig;
 import org.batfish.datamodel.sr.SegmentRoutingVrfConfig;
+import org.batfish.datamodel.sr.SrGlobalBlock;
+import org.batfish.datamodel.sr.SrLabelRange;
+import org.batfish.datamodel.sr.SrLocalBlock;
 import org.batfish.datamodel.sr.SrPrefix;
 import org.batfish.datamodel.sr.SrSidBinding;
 import org.batfish.datamodel.sr.SrSidBindingKey;
@@ -406,6 +409,16 @@ public final class CiscoConfiguration extends VendorConfiguration {
   private final Map<String, ExtendedIpv6AccessList> _extendedIpv6AccessLists;
 
   private String _hostname;
+
+  private boolean _segmentRoutingMpls;
+
+  @Nullable private Long _segmentRoutingGlobalBlockStart;
+
+  @Nullable private Long _segmentRoutingGlobalBlockEnd;
+
+  @Nullable private Long _segmentRoutingLocalBlockStart;
+
+  @Nullable private Long _segmentRoutingLocalBlockEnd;
 
   private final Map<String, InspectClassMap> _inspectClassMaps;
 
@@ -928,6 +941,20 @@ public final class CiscoConfiguration extends VendorConfiguration {
   public void setHostname(String hostname) {
     checkNotNull(hostname, "'hostname' cannot be null");
     _hostname = hostname.toLowerCase();
+  }
+
+  public void setSegmentRoutingMpls(boolean enabled) {
+    _segmentRoutingMpls = enabled;
+  }
+
+  public void setSegmentRoutingGlobalBlock(long start, long end) {
+    _segmentRoutingGlobalBlockStart = start;
+    _segmentRoutingGlobalBlockEnd = end;
+  }
+
+  public void setSegmentRoutingLocalBlock(long start, long end) {
+    _segmentRoutingLocalBlockStart = start;
+    _segmentRoutingLocalBlockEnd = end;
   }
 
   public void setNtpSourceInterface(String ntpSourceInterface) {
@@ -3313,13 +3340,24 @@ public final class CiscoConfiguration extends VendorConfiguration {
 
   private void convertSegmentRouting(Configuration configuration) {
     ImmutableMap.Builder<String, SegmentRoutingVrfConfig> vrfs = ImmutableMap.builder();
-    boolean enabled = false;
+    boolean enabled = _segmentRoutingMpls;
+    Long srgbStart = _segmentRoutingGlobalBlockStart;
+    Long srgbEnd = _segmentRoutingGlobalBlockEnd;
     for (Entry<String, Vrf> entry : _vrfs.entrySet()) {
       IsisProcess isis = entry.getValue().getIsisProcess();
       if (isis == null || !isis.getSegmentRoutingMpls()) {
         continue;
       }
       enabled = true;
+      if (isis.getSegmentRoutingGlobalBlockStart() != null) {
+        if (srgbStart != null
+            && (!srgbStart.equals(isis.getSegmentRoutingGlobalBlockStart())
+                || !Objects.equals(srgbEnd, isis.getSegmentRoutingGlobalBlockEnd()))) {
+          throw new BatfishException("Conflicting device and ISIS SRGB ranges");
+        }
+        srgbStart = isis.getSegmentRoutingGlobalBlockStart();
+        srgbEnd = isis.getSegmentRoutingGlobalBlockEnd();
+      }
       String vrfName = entry.getKey();
       ImmutableList.Builder<SrSidBinding> bindings = ImmutableList.builder();
       _interfaces.values().stream()
@@ -3353,9 +3391,20 @@ public final class CiscoConfiguration extends VendorConfiguration {
       vrfs.put(vrfName, new SegmentRoutingVrfConfig(vrfName, bindings.build()));
     }
     if (enabled) {
+      SrGlobalBlock srgb =
+          SrGlobalBlock.of(
+              ImmutableList.of(
+                  SrLabelRange.of(firstNonNull(srgbStart, 16000L), firstNonNull(srgbEnd, 23999L))));
+      SrLocalBlock srlb =
+          _segmentRoutingLocalBlockStart == null
+              ? null
+              : SrLocalBlock.of(
+                  ImmutableList.of(
+                      SrLabelRange.of(
+                          _segmentRoutingLocalBlockStart, _segmentRoutingLocalBlockEnd)));
       configuration.setSegmentRoutingConfig(
           new SegmentRoutingConfig(
-              ImmutableSet.of(SegmentRoutingConfig.DataPlane.MPLS), null, null, vrfs.build()));
+              ImmutableSet.of(SegmentRoutingConfig.DataPlane.MPLS), srgb, srlb, vrfs.build()));
     }
   }
 

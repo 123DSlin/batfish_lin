@@ -78,6 +78,7 @@ common_is_stanza
    | redistribute_eigrp_is_stanza_null
    | redistribute_static_is_stanza
    | segment_routing_mpls_is_stanza
+   | segment_routing_global_block_is_stanza
    | passive_interface_default_is_stanza
    | passive_interface_is_stanza
    | summary_address_is_stanza
@@ -86,6 +87,11 @@ common_is_stanza
 segment_routing_mpls_is_stanza
 :
    SEGMENT_ROUTING MPLS NEWLINE
+;
+
+segment_routing_global_block_is_stanza
+:
+   SEGMENT_ROUTING GLOBAL_BLOCK start = dec end = dec NEWLINE
 ;
 
 distribute_list_is_stanza

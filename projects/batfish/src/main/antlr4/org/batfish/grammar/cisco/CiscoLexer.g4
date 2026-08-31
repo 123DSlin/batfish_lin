@@ -2246,6 +2246,8 @@ GLBP: 'glbp';
 
 GLOBAL: 'global';
 
+GLOBAL_BLOCK: 'global-block';
+
 GLOBALENFORCEPRIV: 'globalEnforcePriv';
 
 GLOBAL_MTU: 'global-mtu';
@@ -3054,6 +3056,8 @@ LOAD_INTERVAL: 'load-interval';
 LOAD_SHARING: 'load-sharing';
 
 LOCAL: 'local';
+
+LOCAL_BLOCK: 'local-block';
 
 LOCALITY: 'locality';
 

@@ -1388,3 +1388,20 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   回归测试均通过。
 - 当前边界：本阶段尚未解析显式 SRGB/SRLB，因此 index 保持 unresolved typed value；IPv6
   Prefix-SID、multi-topology/algorithm syntax、adjacency SID 和其他 vendor grammar 后续分别扩展。
+
+## Stage 7.2b Cisco IOS SRGB/SRLB 与 SID resolution（2026-08-31 15:16 CST）
+
+- 依据 Cisco IOS-XE 两代真实配置层级，同时解析全局 `segment-routing mpls` 子模式中的
+  `global-block`/`local-block`，以及旧式 ISIS process 下的 `segment-routing global-block`；两条
+  vendor syntax 路径统一转换为同一个 device-level typed SRGB/SRLB。
+- 未显式配置 SRGB 时使用 Cisco 默认 `16000–23999`；显式 device SRGB 与 legacy per-ISIS SRGB
+  冲突时拒绝 conversion，避免同一设备产生含糊的 Prefix-SID label 解释。Cisco 当前单 range
+  限制只存在于 vendor parser，通用 `SrGlobalBlock` 仍保留 ordered multi-range 能力。
+- 新增 `SrSidResolver`。absolute MPLS label 保持不变，`MPLS_INDEX` 必须结合目标设备 SRGB
+  才解析为 wire label；缺失 SRGB、越界和将 SRv6 当 MPLS 解析均显式拒绝。原 binding identity
+  与原始 index 不被 parser/conversion 改写。
+- 现代 fixture 验证 SRGB `45000–55000` 下 index 2 解析为 label 45002，并验证 SRLB membership；
+  legacy fixture 验证 ISIS SRGB `30000–39999` 下 index 3 解析为 label 30003。两条 parser-driven
+  测试与 resolver 边界测试全部通过。
+- 当前边界：尚未解析 connected-prefix-sid-map、IPv6 Prefix-SID、algorithm、manual adjacency SID
+  和其他 vendor grammar；SRGB 已进入 normalized state，但尚未构造 Minesweeper guarded SID DB。

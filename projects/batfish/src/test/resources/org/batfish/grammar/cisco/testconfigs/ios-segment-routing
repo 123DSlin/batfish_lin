@@ -1,5 +1,9 @@
 hostname ios-segment-routing
 !
+segment-routing mpls
+ global-block 45000 55000
+ local-block 15000 15999
+!
 interface Loopback0
  ip address 1.1.1.1 255.255.255.255
  ip router isis 1

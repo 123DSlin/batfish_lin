@@ -914,7 +914,10 @@ import org.batfish.grammar.cisco.CiscoParser.S_zoneContext;
 import org.batfish.grammar.cisco.CiscoParser.S_zone_pairContext;
 import org.batfish.grammar.cisco.CiscoParser.Sd_switchport_blankContext;
 import org.batfish.grammar.cisco.CiscoParser.Sd_switchport_shutdownContext;
+import org.batfish.grammar.cisco.CiscoParser.Segment_routing_global_block_is_stanzaContext;
 import org.batfish.grammar.cisco.CiscoParser.Segment_routing_mpls_is_stanzaContext;
+import org.batfish.grammar.cisco.CiscoParser.Segment_routing_mpls_stanzaContext;
+import org.batfish.grammar.cisco.CiscoParser.Segment_routing_mpls_tailContext;
 import org.batfish.grammar.cisco.CiscoParser.Send_community_bgp_tailContext;
 import org.batfish.grammar.cisco.CiscoParser.Service_group_protocolContext;
 import org.batfish.grammar.cisco.CiscoParser.Service_specifier_icmpContext;
@@ -8232,6 +8235,28 @@ public class CiscoControlPlaneExtractor extends CiscoParserBaseListener
   @Override
   public void exitSegment_routing_mpls_is_stanza(Segment_routing_mpls_is_stanzaContext ctx) {
     _currentIsisProcess.setSegmentRoutingMpls(!_no);
+  }
+
+  @Override
+  public void exitSegment_routing_global_block_is_stanza(
+      Segment_routing_global_block_is_stanzaContext ctx) {
+    _currentIsisProcess.setSegmentRoutingGlobalBlock(toLong(ctx.start), toLong(ctx.end));
+  }
+
+  @Override
+  public void enterSegment_routing_mpls_stanza(Segment_routing_mpls_stanzaContext ctx) {
+    _configuration.setSegmentRoutingMpls(!_no);
+  }
+
+  @Override
+  public void exitSegment_routing_mpls_tail(Segment_routing_mpls_tailContext ctx) {
+    long start = toLong(ctx.start);
+    long end = toLong(ctx.end);
+    if (ctx.GLOBAL_BLOCK() != null) {
+      _configuration.setSegmentRoutingGlobalBlock(start, end);
+    } else {
+      _configuration.setSegmentRoutingLocalBlock(start, end);
+    }
   }
 
   @Override

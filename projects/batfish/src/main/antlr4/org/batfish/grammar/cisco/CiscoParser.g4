@@ -3465,6 +3465,7 @@ stanza
    | router_bgp_stanza
    | router_hsrp_stanza
    | router_isis_stanza
+   | segment_routing_mpls_stanza
    | router_multicast_stanza
    | rsvp_stanza
    | s_aaa
@@ -3655,6 +3656,17 @@ stanza
    | standard_access_list_stanza
    | standard_ipv6_access_list_stanza
    | switching_mode_stanza
+;
+
+segment_routing_mpls_stanza
+:
+   SEGMENT_ROUTING MPLS NEWLINE segment_routing_mpls_tail*
+;
+
+segment_routing_mpls_tail
+:
+   GLOBAL_BLOCK start = dec end = dec NEWLINE
+   | LOCAL_BLOCK start = dec end = dec NEWLINE
 ;
 
 statistics_null
