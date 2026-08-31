@@ -3466,6 +3466,7 @@ stanza
    | router_hsrp_stanza
    | router_isis_stanza
    | segment_routing_mpls_stanza
+   | segment_routing_traffic_eng_stanza
    | router_multicast_stanza
    | rsvp_stanza
    | s_aaa
@@ -3667,6 +3668,42 @@ segment_routing_mpls_tail
 :
    GLOBAL_BLOCK start = dec end = dec NEWLINE
    | LOCAL_BLOCK start = dec end = dec NEWLINE
+;
+
+segment_routing_traffic_eng_stanza
+:
+   SEGMENT_ROUTING TRAFFIC_ENG NEWLINE
+   (
+      srte_segment_list
+      | srte_policy
+   )*
+;
+
+srte_segment_list
+:
+   SEGMENT_LIST NAME? name = variable NEWLINE srte_segment_list_entry*
+;
+
+srte_segment_list_entry
+:
+   INDEX order = dec MPLS LABEL label = dec NEWLINE
+;
+
+srte_policy
+:
+   POLICY name = variable NEWLINE srte_policy_tail*
+;
+
+srte_policy_tail
+:
+   COLOR color = dec END_POINT IPV4? endpoint = IP_ADDRESS NEWLINE
+   | CANDIDATE_PATHS NEWLINE srte_candidate_path*
+;
+
+srte_candidate_path
+:
+   PREFERENCE preference = dec NEWLINE
+   EXPLICIT SEGMENT_LIST segment_list = variable (WEIGHT weight = dec)? NEWLINE
 ;
 
 statistics_null

@@ -1553,3 +1553,24 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 当前仅完成 parser 可写入的通用配置模型。explicit absolute SID 可以无损保存，但若不能唯一映射
   到 guarded binding，后续 symbolic resolver 必须 fail closed；Stage 7.6b 将增加 Cisco IOS
   policy/segment-list vendor representation、grammar 与 conversion。
+
+## Stage 7.6b Cisco IOS SR-TE parser adapter（2026-08-31 18:20 CST）
+
+- Cisco grammar 新增 `segment-routing traffic-eng`、命名 `segment-list`、ordered explicit MPLS
+  label、policy `(color, IPv4 endpoint)` 和 explicit candidate `(preference, weight, list ref)`；
+  支持 IOS 中 endpoint 带或不带 `ipv4`、segment-list 带或不带 `name` 的两种形式。
+- 新增独立 vendor representation：`CiscoSrSegmentList`、`CiscoSrCandidatePath`、
+  `CiscoSrPolicy`。extractor 先保留 CLI 语义，`CiscoConfiguration` 再集中转换成公共 typed model，
+  没有绕过 Batfish parser，也没有让 Minesweeper 解析配置文本。
+- candidate identity 使用 `explicit:<segment-list-name>`，明确不包含可变 preference/weight；同一
+  policy 内相同 identity 的两个 candidate 会使整个 policy fail closed，避免按 preference 伪造身份。
+- conversion 对空 list、20-bit label/order 越界、缺 color/endpoint、无 candidate、preference/
+  weight/color 越界、undefined list reference 和重复 policy identity 全部告警并拒绝对应 list/policy，
+  不构造半成品。当前全局 IOS SR-TE policy 归入 default VRF，设备未启用 IS-IS SR 时仍能独立保留。
+- parser-driven 测试覆盖两条 segment list、ordered label、candidate preference/weight、typed endpoint，
+  以及 undefined reference 和重复 stable candidate identity 的 fail-closed 行为。输入最初只有
+  `hostname + SR-TE` 时未被 Batfish format detector 识别为 IOS；测试补入标准接口配置后走完整
+  自动识别/解析/转换入口并通过，说明此前失败不是 SR 转换异常。
+- 当前 parser subset 只接受 explicit MPLS label list 和 explicit local candidate。dynamic/PCEP、
+  adjacency syntax、binding SID、SRv6 以及其他 vendor grammar 未被静默解释，将在独立 adapter
+  阶段扩展；下一步 Stage 7.7 是 guarded candidate selection 与增量生命周期。

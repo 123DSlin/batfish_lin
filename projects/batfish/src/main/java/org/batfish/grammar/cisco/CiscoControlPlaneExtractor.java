@@ -948,6 +948,11 @@ import org.batfish.grammar.cisco.CiscoParser.Set_weight_rm_stanzaContext;
 import org.batfish.grammar.cisco.CiscoParser.Shutdown_bgp_tailContext;
 import org.batfish.grammar.cisco.CiscoParser.Sntp_serverContext;
 import org.batfish.grammar.cisco.CiscoParser.Spanning_tree_portfastContext;
+import org.batfish.grammar.cisco.CiscoParser.Srte_candidate_pathContext;
+import org.batfish.grammar.cisco.CiscoParser.Srte_policyContext;
+import org.batfish.grammar.cisco.CiscoParser.Srte_policy_tailContext;
+import org.batfish.grammar.cisco.CiscoParser.Srte_segment_listContext;
+import org.batfish.grammar.cisco.CiscoParser.Srte_segment_list_entryContext;
 import org.batfish.grammar.cisco.CiscoParser.Ss_communityContext;
 import org.batfish.grammar.cisco.CiscoParser.Ss_enable_trapsContext;
 import org.batfish.grammar.cisco.CiscoParser.Ss_file_transferContext;
@@ -1032,6 +1037,9 @@ import org.batfish.representation.cisco.CiscoIosNat;
 import org.batfish.representation.cisco.CiscoIosNat.Direction;
 import org.batfish.representation.cisco.CiscoIosNat.RuleAction;
 import org.batfish.representation.cisco.CiscoIosStaticNat;
+import org.batfish.representation.cisco.CiscoSrCandidatePath;
+import org.batfish.representation.cisco.CiscoSrPolicy;
+import org.batfish.representation.cisco.CiscoSrSegmentList;
 import org.batfish.representation.cisco.CiscoStructureType;
 import org.batfish.representation.cisco.CiscoStructureUsage;
 import org.batfish.representation.cisco.CryptoMapEntry;
@@ -1379,6 +1387,10 @@ public class CiscoControlPlaneExtractor extends CiscoParserBaseListener
   private Interface _currentIsisInterface;
 
   private IsisProcess _currentIsisProcess;
+
+  @Nullable private CiscoSrPolicy _currentSrPolicy;
+
+  @Nullable private CiscoSrSegmentList _currentSrSegmentList;
 
   private Keyring _currentKeyring;
 
@@ -8266,6 +8278,55 @@ public class CiscoControlPlaneExtractor extends CiscoParserBaseListener
     } else {
       _configuration.setSegmentRoutingLocalBlock(start, end);
     }
+  }
+
+  @Override
+  public void enterSrte_segment_list(Srte_segment_listContext ctx) {
+    String name = ctx.name.getText();
+    _currentSrSegmentList =
+        _configuration.getSrSegmentLists().computeIfAbsent(name, CiscoSrSegmentList::new);
+  }
+
+  @Override
+  public void exitSrte_segment_list_entry(Srte_segment_list_entryContext ctx) {
+    long order = toLong(ctx.order);
+    long label = toLong(ctx.label);
+    Long oldLabel = _currentSrSegmentList.getLabels().putIfAbsent(order, label);
+    if (oldLabel != null && oldLabel != label) {
+      warn(ctx, "Ignoring duplicate SR segment-list index");
+    }
+  }
+
+  @Override
+  public void exitSrte_segment_list(Srte_segment_listContext ctx) {
+    _currentSrSegmentList = null;
+  }
+
+  @Override
+  public void enterSrte_policy(Srte_policyContext ctx) {
+    String name = ctx.name.getText();
+    _currentSrPolicy = _configuration.getSrPolicies().computeIfAbsent(name, CiscoSrPolicy::new);
+  }
+
+  @Override
+  public void exitSrte_policy_tail(Srte_policy_tailContext ctx) {
+    if (ctx.COLOR() != null) {
+      _currentSrPolicy.setColor(toLong(ctx.color));
+      _currentSrPolicy.setEndpoint(toIp(ctx.endpoint));
+    }
+  }
+
+  @Override
+  public void exitSrte_candidate_path(Srte_candidate_pathContext ctx) {
+    long weight = ctx.weight == null ? 1L : toLong(ctx.weight);
+    _currentSrPolicy
+        .getCandidates()
+        .add(new CiscoSrCandidatePath(toLong(ctx.preference), weight, ctx.segment_list.getText()));
+  }
+
+  @Override
+  public void exitSrte_policy(Srte_policyContext ctx) {
+    _currentSrPolicy = null;
   }
 
   @Override

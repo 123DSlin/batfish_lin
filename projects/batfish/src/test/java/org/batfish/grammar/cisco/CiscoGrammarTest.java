@@ -374,6 +374,10 @@ import org.batfish.datamodel.routing_policy.statement.If;
 import org.batfish.datamodel.routing_policy.statement.SetEigrpMetric;
 import org.batfish.datamodel.routing_policy.statement.Statements;
 import org.batfish.datamodel.sr.SegmentRoutingConfig;
+import org.batfish.datamodel.sr.SegmentRoutingVrfConfig;
+import org.batfish.datamodel.sr.SrCandidatePath;
+import org.batfish.datamodel.sr.SrPolicy;
+import org.batfish.datamodel.sr.SrSegmentList;
 import org.batfish.datamodel.sr.SrSidBinding;
 import org.batfish.datamodel.sr.SrSidBindingKey;
 import org.batfish.datamodel.sr.SrSidResolver;
@@ -1538,6 +1542,44 @@ public final class CiscoGrammarTest {
         equalTo(SrSidValue.mplsLabel(15004L)));
     assertThat(sr.getSrlb().contains(15000L), equalTo(true));
     assertThat(sr.getSrlb().contains(16000L), equalTo(false));
+  }
+
+  @Test
+  public void testIosSegmentRoutingPolicyNormalizedModel() throws IOException {
+    Configuration configuration = parseConfig("ios-segment-routing-policy");
+    SegmentRoutingVrfConfig srVrf =
+        configuration.getSegmentRoutingConfig().getVrfs().get(Configuration.DEFAULT_VRF_NAME);
+
+    assertThat(srVrf.getSegmentLists(), hasSize(2));
+    SrSegmentList corePath =
+        srVrf.getSegmentLists().stream()
+            .filter(segmentList -> segmentList.getKey().getName().equals("core-path"))
+            .findFirst()
+            .get();
+    assertThat(corePath.getSegments(), hasSize(2));
+    assertThat(corePath.getSegments().get(0).getOrder(), equalTo(10L));
+    assertThat(corePath.getSegments().get(0).getSid(), equalTo(SrSidValue.mplsLabel(16002L)));
+
+    assertThat(srVrf.getPolicies(), hasSize(1));
+    SrPolicy policy = srVrf.getPolicies().get(0);
+    assertThat(policy.getName(), equalTo("to-edge"));
+    assertThat(policy.getKey().getColor(), equalTo(50L));
+    assertThat(policy.getKey().getEndpoint().getIpv4(), equalTo(Ip.parse("10.0.0.4")));
+    assertThat(policy.getCandidates(), hasSize(2));
+    SrCandidatePath primary = policy.getCandidates().get(0);
+    assertThat(primary.getName(), equalTo("explicit:core-path"));
+    assertThat(primary.getPreference(), equalTo(200L));
+    assertThat(primary.getWeight(), equalTo(10L));
+  }
+
+  @Test
+  public void testIosSegmentRoutingPolicyInvalidReferencesFailClosed() throws IOException {
+    Configuration configuration = parseConfig("ios-segment-routing-policy-invalid");
+    SegmentRoutingVrfConfig srVrf =
+        configuration.getSegmentRoutingConfig().getVrfs().get(Configuration.DEFAULT_VRF_NAME);
+
+    assertThat(srVrf.getSegmentLists(), hasSize(1));
+    assertThat(srVrf.getPolicies(), empty());
   }
 
   @Test

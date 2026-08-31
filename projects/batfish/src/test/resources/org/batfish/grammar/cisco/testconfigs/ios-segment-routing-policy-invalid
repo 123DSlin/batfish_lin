@@ -1,0 +1,21 @@
+hostname ios-segment-routing-policy-invalid
+!
+interface Loopback0
+ ip address 10.0.0.1 255.255.255.255
+!
+segment-routing traffic-eng
+ segment-list valid-path
+  index 10 mpls label 16002
+ policy undefined-reference
+  color 50 end-point ipv4 10.0.0.4
+  candidate-paths
+   preference 100
+    explicit segment-list missing-path
+ policy duplicate-candidate-identity
+  color 60 end-point 10.0.0.5
+  candidate-paths
+   preference 200
+    explicit segment-list valid-path
+   preference 100
+    explicit segment-list valid-path
+!

@@ -49,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -180,10 +181,17 @@ import org.batfish.datamodel.routing_policy.statement.Statement;
 import org.batfish.datamodel.routing_policy.statement.Statements;
 import org.batfish.datamodel.sr.SegmentRoutingConfig;
 import org.batfish.datamodel.sr.SegmentRoutingVrfConfig;
+import org.batfish.datamodel.sr.SrCandidatePath;
 import org.batfish.datamodel.sr.SrGlobalBlock;
 import org.batfish.datamodel.sr.SrLabelRange;
 import org.batfish.datamodel.sr.SrLocalBlock;
+import org.batfish.datamodel.sr.SrPolicy;
+import org.batfish.datamodel.sr.SrPolicyEndpoint;
+import org.batfish.datamodel.sr.SrPolicyKey;
 import org.batfish.datamodel.sr.SrPrefix;
+import org.batfish.datamodel.sr.SrSegment;
+import org.batfish.datamodel.sr.SrSegmentList;
+import org.batfish.datamodel.sr.SrSegmentListKey;
 import org.batfish.datamodel.sr.SrSidBinding;
 import org.batfish.datamodel.sr.SrSidBindingKey;
 import org.batfish.datamodel.sr.SrSidValue;
@@ -420,6 +428,10 @@ public final class CiscoConfiguration extends VendorConfiguration {
 
   @Nullable private Long _segmentRoutingLocalBlockEnd;
 
+  private final Map<String, CiscoSrSegmentList> _srSegmentLists;
+
+  private final Map<String, CiscoSrPolicy> _srPolicies;
+
   private final Map<String, InspectClassMap> _inspectClassMaps;
 
   private final Map<String, InspectPolicyMap> _inspectPolicyMaps;
@@ -543,6 +555,8 @@ public final class CiscoConfiguration extends VendorConfiguration {
     _standardAccessLists = new TreeMap<>();
     _standardIpv6AccessLists = new TreeMap<>();
     _standardCommunityLists = new TreeMap<>();
+    _srPolicies = new TreeMap<>();
+    _srSegmentLists = new TreeMap<>();
     _tacacsServers = new TreeSet<>();
     _trackingGroups = new TreeMap<>();
     _vrfs = new TreeMap<>();
@@ -955,6 +969,14 @@ public final class CiscoConfiguration extends VendorConfiguration {
   public void setSegmentRoutingLocalBlock(long start, long end) {
     _segmentRoutingLocalBlockStart = start;
     _segmentRoutingLocalBlockEnd = end;
+  }
+
+  public Map<String, CiscoSrPolicy> getSrPolicies() {
+    return _srPolicies;
+  }
+
+  public Map<String, CiscoSrSegmentList> getSrSegmentLists() {
+    return _srSegmentLists;
   }
 
   public void setNtpSourceInterface(String ntpSourceInterface) {
@@ -3340,9 +3362,12 @@ public final class CiscoConfiguration extends VendorConfiguration {
 
   private void convertSegmentRouting(Configuration configuration) {
     ImmutableMap.Builder<String, SegmentRoutingVrfConfig> vrfs = ImmutableMap.builder();
-    boolean enabled = _segmentRoutingMpls;
+    boolean enabled = _segmentRoutingMpls || !_srSegmentLists.isEmpty() || !_srPolicies.isEmpty();
     Long srgbStart = _segmentRoutingGlobalBlockStart;
     Long srgbEnd = _segmentRoutingGlobalBlockEnd;
+    ImmutableList<SrSegmentList> segmentLists = convertSrSegmentLists();
+    ImmutableList<SrPolicy> policies = convertSrPolicies(segmentLists);
+    boolean defaultVrfAdded = false;
     for (Entry<String, Vrf> entry : _vrfs.entrySet()) {
       IsisProcess isis = entry.getValue().getIsisProcess();
       if (isis == null || !isis.getSegmentRoutingMpls()) {
@@ -3413,7 +3438,21 @@ public final class CiscoConfiguration extends VendorConfiguration {
                                     value,
                                     ImmutableSet.of())));
               });
-      vrfs.put(vrfName, new SegmentRoutingVrfConfig(vrfName, bindings.build()));
+      boolean isDefaultVrf = vrfName.equals(Configuration.DEFAULT_VRF_NAME);
+      vrfs.put(
+          vrfName,
+          new SegmentRoutingVrfConfig(
+              vrfName,
+              bindings.build(),
+              isDefaultVrf ? segmentLists : ImmutableList.of(),
+              isDefaultVrf ? policies : ImmutableList.of()));
+      defaultVrfAdded |= isDefaultVrf;
+    }
+    if (!defaultVrfAdded && (!segmentLists.isEmpty() || !policies.isEmpty())) {
+      vrfs.put(
+          Configuration.DEFAULT_VRF_NAME,
+          new SegmentRoutingVrfConfig(
+              Configuration.DEFAULT_VRF_NAME, ImmutableList.of(), segmentLists, policies));
     }
     if (enabled) {
       SrGlobalBlock srgb =
@@ -3431,6 +3470,130 @@ public final class CiscoConfiguration extends VendorConfiguration {
           new SegmentRoutingConfig(
               ImmutableSet.of(SegmentRoutingConfig.DataPlane.MPLS), srgb, srlb, vrfs.build()));
     }
+  }
+
+  private ImmutableList<SrSegmentList> convertSrSegmentLists() {
+    ImmutableList.Builder<SrSegmentList> converted = ImmutableList.builder();
+    _srSegmentLists
+        .values()
+        .forEach(
+            segmentList -> {
+              if (segmentList.getLabels().isEmpty()) {
+                _w.redFlag("Ignoring empty SR segment list '" + segmentList.getName() + "'");
+                return;
+              }
+              if (segmentList.getLabels().values().stream()
+                  .anyMatch(label -> label > SrSidValue.MAX_MPLS_LABEL)) {
+                _w.redFlag(
+                    "Ignoring SR segment list '"
+                        + segmentList.getName()
+                        + "' containing a label outside the 20-bit MPLS range");
+                return;
+              }
+              if (segmentList.getLabels().keySet().stream()
+                  .anyMatch(order -> order > SrSegment.MAX_ORDER)) {
+                _w.redFlag(
+                    "Ignoring SR segment list '"
+                        + segmentList.getName()
+                        + "' containing an index outside the unsigned-integer range");
+                return;
+              }
+              ImmutableList<SrSegment> segments =
+                  segmentList.getLabels().entrySet().stream()
+                      .map(
+                          entry ->
+                              new SrSegment(
+                                  entry.getKey(), null, SrSidValue.mplsLabel(entry.getValue())))
+                      .collect(ImmutableList.toImmutableList());
+              converted.add(
+                  new SrSegmentList(
+                      new SrSegmentListKey(
+                          _hostname, Configuration.DEFAULT_VRF_NAME, segmentList.getName()),
+                      segments));
+            });
+    return converted.build();
+  }
+
+  private ImmutableList<SrPolicy> convertSrPolicies(List<SrSegmentList> segmentLists) {
+    Set<String> definedSegmentLists =
+        segmentLists.stream()
+            .map(segmentList -> segmentList.getKey().getName())
+            .collect(Collectors.toSet());
+    Set<SrPolicyKey> policyKeys = new HashSet<>();
+    ImmutableList.Builder<SrPolicy> converted = ImmutableList.builder();
+    _srPolicies
+        .values()
+        .forEach(
+            policy -> {
+              if (policy.getColor() == null || policy.getEndpoint() == null) {
+                _w.redFlag("Ignoring incomplete SR policy '" + policy.getName() + "'");
+                return;
+              }
+              if (policy.getColor() > SrCandidatePath.MAX_UNSIGNED_INT) {
+                _w.redFlag("Ignoring SR policy '" + policy.getName() + "' with invalid color");
+                return;
+              }
+              Set<String> candidateIdentities = new HashSet<>();
+              ImmutableList.Builder<SrCandidatePath> candidates = ImmutableList.builder();
+              boolean invalid = false;
+              for (CiscoSrCandidatePath candidate : policy.getCandidates()) {
+                if (candidate.getPreference() > SrCandidatePath.MAX_UNSIGNED_INT
+                    || candidate.getWeight() == 0L
+                    || candidate.getWeight() > SrCandidatePath.MAX_UNSIGNED_INT) {
+                  _w.redFlag(
+                      "Ignoring SR policy '"
+                          + policy.getName()
+                          + "' with invalid candidate preference or weight");
+                  invalid = true;
+                  break;
+                }
+                String identity = candidate.stableIdentity();
+                if (!candidateIdentities.add(identity)) {
+                  _w.redFlag(
+                      "Ignoring SR policy '"
+                          + policy.getName()
+                          + "' with duplicate stable candidate identity '"
+                          + identity
+                          + "'");
+                  invalid = true;
+                  break;
+                }
+                if (!definedSegmentLists.contains(candidate.getSegmentList())) {
+                  _w.redFlag(
+                      "Ignoring SR policy '"
+                          + policy.getName()
+                          + "' referencing undefined segment list '"
+                          + candidate.getSegmentList()
+                          + "'");
+                  invalid = true;
+                  break;
+                }
+                candidates.add(
+                    new SrCandidatePath(
+                        identity,
+                        candidate.getPreference(),
+                        candidate.getWeight(),
+                        candidate.getSegmentList()));
+              }
+              if (invalid || policy.getCandidates().isEmpty()) {
+                if (!invalid) {
+                  _w.redFlag("Ignoring SR policy '" + policy.getName() + "' without candidates");
+                }
+                return;
+              }
+              SrPolicyKey key =
+                  new SrPolicyKey(
+                      _hostname,
+                      Configuration.DEFAULT_VRF_NAME,
+                      policy.getColor(),
+                      SrPolicyEndpoint.ipv4(policy.getEndpoint()));
+              if (!policyKeys.add(key)) {
+                _w.redFlag("Ignoring duplicate SR policy identity for '" + policy.getName() + "'");
+                return;
+              }
+              converted.add(new SrPolicy(key, policy.getName(), candidates.build()));
+            });
+    return converted.build();
   }
 
   private void createInspectClassMapAcls(Configuration c) {

@@ -1,0 +1,21 @@
+hostname ios-segment-routing-policy
+!
+interface Loopback0
+ ip address 10.0.0.1 255.255.255.255
+!
+segment-routing mpls
+!
+segment-routing traffic-eng
+ segment-list name core-path
+  index 10 mpls label 16002
+  index 20 mpls label 16003
+ segment-list backup-path
+  index 10 mpls label 17002
+ policy to-edge
+  color 50 end-point 10.0.0.4
+  candidate-paths
+   preference 200
+    explicit segment-list core-path weight 10
+   preference 100
+    explicit segment-list backup-path
+!

@@ -825,6 +825,8 @@ BSR_BORDER: 'bsr-border';
 
 BSR_CANDIDATE: 'bsr-candidate';
 
+CANDIDATE_PATHS: 'candidate-paths';
+
 BUCKETS: 'buckets';
 
 BUFFER_LENGTH: 'buffer-length';
@@ -1021,6 +1023,8 @@ CODEC: 'codec';
 COLLECT: 'collect';
 
 COLLECT_STATS: 'collect-stats';
+
+COLOR: 'color';
 
 COMM_LIST: 'comm-list';
 
@@ -1806,6 +1810,8 @@ END_POLICY: 'end-policy';
 
 END_POLICY_MAP: 'end-policy-map';
 
+END_POINT: 'end-point';
+
 END_SET: 'end-set';
 
 ENET_LINK_PROFILE: 'enet-link-profile';
@@ -1979,6 +1985,8 @@ EXIT_SF_TOPOLOGY: 'exit-sf-topology';
 EXIT_VRF: 'exit-vrf';
 
 EXPECT: 'expect';
+
+EXPLICIT: 'explicit';
 
 EXPLICIT_NULL: 'explicit-null';
 
@@ -4342,6 +4350,8 @@ PREFIX_PRIORITY: 'prefix-priority';
 PREFIX_SET: 'prefix-set';
 
 SEGMENT_ROUTING: 'segment-routing';
+
+SEGMENT_LIST: 'segment-list';
 
 PREPEND: 'prepend';
 
