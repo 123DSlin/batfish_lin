@@ -39,6 +39,7 @@ import org.batfish.datamodel.sr.SrSidBindingKey;
 import org.batfish.datamodel.sr.SrSidValue;
 import org.batfish.dataplane.rib.Rib;
 import org.batfish.minesweeper.symbolicsr.GuardedSidEntry;
+import org.batfish.minesweeper.symbolicsr.GuardedSidUpdate;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -207,6 +208,72 @@ public final class BatfishIsisAlgorithm2Test {
     }
     assertThat(
         r4Sids.get(0).getAvailabilityGuard().isEquivalentTo(expectedSidGuard), equalTo(true));
+
+    result
+        .getIsisL1RibNetwork()
+        .getEngine()
+        .withdraw(
+            ImmutableList.of(
+                new SymbolicRouteContributionId(
+                    "isis-l1-origin:r1:default:Loopback0:1.1.1.1/32", "r1", "r1")));
+    assertThat(result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME), hasSize(0));
+    assertThat(result.getGuardedSidReconciler().getLastDelta().getUpdates(), hasSize(5));
+    assertThat(
+        result.getGuardedSidReconciler().getLastDelta().getUpdates().stream()
+            .allMatch(update -> update.getType() == GuardedSidUpdate.Type.REMOVED),
+        equalTo(true));
+
+    SymbolicRouteMessage<AnnotatedRoute<IsisRoute>> origin =
+        isis.getSeeds().stream()
+            .filter(seed -> seed.getMessageId().contains("Loopback0:1.1.1.1/32"))
+            .findFirst()
+            .get()
+            .toMessage();
+    result
+        .getIsisL1RibNetwork()
+        .getEngine()
+        .converge(ImmutableList.of(withGuard(origin, GUARDS.variable("sid_restore"))));
+    assertThat(result.getGuardedSidDatabase().getEntries("r4", DEFAULT_VRF_NAME), hasSize(1));
+    assertThat(
+        result.getGuardedSidReconciler().getLastDelta().getUpdates().stream()
+            .allMatch(update -> update.getType() == GuardedSidUpdate.Type.ADDED),
+        equalTo(true));
+
+    result
+        .getIsisL1RibNetwork()
+        .getEngine()
+        .converge(ImmutableList.of(withGuard(origin, GUARDS.variable("sid_updated"))));
+    assertThat(
+        result.getGuardedSidReconciler().getLastDelta().getUpdates().stream()
+            .allMatch(update -> update.getType() == GuardedSidUpdate.Type.GUARD_CHANGED),
+        equalTo(true));
+
+    attachPrefixSid(configurations.get("r1"), 8L);
+    result.getGuardedSidReconciler().reconcile();
+    assertThat(
+        result.getGuardedSidReconciler().getLastDelta().getUpdates().stream()
+            .allMatch(update -> update.getType() == GuardedSidUpdate.Type.REPLACED),
+        equalTo(true));
+    assertThat(
+        result
+            .getGuardedSidDatabase()
+            .getEntries("r4", DEFAULT_VRF_NAME)
+            .get(0)
+            .getBinding()
+            .getSid(),
+        equalTo(SrSidValue.mplsIndex(8L)));
+  }
+
+  private static SymbolicRouteMessage<AnnotatedRoute<IsisRoute>> withGuard(
+      SymbolicRouteMessage<AnnotatedRoute<IsisRoute>> message, RouteGuard guard) {
+    return new SymbolicRouteMessage<>(
+        message.getMessageId(),
+        message.getSender(),
+        message.getReceiver(),
+        message.getStage(),
+        message.getRoute(),
+        guard,
+        message.getProvenance());
   }
 
   private static GuardedRibEntry<AnnotatedRoute<IsisRoute>> routeWithMetric(
@@ -236,7 +303,7 @@ public final class BatfishIsisAlgorithm2Test {
       configurations.put(hostname, configuration);
     }
     addInterface(nf, configurations.get("r1"), "Loopback0", "1.1.1.1/32", 0L, true);
-    attachPrefixSid(configurations.get("r1"));
+    attachPrefixSid(configurations.get("r1"), 7L);
     addLink(
         nf,
         configurations,
@@ -317,7 +384,7 @@ public final class BatfishIsisAlgorithm2Test {
     return ImmutableMap.copyOf(configurations);
   }
 
-  private static void attachPrefixSid(Configuration owner) {
+  private static void attachPrefixSid(Configuration owner, long index) {
     SrSidBinding binding =
         new SrSidBinding(
             new SrSidBindingKey(
@@ -328,7 +395,7 @@ public final class BatfishIsisAlgorithm2Test {
                 SrPrefix.ipv4(ORIGIN_PREFIX),
                 null,
                 null),
-            SrSidValue.mplsIndex(7L),
+            SrSidValue.mplsIndex(index),
             com.google.common.collect.ImmutableSet.of());
     owner.setSegmentRoutingConfig(
         new SegmentRoutingConfig(

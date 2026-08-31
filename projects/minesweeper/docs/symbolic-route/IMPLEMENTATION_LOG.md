@@ -1423,3 +1423,20 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 完整 Minesweeper 测试禁用缓存后通过。当前数据库是本次 fixed snapshot 的正确结果；pipeline
   返回后若直接调用 IS-IS engine 做增量 withdrawal/replace，SID snapshot 尚不会自动 reconcile。
   Stage 7.3b 将增加 underlay stable-state listener 与 typed SID delta lifecycle。
+
+## Stage 7.3b guarded SID incremental lifecycle（2026-08-31 15:45 CST）
+
+- 新增 `GuardedSidReconciler` 并同时注册到 IS-IS L1/L2 engine stable-state boundary。pipeline
+  result 的 `getGuardedSidDatabase()` 始终返回 reconciler 当前 snapshot，并额外暴露 reconciler
+  供审计最近一次有语义变化的 delta。
+- 新增 typed `GuardedSidDelta`/`GuardedSidUpdate`：新 identity 为 `ADDED`，消失为 `REMOVED`，
+  同 identity 且仅 guard 逻辑变化为 `GUARD_CHANGED`，SID value/flags payload 改变为 `REPLACED`。
+  guard 比较使用 `RouteGuard.isEquivalentTo`，不是对象或公式字符串相等。
+- nested L1→L2 stable callbacks 可能产生随后到达的 no-op reconciliation；reconciler 仍返回本次
+  empty delta，但 `getLastDelta()` 保留最近一次非空语义 delta，避免 recursive callback 覆盖真正
+  的 removal/update 审计记录。
+- Algorithm 2 pipeline 动态验收覆盖完整序列：撤回 R1 loopback origin 后五台设备的 dependent
+  SID 全部 `REMOVED`；以同 contribution identity 恢复产生 `ADDED`；仅修改 origin guard 产生
+  `GUARD_CHANGED`；固定 binding key 下把 SID index 7 改为 8 产生 `REPLACED`。
+- 完整 Minesweeper 测试禁用缓存后通过。当前 reconciler 维护 Prefix/Node SID；Adjacency-SID
+  parser、canonical link dependency 与 policy/segment-list 后代仍属于后续阶段。

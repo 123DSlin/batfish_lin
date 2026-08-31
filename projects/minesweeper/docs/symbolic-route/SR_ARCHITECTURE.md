@@ -94,6 +94,11 @@ The SID database maintains typed contribution and dependency identities. Route t
 list position, or generated report strings are never identities. Withdrawal of an underlay prefix
 or adjacency recursively removes dependent SID and policy contributions.
 
+The initial SID lifecycle is synchronized at the underlay engines' stable-state boundary. A
+reconciliation compares stable keys and emits `ADDED`, `REMOVED`, `GUARD_CHANGED`, or `REPLACED`:
+guard-only changes retain identity, while a changed SID/flags payload under the same binding key is
+a replacement. No-op stable callbacks do not manufacture deltas.
+
 ## Minimal implementation sequence
 
 1. Add immutable, JSON-serializable Batfish SR value objects and attach the optional root config to

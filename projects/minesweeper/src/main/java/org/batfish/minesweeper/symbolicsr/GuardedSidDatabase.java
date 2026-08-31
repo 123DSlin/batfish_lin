@@ -3,6 +3,7 @@ package org.batfish.minesweeper.symbolicsr;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -86,5 +87,11 @@ public final class GuardedSidDatabase {
     return _entries.stream()
         .filter(entry -> entry.getResolverNode().equals(node) && entry.getResolverVrf().equals(vrf))
         .collect(ImmutableList.toImmutableList());
+  }
+
+  ImmutableMap<GuardedSidKey, GuardedSidEntry> asMap() {
+    ImmutableMap.Builder<GuardedSidKey, GuardedSidEntry> entries = ImmutableMap.builder();
+    _entries.forEach(entry -> entries.put(entry.getKey(), entry));
+    return entries.build();
   }
 }
