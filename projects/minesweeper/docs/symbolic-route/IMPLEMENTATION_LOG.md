@@ -1650,3 +1650,23 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   同样改为需求驱动的独立扩展。
 - 普通 typed Prefix/Node/Adjacency SID binding 的内部解析语义已经实现。递归 Binding-SID 尚未支持，
   继续明确 fail closed，不能把“不支持”静默解释为部分成功。
+
+## Stage 8.0 concrete 1-failure SR-TE demo 输入（2026-09-01 12:14 CST）
+
+- 新增五节点 `X/A/S/B/D` parser-driven 配置快照。X 的 20-Gbps IP flow 正常经 cost 10 的 X-D，
+  X-D 故障后经 cost 20 的 X-A-D；S 的 SR policy 使用同 preference 的 upper/lower candidates，初始
+  weight 为 50/50。
+- SR 路径使用已支持的 explicit MPLS-label segment-list，并由本地 Adj-SID 精确绑定 S-A-D 与 S-B-D，
+  避免 Node-SID 在故障后由 IGP 绕行而改变预期 candidate failure 语义。
+- 流量、canonical undirected links、每链路 95-Gbps 容量、0/1-link failure model 和逻辑整数变量
+  `h` 独立保存在 `tools/sr_te_failure_demo/traffic.json`；配置快照目录不包含脚本或生成结果。
+- 预期解释性结果锁定为：仅 `d_x` 故障使 X flow 转移到 A-D，产生
+  `load(A-D) = 20 + 0.8h < 95`，因此在整数百分比定义域内新增 TE 子规约 `h <= 93`。
+- parser-driven 验收从五份 IOS 配置运行到 concrete dataplane、IS-IS topology 和现有 symbolic-route/
+  SR pipeline，检查两个 50-weight candidates，并分别断言 upper guard 为 `a_s AND a_d`、lower guard
+  为 `b_s AND b_d`。本阶段尚未实现 traffic execution 或 per-scenario subspec runner。
+- 2026-09-01 12:22 CST 验证：初次验收发现同一 `preference` stanza 下只能配置一条 explicit
+  candidate；改为两个同值 `preference 100` stanza 后，parser 保留两个不同 stable candidate identity。
+  `ToleranceSrTeDemoConfigTest` 禁用缓存运行通过，证明配置不是仅通过文本/JSON 格式检查。
+- 2026-09-01 12:23 CST 补充断言并再次通过：无故障 concrete MAIN RIB 中 X 到 D loopback 的唯一
+  longest-prefix-match next hop 是 X-D 对端 `10.0.15.2`，锁定 20-Gbps IP flow 的初始主路径。

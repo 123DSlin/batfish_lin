@@ -34,3 +34,8 @@ filegroup(
     name = "sr-symbolic-route",
     srcs = glob(["sr-symbolic-route/configs/**"]),
 )
+
+filegroup(
+    name = "tolerance-sr-te-demo",
+    srcs = glob(["tolerance_sr_te_demo/configs/**"]),
+)

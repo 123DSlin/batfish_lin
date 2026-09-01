@@ -53,6 +53,7 @@ junit_tests(
     ]),
     data = [
         "//networks:sr-symbolic-route",
+        "//networks:tolerance-sr-te-demo",
         "//networks:tolerance-symbolic-route",
     ],
     tags = ["z3"],
