@@ -1711,3 +1711,24 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 2026-09-01 13:44 CST 完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过；实际
   `SmtReachabilityTest.testReachability` 通过，最新 `smt_output_0039/0_symbolic_routes.txt` 已显示
   `NextHop`、`NextHopIP`、`NextHopInterface` 三列。
+
+## Stage 8.3 Batfish 接口路由对齐与 MAIN 展示边界（2026-09-01 17:34 CST）
+
+- 新增 `BatfishInterfaceRouteInitializer`，按 Batfish `VirtualRouter` 的接口初始化语义从 parsed
+  configuration 生成 symbolic CONNECTED/LOCAL seeds：只处理 active interface；CONNECTED 默认
+  生成；LOCAL 默认只为小于 `/32` 的接口地址生成 `/32`；完整遵守每地址 metadata 中的
+  `generateConnectedRoute`、`generateLocalRoute`、admin 和 tag。
+- CONNECTED message identity 保持既有 `connected:node:interface:address` 格式，避免无意义的身份
+  迁移；LOCAL 使用独立 `local:` 前缀。二者引用同一 parser-derived canonical interface
+  `LinkFailureKey`/guard，未匹配物理链路的接口仍按 Batfish 本地初始化语义使用 `true` guard。
+- `SymbolicRibRecord` 增加 route metric、administrative cost 和 selection satisfiability。JSON 保留
+  完整 candidate audit；人类可读 MAIN 表只展示 selection guard 可满足的 guarded forwarding
+  selections，协议明细表仍保留未选候选，因而本机 CONNECTED 已胜出的 ISIS origin 不再冒充 MAIN
+  forwarding route。
+- 可读表加入 `Metric`/`AD`。原 `Path` 列改名为 `AdvertisementPath`：当前值是控制平面传播来源，
+  不能在多 contribution 尚未分支保存前误称为 forwarding path。真正的 guarded physical
+  forwarding branches 是下一阶段修正项。
+- 新增组件测试覆盖 inactive interface、`/32` 默认行为、metadata 显式启用/抑制及 admin/tag；
+  parser-driven SR-TE demo 断言 12 条 LOCAL seeds；四路由器验收断言 R4 的 3 条 LOCAL records。
+- 2026-09-01 17:34 CST 验证：完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过，共
+  276 个测试；输出中的 Java 8 source/target 信息仍只是既有编译器警告。

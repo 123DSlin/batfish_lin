@@ -1,6 +1,7 @@
 package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
+
 import com.google.common.graph.EndpointPair;
 import com.google.common.graph.ValueGraph;
 import java.util.ArrayList;
@@ -14,9 +15,7 @@ import org.batfish.datamodel.BgpPeerConfig;
 import org.batfish.datamodel.BgpPeerConfigId;
 import org.batfish.datamodel.BgpProcess;
 import org.batfish.datamodel.BgpSessionProperties;
-import org.batfish.datamodel.ConcreteInterfaceAddress;
 import org.batfish.datamodel.Configuration;
-import org.batfish.datamodel.ConnectedRoute;
 import org.batfish.datamodel.GenericRibReadOnly;
 import org.batfish.datamodel.Interface;
 import org.batfish.datamodel.Ip;
@@ -116,36 +115,13 @@ public final class BatfishParsedSnapshotPipelineInputBuilder {
     List<SymbolicRouteSeed<AnnotatedRoute<AbstractRoute>>> mainSeeds = new ArrayList<>();
     List<SymbolicStaticRoute> recursiveStaticRoutes = new ArrayList<>();
     for (Configuration configuration : configurations.values()) {
-      for (Interface iface : configuration.getAllInterfaces().values()) {
-        LinkFailureKey linkFailureKey =
-            topologyGuards.getKey(configuration.getHostname(), iface.getName());
-        RouteGuard inferredGuard =
-            topologyGuards.getGuard(configuration.getHostname(), iface.getName());
-        RouteGuard guard = inferredGuard == null ? guardFactory.trueGuard() : inferredGuard;
-        for (ConcreteInterfaceAddress address : iface.getAllConcreteAddresses()) {
-          AnnotatedRoute<AbstractRoute> route =
-              new AnnotatedRoute<>(
-                  new ConnectedRoute(address.getPrefix(), iface.getName()), iface.getVrfName());
-          mainSeeds.add(
-              new SymbolicRouteSeed<>(
-                  "connected:"
-                      + configuration.getHostname()
-                      + ":"
-                      + iface.getName()
-                      + ":"
-                      + address,
-                  configuration.getHostname(),
-                  route,
-                  guard,
-                  linkFailureKey));
-        }
-      }
+      mainSeeds.addAll(
+          BatfishInterfaceRouteInitializer.build(configuration, topologyGuards, guardFactory));
       for (Map.Entry<String, Vrf> vrfEntry : configuration.getVrfs().entrySet()) {
         String vrfName = vrfEntry.getKey();
         int staticIndex = 0;
         for (StaticRoute staticRoute : vrfEntry.getValue().getStaticRoutes()) {
-          AnnotatedRoute<StaticRoute> annotatedRoute =
-              new AnnotatedRoute<>(staticRoute, vrfName);
+          AnnotatedRoute<StaticRoute> annotatedRoute = new AnnotatedRoute<>(staticRoute, vrfName);
           String messageId =
               "configured:"
                   + configuration.getHostname()

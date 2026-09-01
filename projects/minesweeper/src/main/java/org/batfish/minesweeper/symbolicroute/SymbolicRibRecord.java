@@ -29,9 +29,12 @@ public final class SymbolicRibRecord {
   @Nonnull private final String _nextHop;
   @Nonnull private final String _nextHopIp;
   @Nonnull private final String _nextHopInterface;
+  private final long _metric;
+  private final int _administrativeCost;
   @Nonnull private final String _route;
   @Nonnull private final String _availabilityGuard;
   @Nonnull private final String _selectionGuard;
+  private final boolean _selectionSatisfiable;
   @Nonnull private final ImmutableList<String> _contributionIds;
   @Nonnull private final ImmutableList<String> _routerPath;
 
@@ -44,9 +47,12 @@ public final class SymbolicRibRecord {
       String nextHop,
       String nextHopIp,
       String nextHopInterface,
+      long metric,
+      int administrativeCost,
       String route,
       String availabilityGuard,
       String selectionGuard,
+      boolean selectionSatisfiable,
       Iterable<String> contributionIds,
       Iterable<String> routerPath) {
     _plane = requireNonNull(plane, "plane must be provided");
@@ -57,9 +63,12 @@ public final class SymbolicRibRecord {
     _nextHop = requireNonNull(nextHop, "nextHop must be provided");
     _nextHopIp = requireNonNull(nextHopIp, "nextHopIp must be provided");
     _nextHopInterface = requireNonNull(nextHopInterface, "nextHopInterface must be provided");
+    _metric = metric;
+    _administrativeCost = administrativeCost;
     _route = requireNonNull(route, "route must be provided");
     _availabilityGuard = requireNonNull(availabilityGuard, "availabilityGuard must be provided");
     _selectionGuard = requireNonNull(selectionGuard, "selectionGuard must be provided");
+    _selectionSatisfiable = selectionSatisfiable;
     _contributionIds = ImmutableList.copyOf(contributionIds);
     _routerPath = ImmutableList.copyOf(routerPath);
   }
@@ -95,9 +104,12 @@ public final class SymbolicRibRecord {
         nextHop.toString(),
         nextHopIp(nextHop),
         nextHopInterface(nextHop),
+        symbolic.getRoute().getAbstractRoute().getMetric(),
+        symbolic.getRoute().getAbstractRoute().getAdministrativeCost(),
         symbolic.getRoute().toString(),
         guardText(symbolic.getAvailabilityGuard(), simplifyGuards),
         guardText(entry.getSelectionGuard(), simplifyGuards),
+        entry.getSelectionGuard().isSatisfiable(),
         contributions,
         symbolic.getProvenance().getRouterPath());
   }
@@ -170,6 +182,14 @@ public final class SymbolicRibRecord {
     return _nextHopInterface;
   }
 
+  public long getMetric() {
+    return _metric;
+  }
+
+  public int getAdministrativeCost() {
+    return _administrativeCost;
+  }
+
   @Nonnull
   public String getRoute() {
     return _route;
@@ -183,6 +203,10 @@ public final class SymbolicRibRecord {
   @Nonnull
   public String getSelectionGuard() {
     return _selectionGuard;
+  }
+
+  public boolean getSelectionSatisfiable() {
+    return _selectionSatisfiable;
   }
 
   @Nonnull

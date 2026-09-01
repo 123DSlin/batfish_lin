@@ -79,11 +79,7 @@ public final class ToleranceFourRouterParsedPipelineTest {
     assertThat(
         parsedRule.getPolicyName(),
         equalTo(
-            configurations
-                .get("r1")
-                .getDefaultVrf()
-                .getBgpProcess()
-                .getRedistributionPolicy()));
+            configurations.get("r1").getDefaultVrf().getBgpProcess().getRedistributionPolicy()));
     assertCanonicalIdentity(batfish, input, "r1", "Ethernet12", "r2", "Ethernet21");
     assertCanonicalIdentity(batfish, input, "r1", "Ethernet13", "r3", "Ethernet31");
     assertCanonicalIdentity(batfish, input, "r1", "Ethernet14", "r4", "Ethernet41");
@@ -110,14 +106,11 @@ public final class ToleranceFourRouterParsedPipelineTest {
             .and(GUARDS.variable("r1_r4").not()));
     List<GuardedRibEntry<AnnotatedRoute<AbstractRoute>>> r4MainRoutes =
         result.getMainRibNetwork().getRib("r4").getEntries();
-    assertMainBgpGuard(
-        r4MainRoutes, 200L, GUARDS.variable("r1_r2").and(GUARDS.variable("r2_r4")));
+    assertMainBgpGuard(r4MainRoutes, 200L, GUARDS.variable("r1_r2").and(GUARDS.variable("r2_r4")));
     assertMainBgpGuard(
         r4MainRoutes,
         100L,
-        GUARDS
-            .variable("r1_r4")
-            .and(GUARDS.variable("r1_r2").and(GUARDS.variable("r2_r4")).not()));
+        GUARDS.variable("r1_r4").and(GUARDS.variable("r1_r2").and(GUARDS.variable("r2_r4")).not()));
     assertMainBgpGuard(
         r4MainRoutes,
         50L,
@@ -131,7 +124,12 @@ public final class ToleranceFourRouterParsedPipelineTest {
             .filter(route -> route.getPlane() == SymbolicRibRecord.Plane.BGP)
             .count(),
         equalTo(10L));
-    assertThat(result.getRoutes("r4", DEFAULT_VRF_NAME), hasSize(9));
+    assertThat(result.getRoutes("r4", DEFAULT_VRF_NAME), hasSize(12));
+    assertThat(
+        result.getRoutes("r4", DEFAULT_VRF_NAME).stream()
+            .filter(route -> route.getProtocol().equals("LOCAL"))
+            .count(),
+        equalTo(3L));
     assertThat(
         result.getAllRoutes().stream()
             .filter(
@@ -156,9 +154,11 @@ public final class ToleranceFourRouterParsedPipelineTest {
     assertThat(result.toJson().contains("\"r4\""), equalTo(true));
     String readableText = result.toReadableText();
     String rawReadableText = result.toRawReadableText();
-    assertThat(readableText.contains("MAIN RIB (cross-protocol forwarding candidates)"), equalTo(true));
+    assertThat(readableText.contains("MAIN RIB (guarded forwarding selections)"), equalTo(true));
     assertThat(readableText.contains("BGP LOC-RIB (protocol detail)"), equalTo(true));
-    assertThat(readableText.matches("(?s).*Protocol\\s+NextHop\\s+NextHopIP.*"), equalTo(true));
+    assertThat(
+        readableText.matches("(?s).*Protocol\\s+Metric\\s+AD\\s+NextHop\\s+NextHopIP.*"),
+        equalTo(true));
     assertThat(readableText.contains("Network            RIB"), equalTo(false));
     assertThat(readableText.contains("(let"), equalTo(false));
     assertThat(rawReadableText.contains("(let"), equalTo(true));

@@ -340,14 +340,14 @@ public final class BatfishSymbolicRoutePipelineResult {
   private String toReadableText(boolean simplifyGuards) {
     StringBuilder output = new StringBuilder("SYMBOLIC ROUTING INFORMATION BASE\n");
     output.append("Guards describe route availability and final selection conditions.\n");
-    output.append("\nMAIN RIB (cross-protocol forwarding candidates)\n");
-    appendReadableTable(output, SymbolicRibRecord.Plane.MAIN, simplifyGuards);
+    output.append("\nMAIN RIB (guarded forwarding selections)\n");
+    appendReadableTable(output, SymbolicRibRecord.Plane.MAIN, simplifyGuards, true);
     output.append("\nBGP LOC-RIB (protocol detail)\n");
-    appendReadableTable(output, SymbolicRibRecord.Plane.BGP, simplifyGuards);
+    appendReadableTable(output, SymbolicRibRecord.Plane.BGP, simplifyGuards, false);
     output.append("\nIS-IS LEVEL-1 RIB (protocol detail)\n");
-    appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L1, simplifyGuards);
+    appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L1, simplifyGuards, false);
     output.append("\nIS-IS LEVEL-2 RIB (protocol detail)\n");
-    appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L2, simplifyGuards);
+    appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L2, simplifyGuards, false);
     output.append("\nSR POLICY CANDIDATES AND FORWARDING BRANCHES\n");
     appendSrPolicyTable(output, simplifyGuards);
     return output.toString();
@@ -395,33 +395,43 @@ public final class BatfishSymbolicRoutePipelineResult {
   }
 
   private void appendReadableTable(
-      StringBuilder output, SymbolicRibRecord.Plane plane, boolean simplifyGuards) {
+      StringBuilder output,
+      SymbolicRibRecord.Plane plane,
+      boolean simplifyGuards,
+      boolean omitNeverSelected) {
     output.append(
         String.format(
-            "%-8s %-9s %-18s %-10s %-34s %-16s %-18s %-28s %-55s %s%n",
+            "%-8s %-9s %-18s %-10s %-8s %-5s %-34s %-16s %-18s %-28s %-55s %s%n",
             "Node",
             "VRF",
             "Network",
             "Protocol",
+            "Metric",
+            "AD",
             "NextHop",
             "NextHopIP",
             "NextHopInterface",
             "AvailabilityGuard",
             "SelectionGuard",
-            "Path"));
+            "AdvertisementPath"));
     output.append(
         "========================================================================================================================================================================\n");
     for (SymbolicRibRecord route : getAllRoutes(simplifyGuards)) {
       if (route.getPlane() != plane) {
         continue;
       }
+      if (omitNeverSelected && !route.getSelectionSatisfiable()) {
+        continue;
+      }
       output.append(
           String.format(
-              "%-8s %-9s %-18s %-10s %-34s %-16s %-18s %-28s %-55s %s%n",
+              "%-8s %-9s %-18s %-10s %-8d %-5d %-34s %-16s %-18s %-28s %-55s %s%n",
               route.getRouter(),
               route.getVrf(),
               route.getPrefix(),
               route.getProtocol(),
+              route.getMetric(),
+              route.getAdministrativeCost(),
               route.getNextHop(),
               route.getNextHopIp(),
               route.getNextHopInterface(),

@@ -91,6 +91,11 @@ public final class ToleranceSrTeDemoConfigTest {
             isisTopology,
             GUARDS);
     assertThat(input.getRedistributionRules(), hasSize(0));
+    assertThat(
+        input.getMainSeeds().stream()
+            .filter(seed -> seed.getMessageId().startsWith("local:"))
+            .count(),
+        equalTo(12L));
 
     GuardedSrPolicyDatabase database =
         BatfishSymbolicRoutePipeline.run(input).getGuardedSrPolicyDatabase();
