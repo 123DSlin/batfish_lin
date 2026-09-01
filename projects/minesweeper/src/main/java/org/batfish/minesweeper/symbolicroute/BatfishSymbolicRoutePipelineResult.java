@@ -387,9 +387,11 @@ public final class BatfishSymbolicRoutePipelineResult {
   }
 
   private void appendSrPolicyTable(StringBuilder output, boolean simplifyGuards) {
+    String commonFormat =
+        "%-18s %-8s %-9s %-8s %-16s %-20s %-18s %-8s %-8s %-18s %-20s %-18s";
     output.append(
         String.format(
-            "%-18s %-8s %-9s %-8s %-16s %-20s %-18s %-8s %-8s %-18s %-20s %-18s %-24s %s%n",
+            commonFormat,
             "Kind",
             "Node",
             "VRF",
@@ -401,15 +403,17 @@ public final class BatfishSymbolicRoutePipelineResult {
             "Weight",
             "SegmentList",
             "Labels",
-            "NextHops",
-            "AvailabilityGuard",
-            "SelectionGuard"));
+            "NextHops"));
+    output.append(
+        simplifyGuards
+            ? String.format(" %s%n", "SelectionGuard")
+            : String.format(" %-24s %s%n", "AvailabilityGuard", "SelectionGuard"));
     output.append(
         "========================================================================================================================================================================\n");
     for (SymbolicSrPolicyRecord record : getAllSrPolicyRecords(simplifyGuards)) {
-      output.append(
+      String commonValues =
           String.format(
-              "%-18s %-8s %-9s %-8d %-16s %-20s %-18s %-8d %-8d %-18s %-20s %-18s %-24s %s%n",
+              commonFormat,
               record.getKind(),
               record.getNode(),
               record.getVrf(),
@@ -421,9 +425,12 @@ public final class BatfishSymbolicRoutePipelineResult {
               record.getWeight(),
               record.getSegmentList(),
               record.getLabels().isEmpty() ? "-" : record.getLabels(),
-              record.getNextHops().isEmpty() ? "-" : record.getNextHops(),
-              oneLine(record.getAvailabilityGuard()),
-              oneLine(record.getSelectionGuard())));
+              record.getNextHops().isEmpty() ? "-" : record.getNextHops());
+      output.append(commonValues);
+      if (!simplifyGuards) {
+        output.append(String.format(" %-24s", oneLine(record.getAvailabilityGuard())));
+      }
+      output.append(String.format(" %s%n", oneLine(record.getSelectionGuard())));
     }
   }
 
@@ -434,9 +441,10 @@ public final class BatfishSymbolicRoutePipelineResult {
       boolean omitNeverSelected) {
     String pathHeader =
         plane == SymbolicRibRecord.Plane.MAIN ? "ForwardingPath" : "AdvertisementPath";
+    String commonFormat = "%-8s %-9s %-18s %-10s %-8s %-5s %-10s %-16s %-18s";
     output.append(
         String.format(
-            "%-8s %-9s %-18s %-10s %-8s %-5s %-34s %-16s %-18s %-28s %-55s %s%n",
+            commonFormat,
             "Node",
             "VRF",
             "Network",
@@ -445,10 +453,12 @@ public final class BatfishSymbolicRoutePipelineResult {
             "AD",
             "NextHop",
             "NextHopIP",
-            "NextHopInterface",
-            "AvailabilityGuard",
-            "SelectionGuard",
-            pathHeader));
+            "NextHopInterface"));
+    output.append(
+        simplifyGuards
+            ? String.format(" %-55s %s%n", "SelectionGuard", pathHeader)
+            : String.format(
+                " %-28s %-55s %s%n", "AvailabilityGuard", "SelectionGuard", pathHeader));
     output.append(
         "========================================================================================================================================================================\n");
     Iterable<SymbolicRibRecord> routes =
@@ -462,19 +472,25 @@ public final class BatfishSymbolicRoutePipelineResult {
       if (omitNeverSelected && !route.getSelectionSatisfiable()) {
         continue;
       }
-      output.append(
+      String commonValues =
           String.format(
-              "%-8s %-9s %-18s %-10s %-8d %-5d %-34s %-16s %-18s %-28s %-55s %s%n",
+              commonFormat,
               route.getRouter(),
               route.getVrf(),
               route.getPrefix(),
               route.getProtocol(),
               route.getMetric(),
               route.getAdministrativeCost(),
-              route.getNextHop(),
+              readableNextHopNode(route, plane),
               route.getNextHopIp(),
-              route.getNextHopInterface(),
-              oneLine(route.getAvailabilityGuard()),
+              route.getNextHopInterface());
+      output.append(commonValues);
+      if (!simplifyGuards) {
+        output.append(String.format(" %-28s", oneLine(route.getAvailabilityGuard())));
+      }
+      output.append(
+          String.format(
+              " %-55s %s%n",
               oneLine(route.getSelectionGuard()),
               String.join(
                   " -> ",
@@ -482,6 +498,20 @@ public final class BatfishSymbolicRoutePipelineResult {
                       ? route.getForwardingPath()
                       : route.getRouterPath())));
     }
+  }
+
+  private static String readableNextHopNode(
+      SymbolicRibRecord route, SymbolicRibRecord.Plane plane) {
+    List<String> path =
+        plane == SymbolicRibRecord.Plane.MAIN
+            ? route.getForwardingPath()
+            : route.getRouterPath();
+    if (path.size() < 2) {
+      return "null";
+    }
+    return plane == SymbolicRibRecord.Plane.MAIN
+        ? path.get(1)
+        : path.get(path.size() - 2);
   }
 
   private static String oneLine(String value) {

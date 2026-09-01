@@ -1773,3 +1773,34 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   `networks/tolerance-symbolic-route/traffic.json` 抛出 `IOException`。修复后同一条
   `SmtReachabilityTest.testReachability` 禁用缓存通过；`smt_output_0043` 同时包含 SMT 编码、
   raw/readable symbolic RIB，且按预期不包含 `0_traffic.json`。
+
+## Stage 8.6 symbolic RIB 简洁 next-hop node 展示（2026-09-01 18:37 CST）
+
+- 将 readable/raw text 表中的 `NextHop` 从 Batfish typed next-hop 对象字符串改为设备名，与
+  concrete `dataplane.txt` 的该列语义对齐：本地起源、CONNECTED 和 LOCAL 路由显示 `null`；
+  传播路由显示当前设备实际转发到的下一跳设备，例如 R2 直达 R1 的 BGP 分支显示 `r1`。
+- next-hop node 不通过 IP 或接口名猜测。MAIN contribution 使用已保留的 `ForwardingPath` 第二个节点；
+  协议 RIB 使用 `AdvertisementPath` 中当前节点的前驱。这样同一候选的不同 failure-conditioned
+  forwarding branches 可以分别显示不同 next hop。
+- 该修改仅作用于人类可读 renderer，并将列宽从 typed object 所需的 34 字符缩为 10 字符；
+  `SymbolicRibRecord.nextHop`、JSON 中的 typed next hop、`NextHopIP` 和 `NextHopInterface` 均保留，
+  控制平面语义及 concrete `RibPrinter` 没有修改。
+- 2026-09-01 18:37 CST 验证：四路由器 parser-driven 测试通过，新增断言覆盖 R2->R1 分支和
+  readable text 不再包含 `NextHopInterface{interfaceName=...}`；当前 r1->r4 SMT reachability 测试
+  通过，实际 `smt_output_0045/0_symbolic_routes.txt` 显示 `null`、`r1`、`r2`、`r3`、`r4`。
+- 2026-09-01 18:46 CST 完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过，共 277 个
+  测试。首轮唯一失败是旧断言仍要求 readable text 包含 typed next-hop；断言已按新契约修正为
+  typed 值保留在 JSON、不得泄漏到 readable text，随后完整套件通过。
+
+## Stage 8.7 简化/初始报告的 guard 展示边界（2026-09-01 18:53 CST）
+
+- `0_symbolic_routes.txt` 作为面向结果审查的简化报告，只显示最终 `SelectionGuard`，不再重复展示
+  `AvailabilityGuard`；该规则同时应用于 MAIN、BGP、IS-IS 与 SR policy 表。
+- `0_symbolic_routes_init.txt` 继续同时显示未化简的 `AvailabilityGuard` 与 `SelectionGuard`，用于
+  审计候选可用性与优先级抑制的区别。内部 guarded RIB、`SymbolicRibRecord` 和 JSON 均未删除
+  availability 数据，因此这只是输出投影，不改变 Algorithm 1 语义。
+- 新增端到端表头断言：simplified report 必须有 selection 且没有 availability，raw init report
+  必须同时包含两者。2026-09-01 18:53 CST 四路由器 parser-driven 测试和当前 r1->r4 SMT
+  reachability 测试通过；实际 `smt_output_0048` 的两份文件符合上述边界。
+- 2026-09-01 18:54 CST 最终合并状态的完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存
+  通过，共 277 个测试。

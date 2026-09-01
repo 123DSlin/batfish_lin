@@ -156,8 +156,27 @@ public final class ToleranceFourRouterParsedPipelineTest {
     String rawReadableText = result.toRawReadableText();
     assertThat(readableText.contains("MAIN RIB (guarded forwarding selections)"), equalTo(true));
     assertThat(readableText.contains("BGP LOC-RIB (protocol detail)"), equalTo(true));
+    assertThat(readableText.contains("AvailabilityGuard"), equalTo(false));
+    assertThat(readableText.contains("SelectionGuard"), equalTo(true));
+    assertThat(rawReadableText.contains("AvailabilityGuard"), equalTo(true));
+    assertThat(rawReadableText.contains("SelectionGuard"), equalTo(true));
     assertThat(
         readableText.matches("(?s).*Protocol\\s+Metric\\s+AD\\s+NextHop\\s+NextHopIP.*"),
+        equalTo(true));
+    assertThat(readableText.contains("NextHopInterface{interfaceName="), equalTo(false));
+    assertThat(
+        result.getMainForwardingBranches().stream()
+            .filter(
+                route ->
+                    route.getRouter().equals("r2")
+                        && route.getPrefix().equals(PREFIX.toString())
+                        && route.getForwardingPath().equals(ImmutableList.of("r2", "r1")))
+            .findFirst()
+            .isPresent(),
+        equalTo(true));
+    assertThat(
+        readableText.matches(
+            "(?s).*r2\\s+default\\s+10\\.0\\.0\\.0/24\\s+BGP.*?\\s+r1\\s+192\\.0\\.12\\.1.*"),
         equalTo(true));
     assertThat(readableText.contains("Network            RIB"), equalTo(false));
     assertThat(readableText.contains("(let"), equalTo(false));
