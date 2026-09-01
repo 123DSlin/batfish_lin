@@ -1673,3 +1673,30 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   longest-prefix-match next hop 是 X-D 对端 `10.0.15.2`，锁定 20-Gbps IP flow 的初始主路径。
 - 2026-09-01 12:29 CST 按实验输入组织要求将 `traffic.json` 与配置快照归入同一个 demo 根目录；
   网络 BUILD data target 同步覆盖该输入，但设备 parser 边界仍严格保持为 `configs/`。
+
+## Stage 8.1 parser-driven 通用 snapshot 输入（2026-09-01 13:14 CST）
+
+- 删除实际 pipeline 对 `r1-originate-P`、节点名、固定 VRF 和手写 route-map 的依赖。新增
+  `BatfishBgpRedistributionRuleExtractor`，确定性枚举所有 parsed node/VRF 的 `BgpProcess`，直接复用
+  Batfish 规范化的 `getRedistributionPolicy()`；policy 为 null 的 BGP process 不产生规则，缺失的
+  policy 引用明确失败，不能静默漏路由。Cisco 会为未配置 redistribution 的 process 生成恒拒绝
+  wrapper policy，因此这些 process 保留 evaluation boundary，但不会产生 BGP contribution。
+- 自动规则 identity 使用 hostname、VRF 和 normalized policy 的长度前缀字段，不使用 route
+  `toString()`；普通 route attributes 仍不进入 message identity。每个规则把同 VRF MAIN 的非 BGP
+  candidate 交给 Batfish policy interpreter，BGP/IBGP candidate 明确排除以防反馈。
+- parsed snapshot builder 同时修正多 VRF 输入：connected route 使用 interface 的真实 VRF；所有
+  configured static route 从 `Vrf.getStaticRoutes()` 自动装载。next-hop-IP static 进入既有 recursive
+  fixed point；active next-hop-interface static 绑定 canonical link guard；discard/next-VRF static 按
+  Batfish `VirtualRouter.initStaticRibs` 作为 unconditional configured contribution。
+- `SmtReachabilityTest` 保留无 traffic 与带 traffic 两个 writer；二者共用同一个配置驱动 symbolic
+  pipeline 和真实 parsed IS-IS topology。traffic writer 另外要求同 snapshot 根目录存在
+  `traffic.json`，并复制为同一次输出中的 `0_traffic.json`。
+- 能力边界：这里的“任意上传配置”表示不依赖拓扑节点名、固定 origin 或手写 redistribution rule；
+  协议能力仍遵守当前 pipeline 的显式边界（IPv4 numbered eBGP、当前已实现的 static/connected、
+  IS-IS 与 SR 子集）。iBGP、unnumbered BGP 或未支持的 SR 语法仍应显式拒绝，不能宣称已支持。
+- 2026-09-01 13:14 CST 验证：tolerance 四路由器 parser-driven BGP 回归和 SR-TE parser-driven
+  回归通过；实际 `SmtReachabilityTest.testReachability` 通过，并在同一 `smt_output_0034` 中生成
+  `0_symbolic_routes_init.txt`、`0_symbolic_routes.txt` 与 `0_traffic.json`。
+- 2026-09-01 13:34 CST 完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过。PMD 首轮仅在
+  本次 builder 中发现一个迁移后未使用的 `ImmutableList` import，已删除；其余报告仍为既有
+  Graph/Encoder/EncoderSlice/PropertyChecker 与旧 SMT symbolic-route 基线项。

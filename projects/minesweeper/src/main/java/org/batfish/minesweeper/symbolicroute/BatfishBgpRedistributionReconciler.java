@@ -1,9 +1,6 @@
 package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
-import static org.batfish.datamodel.RoutingProtocol.CONNECTED;
-import static org.batfish.datamodel.RoutingProtocol.STATIC;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -149,7 +146,8 @@ public final class BatfishBgpRedistributionReconciler {
         SymbolicRoute<AnnotatedRoute<AbstractRoute>> symbolic = entry.getSymbolicRoute();
         RoutingProtocol sourceProtocol = symbolic.getKey().getProtocol();
         if (!symbolic.getKey().getVrf().equals(rule.getSourceVrf())
-            || sourceProtocol != CONNECTED && sourceProtocol != STATIC
+            || sourceProtocol == RoutingProtocol.BGP
+            || sourceProtocol == RoutingProtocol.IBGP
             || !entry.getSelectionGuard().isSatisfiable()) {
           continue;
         }

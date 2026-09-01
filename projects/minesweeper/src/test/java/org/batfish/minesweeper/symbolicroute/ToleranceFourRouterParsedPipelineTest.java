@@ -64,15 +64,26 @@ public final class ToleranceFourRouterParsedPipelineTest {
             configurations,
             dataPlane.getRibs(),
             batfish.getTopologyProvider().getBgpTopology(batfish.getSnapshot()).getGraph(),
-            GUARDS,
-            ImmutableList.of(
-                new BatfishBgpRedistributionRule(
-                    "r1-originate-P",
-                    "r1",
-                    DEFAULT_VRF_NAME,
-                    DEFAULT_VRF_NAME,
-                    "REDISTRIBUTE_CONNECTED",
-                    BGP)));
+            GUARDS);
+    // Cisco normalization attaches one wrapper policy to each BGP process. Policies for routers
+    // without configured redistribution reject every MAIN candidate.
+    assertThat(input.getRedistributionRules(), hasSize(4));
+    BatfishBgpRedistributionRule parsedRule =
+        input.getRedistributionRules().stream()
+            .filter(rule -> rule.getRouter().equals("r1"))
+            .findFirst()
+            .get();
+    assertThat(parsedRule.getRouter(), equalTo("r1"));
+    assertThat(parsedRule.getSourceVrf(), equalTo(DEFAULT_VRF_NAME));
+    assertThat(parsedRule.getTargetVrf(), equalTo(DEFAULT_VRF_NAME));
+    assertThat(
+        parsedRule.getPolicyName(),
+        equalTo(
+            configurations
+                .get("r1")
+                .getDefaultVrf()
+                .getBgpProcess()
+                .getRedistributionPolicy()));
     assertCanonicalIdentity(batfish, input, "r1", "Ethernet12", "r2", "Ethernet21");
     assertCanonicalIdentity(batfish, input, "r1", "Ethernet13", "r3", "Ethernet31");
     assertCanonicalIdentity(batfish, input, "r1", "Ethernet14", "r4", "Ethernet41");

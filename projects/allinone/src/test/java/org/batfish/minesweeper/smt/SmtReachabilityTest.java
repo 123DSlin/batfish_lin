@@ -8,6 +8,7 @@ import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.RoutingProtocol;
 import org.batfish.datamodel.Zone;
 import org.batfish.datamodel.answers.AnswerElement;
+import org.batfish.datamodel.isis.IsisTopology;
 import org.batfish.main.Batfish;
 import org.batfish.main.BatfishTestUtils;
 import org.batfish.main.TestrigText;
@@ -26,6 +27,8 @@ import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipeline;
 import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipelineResult;
 import org.batfish.minesweeper.symbolicroute.Z3RouteGuardFactory;
 import static org.batfish.minesweeper.smt.Encoder.createOutputDirectory;
+import static org.batfish.common.topology.TopologyUtil.synthesizeL3Topology;
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -42,6 +45,7 @@ import java.io.PrintWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.ZoneId;
 import java.util.Set;
@@ -94,7 +98,8 @@ public class SmtReachabilityTest {
 
         // read the configurations from the filesystem
         Runfiles runfiles = Runfiles.create();
-        String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
+        String configPath = runfiles.rlocation("batfish/networks/tolerance_sr_te_demo");
+        // String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_hard");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_accessment");
@@ -142,39 +147,56 @@ public class SmtReachabilityTest {
         RoutesAnswerer routesAnswerer = new RoutesAnswerer(routesQuestion, _batfish);
         AnswerElement routesAnswer = routesAnswerer.answer(_batfish.getSnapshot());
         RibPrinter.printRouteTable(routesAnswer, _dataPlaneWriter);
-        writeSymbolicRoutes(dataPlane);
+        // Use writeSymbolicRoutes(dataPlane) for a snapshot without traffic input.
+        writeTrafficSymbolicRoutes(dataPlane, configPath);
         long end = System.currentTimeMillis();
         System.out.println("[Time taken to compute data plane and print RIBs: " + (end - start) + " ms]");
     }
 
     private void writeSymbolicRoutes(DataPlane dataPlane) throws IOException {
+        try (Context context = new Context()) {
+            writeSymbolicRouteFiles(runSymbolicRoutePipeline(dataPlane, context));
+        }
+    }
+
+    private void writeTrafficSymbolicRoutes(DataPlane dataPlane, String configPath)
+            throws IOException {
+        Path trafficInput = Paths.get(configPath, "traffic.json");
+        if (!Files.isRegularFile(trafficInput)) {
+            throw new IOException("Missing traffic input: " + trafficInput);
+        }
+        Files.copy(trafficInput, Paths.get(_outputDir, "0_traffic.json"), REPLACE_EXISTING);
+        try (Context context = new Context()) {
+            writeSymbolicRouteFiles(runSymbolicRoutePipeline(dataPlane, context));
+        }
+    }
+
+    private BatfishSymbolicRoutePipelineResult runSymbolicRoutePipeline(
+            DataPlane dataPlane, Context context) {
         SortedMap<String, org.batfish.datamodel.Configuration> configurations =
                 _batfish.loadConfigurations(_batfish.getSnapshot());
-        try (Context context = new Context()) {
-            BatfishSymbolicRoutePipelineResult result =
-                    BatfishSymbolicRoutePipeline.run(
-                            BatfishParsedSnapshotPipelineInputBuilder.build(
-                                    configurations,
-                                    dataPlane.getRibs(),
-                                    _batfish.getTopologyProvider()
-                                            .getBgpTopology(_batfish.getSnapshot())
-                                            .getGraph(),
-                                    new Z3RouteGuardFactory(context),
-                                    ImmutableList.of(
-                                            new BatfishBgpRedistributionRule(
-                                                    "r1-originate-P",
-                                                    "r1",
-                                                    org.batfish.datamodel.Configuration.DEFAULT_VRF_NAME,
-                                                    org.batfish.datamodel.Configuration.DEFAULT_VRF_NAME,
-                                                    "REDISTRIBUTE_CONNECTED",
-                                                    RoutingProtocol.BGP))));
-            Files.write(
-                    Paths.get(_outputDir, "0_symbolic_routes_init.txt"),
-                    result.toRawReadableText().getBytes(StandardCharsets.UTF_8));
-            Files.write(
-                    Paths.get(_outputDir, "0_symbolic_routes.txt"),
-                    result.toReadableText().getBytes(StandardCharsets.UTF_8));
-        }
+        IsisTopology isisTopology =
+                IsisTopology.initIsisTopology(
+                        configurations, synthesizeL3Topology(configurations));
+        return BatfishSymbolicRoutePipeline.run(
+                BatfishParsedSnapshotPipelineInputBuilder.build(
+                        configurations,
+                        dataPlane.getRibs(),
+                        _batfish.getTopologyProvider()
+                                .getBgpTopology(_batfish.getSnapshot())
+                                .getGraph(),
+                        isisTopology,
+                        new Z3RouteGuardFactory(context)));
+    }
+
+    private void writeSymbolicRouteFiles(BatfishSymbolicRoutePipelineResult result)
+            throws IOException {
+        Files.write(
+                Paths.get(_outputDir, "0_symbolic_routes_init.txt"),
+                result.toRawReadableText().getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                Paths.get(_outputDir, "0_symbolic_routes.txt"),
+                result.toReadableText().getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -185,11 +207,17 @@ public class SmtReachabilityTest {
     public void testReachability() {
         final ReachabilityQuestion question = new ReachabilityQuestion();
 
+        // tolerance-symbolic traffic
+        question.setIngressNodeRegex("x");
+        question.setFinalNodeRegex("d");
+        question.setDstIps(Set.of(IpWildcard.parse("10.0.15.2/32")));
+        question.setFailures(0);
+
         // tolerance-symbolic-route
-        question.setIngressNodeRegex("r1");
-        question.setFinalNodeRegex("r4");
-        IpWildcard ipWildcard = IpWildcard.parse("192.0.14.2/32");
-        question.setDstIps(Set.of(ipWildcard));
+        // question.setIngressNodeRegex("r1");
+        // question.setFinalNodeRegex("r4");
+        // IpWildcard ipWildcard = IpWildcard.parse("192.0.14.2/32");
+        // question.setDstIps(Set.of(ipWildcard));
 
         // user-study specification 1: ECMP reachability
         // question.setIngressNodeRegex("r3");

@@ -1,9 +1,6 @@
 package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
-import static org.batfish.datamodel.Configuration.DEFAULT_VRF_NAME;
-
-import com.google.common.collect.ImmutableList;
 import com.google.common.graph.EndpointPair;
 import com.google.common.graph.ValueGraph;
 import java.util.ArrayList;
@@ -24,12 +21,55 @@ import org.batfish.datamodel.GenericRibReadOnly;
 import org.batfish.datamodel.Interface;
 import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.NetworkConfigurations;
+import org.batfish.datamodel.StaticRoute;
+import org.batfish.datamodel.Vrf;
 import org.batfish.datamodel.isis.IsisTopology;
+import org.batfish.datamodel.route.nh.NextHopInterface;
+import org.batfish.datamodel.route.nh.NextHopIp;
 
 /** Builds supported connected, numbered-eBGP, and IS-IS L1 input from parsed Batfish state. */
 public final class BatfishParsedSnapshotPipelineInputBuilder {
 
   private BatfishParsedSnapshotPipelineInputBuilder() {}
+
+  /** Builds a parsed snapshot and discovers BGP redistribution directly from its configuration. */
+  @Nonnull
+  public static BatfishSymbolicRoutePipelineInput build(
+      Map<String, Configuration> configurations,
+      Map<
+              String,
+              ? extends Map<String, ? extends GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
+          concreteMainRibs,
+      ValueGraph<BgpPeerConfigId, BgpSessionProperties> bgpTopology,
+      Z3RouteGuardFactory guardFactory) {
+    return build(
+        configurations,
+        concreteMainRibs,
+        bgpTopology,
+        IsisTopology.EMPTY,
+        guardFactory,
+        BatfishBgpRedistributionRuleExtractor.extract(configurations));
+  }
+
+  /** Builds a parsed snapshot and discovers BGP redistribution directly from its configuration. */
+  @Nonnull
+  public static BatfishSymbolicRoutePipelineInput build(
+      Map<String, Configuration> configurations,
+      Map<
+              String,
+              ? extends Map<String, ? extends GenericRibReadOnly<AnnotatedRoute<AbstractRoute>>>>
+          concreteMainRibs,
+      ValueGraph<BgpPeerConfigId, BgpSessionProperties> bgpTopology,
+      IsisTopology isisTopology,
+      Z3RouteGuardFactory guardFactory) {
+    return build(
+        configurations,
+        concreteMainRibs,
+        bgpTopology,
+        isisTopology,
+        guardFactory,
+        BatfishBgpRedistributionRuleExtractor.extract(configurations));
+  }
 
   @Nonnull
   public static BatfishSymbolicRoutePipelineInput build(
@@ -74,6 +114,7 @@ public final class BatfishParsedSnapshotPipelineInputBuilder {
             topologyGuards,
             guardFactory);
     List<SymbolicRouteSeed<AnnotatedRoute<AbstractRoute>>> mainSeeds = new ArrayList<>();
+    List<SymbolicStaticRoute> recursiveStaticRoutes = new ArrayList<>();
     for (Configuration configuration : configurations.values()) {
       for (Interface iface : configuration.getAllInterfaces().values()) {
         LinkFailureKey linkFailureKey =
@@ -84,7 +125,7 @@ public final class BatfishParsedSnapshotPipelineInputBuilder {
         for (ConcreteInterfaceAddress address : iface.getAllConcreteAddresses()) {
           AnnotatedRoute<AbstractRoute> route =
               new AnnotatedRoute<>(
-                  new ConnectedRoute(address.getPrefix(), iface.getName()), DEFAULT_VRF_NAME);
+                  new ConnectedRoute(address.getPrefix(), iface.getName()), iface.getVrfName());
           mainSeeds.add(
               new SymbolicRouteSeed<>(
                   "connected:"
@@ -97,6 +138,52 @@ public final class BatfishParsedSnapshotPipelineInputBuilder {
                   route,
                   guard,
                   linkFailureKey));
+        }
+      }
+      for (Map.Entry<String, Vrf> vrfEntry : configuration.getVrfs().entrySet()) {
+        String vrfName = vrfEntry.getKey();
+        int staticIndex = 0;
+        for (StaticRoute staticRoute : vrfEntry.getValue().getStaticRoutes()) {
+          AnnotatedRoute<StaticRoute> annotatedRoute =
+              new AnnotatedRoute<>(staticRoute, vrfName);
+          String messageId =
+              "configured:"
+                  + configuration.getHostname()
+                  + ":"
+                  + vrfName.length()
+                  + ":"
+                  + vrfName
+                  + ":"
+                  + staticIndex++;
+          if (staticRoute.getNextHop() instanceof NextHopIp) {
+            recursiveStaticRoutes.add(
+                new SymbolicStaticRoute(
+                    messageId,
+                    configuration.getHostname(),
+                    annotatedRoute,
+                    guardFactory.trueGuard()));
+          } else {
+            RouteGuard staticGuard = guardFactory.trueGuard();
+            if (staticRoute.getNextHop() instanceof NextHopInterface) {
+              String nextHopInterface =
+                  ((NextHopInterface) staticRoute.getNextHop()).getInterfaceName();
+              Interface iface = configuration.getAllInterfaces().get(nextHopInterface);
+              if (iface == null || !iface.getActive() || !iface.getVrfName().equals(vrfName)) {
+                continue;
+              }
+              RouteGuard interfaceGuard =
+                  topologyGuards.getGuard(configuration.getHostname(), nextHopInterface);
+              if (interfaceGuard != null) {
+                staticGuard = interfaceGuard;
+              }
+            }
+            mainSeeds.add(
+                new SymbolicRouteSeed<>(
+                    "static:" + messageId,
+                    configuration.getHostname(),
+                    widen(annotatedRoute),
+                    staticGuard));
+          }
         }
       }
     }
@@ -173,7 +260,7 @@ public final class BatfishParsedSnapshotPipelineInputBuilder {
     return new BatfishSymbolicRoutePipelineInput(
         configurations,
         mainSeeds,
-        ImmutableList.of(),
+        recursiveStaticRoutes,
         redistributionRules,
         edges,
         sessions,
@@ -184,6 +271,10 @@ public final class BatfishParsedSnapshotPipelineInputBuilder {
         isis.getL2Sessions(),
         isis.getL2Seeds(),
         normalizedRibs);
+  }
+
+  private static AnnotatedRoute<AbstractRoute> widen(AnnotatedRoute<StaticRoute> route) {
+    return new AnnotatedRoute<>(route.getRoute(), route.getSourceVrf());
   }
 
   private static String interfaceForIp(Configuration configuration, Ip localIp) {

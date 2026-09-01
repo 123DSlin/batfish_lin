@@ -89,8 +89,8 @@ public final class ToleranceSrTeDemoConfigTest {
             dataPlane.getRibs(),
             batfish.getTopologyProvider().getBgpTopology(batfish.getSnapshot()).getGraph(),
             isisTopology,
-            GUARDS,
-            ImmutableList.of());
+            GUARDS);
+    assertThat(input.getRedistributionRules(), hasSize(0));
 
     GuardedSrPolicyDatabase database =
         BatfishSymbolicRoutePipeline.run(input).getGuardedSrPolicyDatabase();
