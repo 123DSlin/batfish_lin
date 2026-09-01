@@ -63,6 +63,10 @@ public final class SymbolicRouteExporterTest {
         dependencies);
   }
 
+  private static SymbolicRouteContributionId parent(String messageId) {
+    return new SymbolicRouteContributionId(messageId, "origin", "sender");
+  }
+
   private static void assertThrows(Class<? extends Throwable> expected, Runnable action) {
     try {
       action.run();
@@ -84,7 +88,7 @@ public final class SymbolicRouteExporterTest {
 
     SymbolicRouteMessage<StaticRoute> message =
         exporter(link, (sender, receiver, route) -> Optional.of(route), dependencies)
-            .export(entry(availability, selection), ImmutableList.of())
+            .export(entry(availability, selection), parent("export-parent"))
             .get();
 
     assertThat(message.getGuard().isEquivalentTo(selection.and(link)), equalTo(true));
@@ -107,7 +111,7 @@ public final class SymbolicRouteExporterTest {
                 dependencies)
             .export(
                 entry(GUARDS.variable("deny_availability"), GUARDS.variable("deny_selection")),
-                ImmutableList.of(parent));
+                parent);
 
     assertThat(result.isPresent(), equalTo(false));
     assertThat(dependencies.getChildren(parent).isEmpty(), equalTo(true));
@@ -120,7 +124,7 @@ public final class SymbolicRouteExporterTest {
 
     Optional<SymbolicRouteMessage<StaticRoute>> result =
         exporter(link, (sender, receiver, route) -> Optional.of(route), dependencies)
-            .export(entry(GUARDS.variable("unsat_availability"), link.not()), ImmutableList.of());
+            .export(entry(GUARDS.variable("unsat_availability"), link.not()), parent("unsat"));
 
     assertThat(result.isPresent(), equalTo(false));
   }
@@ -139,38 +143,40 @@ public final class SymbolicRouteExporterTest {
                 entry(
                     GUARDS.variable("transform_availability"),
                     GUARDS.variable("transform_selection")),
-                ImmutableList.of())
+                parent("transform"))
             .get();
 
     assertThat(message.getRoute(), equalTo(transformed));
   }
 
   @Test
-  public void testEveryParentRecordsSameChildDependency() {
+  public void testEachParentProducesIndependentChildDependency() {
     SymbolicRouteContributionId left =
         new SymbolicRouteContributionId("left", "left-router", "sender");
     SymbolicRouteContributionId right =
         new SymbolicRouteContributionId("right", "right-router", "sender");
     SymbolicRoutePropagationDependencies dependencies = new SymbolicRoutePropagationDependencies();
 
-    SymbolicRouteMessage<StaticRoute> message =
+    SymbolicRouteExporter<StaticRoute> exporter =
         exporter(
-                GUARDS.variable("dependency_link"),
-                (sender, receiver, route) -> Optional.of(route),
-                dependencies)
-            .export(
-                entry(
-                    GUARDS.variable("dependency_availability"),
-                    GUARDS.variable("dependency_selection")),
-                ImmutableList.of(left, right))
-            .get();
-    SymbolicRouteContributionId child =
+            GUARDS.variable("dependency_link"),
+            (sender, receiver, route) -> Optional.of(route),
+            dependencies);
+    GuardedRibEntry<StaticRoute> entry =
+        entry(GUARDS.variable("dependency_availability"), GUARDS.variable("dependency_selection"));
+    SymbolicRouteMessage<StaticRoute> leftMessage = exporter.export(entry, left).get();
+    SymbolicRouteMessage<StaticRoute> rightMessage = exporter.export(entry, right).get();
+    SymbolicRouteContributionId leftChild =
         new SymbolicRouteContributionId(
-            message.getMessageId(), message.getSender(), message.getReceiver());
+            leftMessage.getMessageId(), leftMessage.getSender(), leftMessage.getReceiver());
+    SymbolicRouteContributionId rightChild =
+        new SymbolicRouteContributionId(
+            rightMessage.getMessageId(), rightMessage.getSender(), rightMessage.getReceiver());
 
     assertThat(dependencies.getChildren(left), hasSize(1));
-    assertThat(dependencies.getChildren(left).contains(child), equalTo(true));
-    assertThat(dependencies.getChildren(right).contains(child), equalTo(true));
+    assertThat(dependencies.getChildren(left), equalTo(ImmutableSet.of(leftChild)));
+    assertThat(dependencies.getChildren(right), equalTo(ImmutableSet.of(rightChild)));
+    assertThat(leftChild.equals(rightChild), equalTo(false));
   }
 
   @Test
@@ -184,7 +190,7 @@ public final class SymbolicRouteExporterTest {
                 new SymbolicRoutePropagationDependencies())
             .export(
                 entry(GUARDS.variable("path_availability"), GUARDS.variable("path_selection")),
-                ImmutableList.of(parent))
+                parent)
             .get();
 
     assertThat(
@@ -207,15 +213,13 @@ public final class SymbolicRouteExporterTest {
             new SymbolicRoutePropagationDependencies());
 
     assertThrows(
-        IllegalArgumentException.class, () -> wrongExporter.export(entry, ImmutableList.of()));
+        IllegalArgumentException.class, () -> wrongExporter.export(entry, parent("wrong-owner")));
   }
 
   @Test
   public void testReexportReplacesParentDependencies() {
-    SymbolicRouteContributionId oldParent =
-        new SymbolicRouteContributionId("old-parent", "old", "sender");
-    SymbolicRouteContributionId newParent =
-        new SymbolicRouteContributionId("new-parent", "new", "sender");
+    SymbolicRouteContributionId stableParent =
+        new SymbolicRouteContributionId("stable-parent", "old", "sender");
     SymbolicRoutePropagationDependencies dependencies = new SymbolicRoutePropagationDependencies();
     SymbolicRouteExporter<StaticRoute> exporter =
         exporter(
@@ -225,17 +229,14 @@ public final class SymbolicRouteExporterTest {
     GuardedRibEntry<StaticRoute> entry =
         entry(GUARDS.variable("replace_availability"), GUARDS.variable("replace_selection"));
 
-    SymbolicRouteMessage<StaticRoute> first =
-        exporter.export(entry, ImmutableList.of(oldParent)).get();
-    SymbolicRouteMessage<StaticRoute> second =
-        exporter.export(entry, ImmutableList.of(newParent)).get();
+    SymbolicRouteMessage<StaticRoute> first = exporter.export(entry, stableParent).get();
+    SymbolicRouteMessage<StaticRoute> second = exporter.export(entry, stableParent).get();
     SymbolicRouteContributionId child =
         new SymbolicRouteContributionId(
             second.getMessageId(), second.getSender(), second.getReceiver());
 
     assertThat(first.getMessageId(), equalTo(second.getMessageId()));
-    assertThat(dependencies.getChildren(oldParent).isEmpty(), equalTo(true));
-    assertThat(dependencies.getChildren(newParent), equalTo(ImmutableSet.of(child)));
-    assertThat(dependencies.getParents(child), equalTo(ImmutableSet.of(newParent)));
+    assertThat(dependencies.getChildren(stableParent), equalTo(ImmutableSet.of(child)));
+    assertThat(dependencies.getParents(child), equalTo(ImmutableSet.of(stableParent)));
   }
 }

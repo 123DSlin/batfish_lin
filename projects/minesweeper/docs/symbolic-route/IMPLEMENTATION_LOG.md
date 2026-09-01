@@ -1732,3 +1732,31 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   parser-driven SR-TE demo 断言 12 条 LOCAL seeds；四路由器验收断言 R4 的 3 条 LOCAL records。
 - 2026-09-01 17:34 CST 验证：完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过，共
   276 个测试；输出中的 Java 8 source/target 信息仍只是既有编译器警告。
+
+## Stage 8.4 contribution 分支传播与 symbolic/concrete 集成证明（2026-09-01 18:08 CST）
+
+- 修正 `GuardedRib` 聚合候选只保留一个 representative provenance 的下游语义错误。候选级
+  availability 仍是所有 contributions 的析取，用于 priority/ECMP selection；新增 contribution-level
+  entries，使每个分支分别保存自身 availability、selection guard、identity 和 provenance。
+- `ConvergenceEngine` 的 advertisement registry 从每个 exporter/candidate 一条改为按 parent
+  contribution 分支保存。export message identity 由协议 adapter 的稳定 base identity 与完整 parent
+  contribution identity 组合，不使用 route `toString()`；每个 child 只依赖一个真实 parent，guard
+  更新、替换和 recursive withdrawal 不再错误地绑定所有 parents 到一条聚合 child。
+- 分支契约贯穿三个容易再次压扁路径的 stable-state 边界：协议 RIB 到 MAIN、MAIN 到 BGP
+  redistribution、IS-IS L1 到 L2 transition。各 reconciler 的 source identity 均加入源 contribution
+  identity；相同 concrete route 的不同物理传播来源保持独立生命周期。
+- 人类可读 MAIN 表改为 contribution-level guarded forwarding branches；协议明细仍保留候选聚合
+  audit。每条 MAIN branch 显示自己独立的 guard 与反向后的 `ForwardingPath`，不再显示 OR guard
+  配任意 representative path。当前 path 解释适用于已支持的 numbered point-to-point ISIS/基础 eBGP
+  pipeline；后续 traffic execution 应消费 typed/canonical edge dependencies，而不是解析展示字符串。
+- 新增 diamond 测试：同一 seed 经 `A-B-D` 与 `A-C-D` 到达相同 candidate，D 保留两条独立 guards、
+  provenance 和 child dependencies，同时候选 availability 等价于两者析取。
+- parser-driven SR-TE demo 的验收端点与实验 query 对齐为 `S -> D`。全 failure domain 中 MAIN 保存
+  `S-A-D`、`S-B-D` 和仅在多链路故障条件下可选的 `S-A-X-D`。当前 pipeline 尚未接收
+  `ReachabilityQuestion.failures=k`，因此 k-failure pruning/报告投影必须作为下一项显式集成，不能
+  静默把全域 symbolic RIB 当作 `k=0/1` 结果。
+- 新增 all-links-up 集成断言：逐设备、逐默认 VRF 将 symbolic MAIN 中在全链路 up assignment 下
+  selected 的分支解开 annotation，与 Batfish concrete MAIN 的 `AbstractRoute` 集合直接比较，全部
+  相等；比较不经过 `dataplane.txt` 字符串。`RibPrinter`/concrete dataplane 输出逻辑保持零修改。
+- 2026-09-01 18:08 CST 验证：完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过，共
+  277 个测试。用户工作区中的 `SmtReachabilityTest.java` 配置切换未修改、未暂存。

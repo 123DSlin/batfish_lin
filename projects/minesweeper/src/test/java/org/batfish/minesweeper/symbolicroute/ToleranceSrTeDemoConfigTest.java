@@ -1,6 +1,7 @@
 package org.batfish.minesweeper.symbolicroute;
 
 import static org.batfish.common.topology.TopologyUtil.synthesizeL3Topology;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.Assert.assertThat;
@@ -10,6 +11,7 @@ import com.microsoft.z3.Context;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -97,8 +99,35 @@ public final class ToleranceSrTeDemoConfigTest {
             .count(),
         equalTo(12L));
 
-    GuardedSrPolicyDatabase database =
-        BatfishSymbolicRoutePipeline.run(input).getGuardedSrPolicyDatabase();
+    BatfishSymbolicRoutePipelineResult result = BatfishSymbolicRoutePipeline.run(input);
+    RouteGuard allLinksUp =
+        GUARDS
+            .variable("a_s")
+            .and(GUARDS.variable("a_x"))
+            .and(GUARDS.variable("a_d"))
+            .and(GUARDS.variable("b_s"))
+            .and(GUARDS.variable("b_d"))
+            .and(GUARDS.variable("d_x"));
+    for (String router : configurations.keySet()) {
+      Set<AbstractRoute> symbolicAllUp = new HashSet<>();
+      GuardedRib<AnnotatedRoute<AbstractRoute>> rib = result.getMainRibNetwork().getRib(router);
+      rib.getEntries()
+          .forEach(
+              candidate ->
+                  rib.getContributionEntries(candidate.getSymbolicRoute().getKey())
+                      .values()
+                      .forEach(
+                          branch -> {
+                            if (branch.getSelectionGuard().and(allLinksUp).isSatisfiable()) {
+                              symbolicAllUp.add(
+                                  branch.getSymbolicRoute().getRoute().getAbstractRoute());
+                            }
+                          }));
+      assertThat(
+          symbolicAllUp,
+          equalTo(dataPlane.getRibs().get(router).get(Configuration.DEFAULT_VRF_NAME).getRoutes()));
+    }
+    GuardedSrPolicyDatabase database = result.getGuardedSrPolicyDatabase();
     assertThat(database.getCandidates(), hasSize(2));
     assertThat(database.getContributions(), hasSize(2));
     GuardedSrCandidate upper = candidate(database, "explicit:upper-via-A");
@@ -112,6 +141,49 @@ public final class ToleranceSrTeDemoConfigTest {
         lower
             .getAvailabilityGuard()
             .isEquivalentTo(GUARDS.variable("b_s").and(GUARDS.variable("b_d"))),
+        equalTo(true));
+    ImmutableList<SymbolicRibRecord> sToD =
+        result.getMainForwardingBranches().stream()
+            .filter(
+                route ->
+                    route.getRouter().equals("s")
+                        && route.getPrefix().equals("5.5.5.5/32")
+                        && route.getProtocol().equals("ISIS_L2"))
+            .collect(ImmutableList.toImmutableList());
+    assertThat(sToD, hasSize(3));
+    assertThat(
+        sToD.stream()
+            .map(SymbolicRibRecord::getForwardingPath)
+            .collect(ImmutableList.toImmutableList()),
+        containsInAnyOrder(
+            ImmutableList.of("s", "a", "d"),
+            ImmutableList.of("s", "a", "x", "d"),
+            ImmutableList.of("s", "b", "d")));
+    assertThat(
+        sToD.stream()
+            .anyMatch(
+                route ->
+                    route.getForwardingPath().equals(ImmutableList.of("s", "a", "d"))
+                        && route.getSelectionGuard().contains("a_s")
+                        && route.getSelectionGuard().contains("a_d")),
+        equalTo(true));
+    assertThat(
+        sToD.stream()
+            .anyMatch(
+                route ->
+                    route.getForwardingPath().equals(ImmutableList.of("s", "b", "d"))
+                        && route.getSelectionGuard().contains("b_s")
+                        && route.getSelectionGuard().contains("b_d")),
+        equalTo(true));
+    assertThat(
+        sToD.stream()
+            .anyMatch(
+                route ->
+                    route.getForwardingPath().equals(ImmutableList.of("s", "a", "x", "d"))
+                        && route.getSelectionGuard().contains("a_s")
+                        && route.getSelectionGuard().contains("a_x")
+                        && route.getSelectionGuard().contains("d_x")
+                        && route.getSelectionGuard().contains("not")),
         equalTo(true));
   }
 

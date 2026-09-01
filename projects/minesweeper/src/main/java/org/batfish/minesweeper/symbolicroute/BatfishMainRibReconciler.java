@@ -21,10 +21,13 @@ public final class BatfishMainRibReconciler {
   private static final class SourceKey {
     @Nonnull private final String _plane;
     @Nonnull private final SymbolicRouteKey _routeKey;
+    @Nonnull private final SymbolicRouteContributionId _sourceContributionId;
 
-    private SourceKey(String plane, SymbolicRouteKey routeKey) {
+    private SourceKey(
+        String plane, SymbolicRouteKey routeKey, SymbolicRouteContributionId sourceContributionId) {
       _plane = plane;
       _routeKey = routeKey;
+      _sourceContributionId = sourceContributionId;
     }
 
     @Override
@@ -36,12 +39,14 @@ public final class BatfishMainRibReconciler {
         return false;
       }
       SourceKey that = (SourceKey) object;
-      return _plane.equals(that._plane) && _routeKey.equals(that._routeKey);
+      return _plane.equals(that._plane)
+          && _routeKey.equals(that._routeKey)
+          && _sourceContributionId.equals(that._sourceContributionId);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(_plane, _routeKey);
+      return Objects.hash(_plane, _routeKey, _sourceContributionId);
     }
   }
 
@@ -92,20 +97,24 @@ public final class BatfishMainRibReconciler {
     @Override
     public void collect(Map<SourceKey, DesiredMainRoute> desired) {
       for (GuardedRib<R> rib : _network.getRibs().values()) {
-        for (GuardedRibEntry<R> entry : rib.getEntries()) {
-          SymbolicRoute<R> symbolic = entry.getSymbolicRoute();
-          if (!_eligible.test(symbolic)
-              || symbolic.getRoute().getAbstractRoute().getNonRouting()
-              || !entry.getSelectionGuard().isSatisfiable()) {
-            continue;
+        for (GuardedRibEntry<R> candidate : rib.getEntries()) {
+          for (Map.Entry<SymbolicRouteContributionId, GuardedRibEntry<R>> contribution :
+              rib.getContributionEntries(candidate.getSymbolicRoute().getKey()).entrySet()) {
+            GuardedRibEntry<R> entry = contribution.getValue();
+            SymbolicRoute<R> symbolic = entry.getSymbolicRoute();
+            if (!_eligible.test(symbolic)
+                || symbolic.getRoute().getAbstractRoute().getNonRouting()
+                || !entry.getSelectionGuard().isSatisfiable()) {
+              continue;
+            }
+            desired.put(
+                new SourceKey(_plane, symbolic.getKey(), contribution.getKey()),
+                new DesiredMainRoute(
+                    new AnnotatedRoute<>(
+                        symbolic.getRoute().getAbstractRoute(), symbolic.getKey().getVrf()),
+                    entry.getSelectionGuard(),
+                    symbolic.getProvenance()));
           }
-          desired.put(
-              new SourceKey(_plane, symbolic.getKey()),
-              new DesiredMainRoute(
-                  new AnnotatedRoute<>(
-                      symbolic.getRoute().getAbstractRoute(), symbolic.getKey().getVrf()),
-                  entry.getSelectionGuard(),
-                  symbolic.getProvenance()));
         }
       }
     }

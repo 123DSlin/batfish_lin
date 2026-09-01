@@ -83,7 +83,9 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
   private final Map<SymbolicRouteContributionId, ContributionLocation> _contributionLocations;
 
   @Nonnull
-  private final Map<SymbolicRouteExporter<R>, Map<SymbolicRouteKey, AdvertisementRecord>>
+  private final Map<
+          SymbolicRouteExporter<R>,
+          Map<SymbolicRouteKey, Map<SymbolicRouteContributionId, AdvertisementRecord>>>
       _advertisements;
 
   private static final class ContributionLocation {
@@ -270,25 +272,37 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
       SymbolicRouteKey key = referenceEntry.getSymbolicRoute().getKey();
       for (SymbolicRouteExporter<R> exporter :
           _exporters.getOrDefault(processor.getReceiver(), java.util.Collections.emptyList())) {
-        Map<SymbolicRouteKey, AdvertisementRecord> byCandidate = _advertisements.get(exporter);
-        AdvertisementRecord oldAdvertisement = byCandidate.remove(key);
-        if (oldAdvertisement != null) {
-          exporter.removeDependencies(oldAdvertisement._id);
-          queue.add(WorkItem.withdraw(oldAdvertisement._id, oldAdvertisement._guard));
+        Map<SymbolicRouteKey, Map<SymbolicRouteContributionId, AdvertisementRecord>> byCandidate =
+            _advertisements.get(exporter);
+        Map<SymbolicRouteContributionId, AdvertisementRecord> oldAdvertisements =
+            byCandidate.remove(key);
+        if (oldAdvertisements != null) {
+          for (AdvertisementRecord oldAdvertisement : oldAdvertisements.values()) {
+            exporter.removeDependencies(oldAdvertisement._id);
+            queue.add(WorkItem.withdraw(oldAdvertisement._id, oldAdvertisement._guard));
+          }
         }
         if (update.getNewEntry() == null) {
           continue;
         }
-        Iterable<SymbolicRouteContributionId> parents = processor.getRib().getContributionIds(key);
-        java.util.Optional<SymbolicRouteMessage<R>> child =
-            exporter.export(update.getNewEntry(), parents);
-        if (child.isPresent()) {
-          SymbolicRouteMessage<R> message = child.get();
-          SymbolicRouteContributionId childId =
-              new SymbolicRouteContributionId(
-                  message.getMessageId(), message.getSender(), message.getReceiver());
-          byCandidate.put(key, new AdvertisementRecord(childId, message.getGuard()));
-          queue.add(WorkItem.advertise(message));
+        Map<SymbolicRouteContributionId, AdvertisementRecord> newAdvertisements =
+            new LinkedHashMap<>();
+        for (Map.Entry<SymbolicRouteContributionId, GuardedRibEntry<R>> contribution :
+            processor.getRib().getContributionEntries(key).entrySet()) {
+          java.util.Optional<SymbolicRouteMessage<R>> child =
+              exporter.export(contribution.getValue(), contribution.getKey());
+          if (child.isPresent()) {
+            SymbolicRouteMessage<R> message = child.get();
+            SymbolicRouteContributionId childId =
+                new SymbolicRouteContributionId(
+                    message.getMessageId(), message.getSender(), message.getReceiver());
+            newAdvertisements.put(
+                contribution.getKey(), new AdvertisementRecord(childId, message.getGuard()));
+            queue.add(WorkItem.advertise(message));
+          }
+        }
+        if (!newAdvertisements.isEmpty()) {
+          byCandidate.put(key, newAdvertisements);
         }
       }
     }

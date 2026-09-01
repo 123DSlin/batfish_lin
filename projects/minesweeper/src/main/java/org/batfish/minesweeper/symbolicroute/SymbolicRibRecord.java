@@ -3,7 +3,10 @@ package org.batfish.minesweeper.symbolicroute;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.List;
 import javax.annotation.Nonnull;
 import org.batfish.datamodel.AbstractRouteDecorator;
 import org.batfish.datamodel.route.nh.NextHop;
@@ -37,6 +40,7 @@ public final class SymbolicRibRecord {
   private final boolean _selectionSatisfiable;
   @Nonnull private final ImmutableList<String> _contributionIds;
   @Nonnull private final ImmutableList<String> _routerPath;
+  @Nonnull private final ImmutableList<String> _forwardingPath;
 
   private SymbolicRibRecord(
       Plane plane,
@@ -54,7 +58,8 @@ public final class SymbolicRibRecord {
       String selectionGuard,
       boolean selectionSatisfiable,
       Iterable<String> contributionIds,
-      Iterable<String> routerPath) {
+      Iterable<String> routerPath,
+      Iterable<String> forwardingPath) {
     _plane = requireNonNull(plane, "plane must be provided");
     _router = requireNonNull(router, "router must be provided");
     _vrf = requireNonNull(vrf, "vrf must be provided");
@@ -71,6 +76,7 @@ public final class SymbolicRibRecord {
     _selectionSatisfiable = selectionSatisfiable;
     _contributionIds = ImmutableList.copyOf(contributionIds);
     _routerPath = ImmutableList.copyOf(routerPath);
+    _forwardingPath = ImmutableList.copyOf(forwardingPath);
   }
 
   static <R extends AbstractRouteDecorator> SymbolicRibRecord from(
@@ -81,7 +87,6 @@ public final class SymbolicRibRecord {
   static <R extends AbstractRouteDecorator> SymbolicRibRecord from(
       Plane plane, GuardedRib<R> rib, GuardedRibEntry<R> entry, boolean simplifyGuards) {
     SymbolicRoute<R> symbolic = entry.getSymbolicRoute();
-    NextHop nextHop = symbolic.getRoute().getAbstractRoute().getNextHop();
     ImmutableList<String> contributions =
         rib.getContributionIds(symbolic.getKey()).stream()
             .map(
@@ -95,6 +100,37 @@ public final class SymbolicRibRecord {
                         id.getMessageId()))
             .sorted()
             .collect(ImmutableList.toImmutableList());
+    return create(plane, symbolic, entry, simplifyGuards, contributions, false);
+  }
+
+  static <R extends AbstractRouteDecorator> SymbolicRibRecord fromContribution(
+      Plane plane,
+      SymbolicRouteContributionId contributionId,
+      GuardedRibEntry<R> entry,
+      boolean simplifyGuards) {
+    return create(
+        plane,
+        entry.getSymbolicRoute(),
+        entry,
+        simplifyGuards,
+        ImmutableList.of(formatContributionId(contributionId)),
+        true);
+  }
+
+  private static <R extends AbstractRouteDecorator> SymbolicRibRecord create(
+      Plane plane,
+      SymbolicRoute<R> symbolic,
+      GuardedRibEntry<R> entry,
+      boolean simplifyGuards,
+      Iterable<String> contributions,
+      boolean forwardingBranch) {
+    NextHop nextHop = symbolic.getRoute().getAbstractRoute().getNextHop();
+    List<String> advertisementPath = symbolic.getProvenance().getRouterPath();
+    List<String> forwardingPath = new ArrayList<>();
+    if (forwardingBranch) {
+      forwardingPath.addAll(advertisementPath);
+      Collections.reverse(forwardingPath);
+    }
     return new SymbolicRibRecord(
         plane,
         symbolic.getKey().getRouter(),
@@ -111,7 +147,18 @@ public final class SymbolicRibRecord {
         guardText(entry.getSelectionGuard(), simplifyGuards),
         entry.getSelectionGuard().isSatisfiable(),
         contributions,
-        symbolic.getProvenance().getRouterPath());
+        advertisementPath,
+        forwardingPath);
+  }
+
+  private static String formatContributionId(SymbolicRouteContributionId id) {
+    return String.format(
+        "%d:%s:%d:%s:%s",
+        id.getSender().length(),
+        id.getSender(),
+        id.getReceiver().length(),
+        id.getReceiver(),
+        id.getMessageId());
   }
 
   private static String guardText(RouteGuard guard, boolean simplifyGuards) {
@@ -139,7 +186,8 @@ public final class SymbolicRibRecord {
         .thenComparing(SymbolicRibRecord::getVrf)
         .thenComparing(SymbolicRibRecord::getPrefix)
         .thenComparing(record -> record.getPlane().toString())
-        .thenComparing(SymbolicRibRecord::getRoute);
+        .thenComparing(SymbolicRibRecord::getRoute)
+        .thenComparing(record -> String.join("\u0000", record.getForwardingPath()));
   }
 
   @Nonnull
@@ -217,5 +265,11 @@ public final class SymbolicRibRecord {
   @Nonnull
   public ImmutableList<String> getRouterPath() {
     return _routerPath;
+  }
+
+  /** Reverse of the preserved advertisement branch for the current point-to-point pipeline. */
+  @Nonnull
+  public ImmutableList<String> getForwardingPath() {
+    return _forwardingPath;
   }
 }

@@ -270,6 +270,39 @@ public final class BatfishSymbolicRoutePipelineResult {
     return ImmutableList.copyOf(records);
   }
 
+  /** Returns every satisfiable MAIN contribution as an independent guarded forwarding branch. */
+  @Nonnull
+  public ImmutableList<SymbolicRibRecord> getMainForwardingBranches() {
+    return getMainForwardingBranches(true);
+  }
+
+  @Nonnull
+  private ImmutableList<SymbolicRibRecord> getMainForwardingBranches(boolean simplifyGuards) {
+    List<SymbolicRibRecord> records = new ArrayList<>();
+    _mainRibNetwork
+        .getRibs()
+        .values()
+        .forEach(
+            rib ->
+                rib.getEntries()
+                    .forEach(
+                        candidate ->
+                            rib.getContributionEntries(candidate.getSymbolicRoute().getKey())
+                                .forEach(
+                                    (id, branch) -> {
+                                      if (branch.getSelectionGuard().isSatisfiable()) {
+                                        records.add(
+                                            SymbolicRibRecord.fromContribution(
+                                                SymbolicRibRecord.Plane.MAIN,
+                                                id,
+                                                branch,
+                                                simplifyGuards));
+                                      }
+                                    })));
+    records.sort(SymbolicRibRecord.ordering());
+    return ImmutableList.copyOf(records);
+  }
+
   /** Returns the final records grouped exactly as router -&gt; VRF -&gt; guarded RIB entries. */
   @Nonnull
   public ImmutableMap<String, Map<String, ImmutableList<SymbolicRibRecord>>>
@@ -399,6 +432,8 @@ public final class BatfishSymbolicRoutePipelineResult {
       SymbolicRibRecord.Plane plane,
       boolean simplifyGuards,
       boolean omitNeverSelected) {
+    String pathHeader =
+        plane == SymbolicRibRecord.Plane.MAIN ? "ForwardingPath" : "AdvertisementPath";
     output.append(
         String.format(
             "%-8s %-9s %-18s %-10s %-8s %-5s %-34s %-16s %-18s %-28s %-55s %s%n",
@@ -413,10 +448,14 @@ public final class BatfishSymbolicRoutePipelineResult {
             "NextHopInterface",
             "AvailabilityGuard",
             "SelectionGuard",
-            "AdvertisementPath"));
+            pathHeader));
     output.append(
         "========================================================================================================================================================================\n");
-    for (SymbolicRibRecord route : getAllRoutes(simplifyGuards)) {
+    Iterable<SymbolicRibRecord> routes =
+        plane == SymbolicRibRecord.Plane.MAIN
+            ? getMainForwardingBranches(simplifyGuards)
+            : getAllRoutes(simplifyGuards);
+    for (SymbolicRibRecord route : routes) {
       if (route.getPlane() != plane) {
         continue;
       }
@@ -437,7 +476,11 @@ public final class BatfishSymbolicRoutePipelineResult {
               route.getNextHopInterface(),
               oneLine(route.getAvailabilityGuard()),
               oneLine(route.getSelectionGuard()),
-              String.join(" -> ", route.getRouterPath())));
+              String.join(
+                  " -> ",
+                  plane == SymbolicRibRecord.Plane.MAIN
+                      ? route.getForwardingPath()
+                      : route.getRouterPath())));
     }
   }
 

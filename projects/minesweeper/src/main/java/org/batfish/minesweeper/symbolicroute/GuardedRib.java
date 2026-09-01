@@ -3,6 +3,7 @@ package org.batfish.minesweeper.symbolicroute;
 import static java.util.Objects.requireNonNull;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -121,6 +122,39 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
     requireNonNull(key, "key must be provided");
     Map<SymbolicRouteContributionId, SymbolicRoute<R>> contributions = _contributions.get(key);
     return contributions == null ? ImmutableSet.of() : ImmutableSet.copyOf(contributions.keySet());
+  }
+
+  /**
+   * Returns every supporting advertisement as its own guarded selection branch.
+   *
+   * <p>The candidate-wide availability remains the disjunction of these branches. Each branch is
+   * suppressed by the same strictly better candidates, but retains its own provenance and guard.
+   */
+  public ImmutableMap<SymbolicRouteContributionId, GuardedRibEntry<R>> getContributionEntries(
+      SymbolicRouteKey key) {
+    requireNonNull(key, "key must be provided");
+    Map<SymbolicRouteContributionId, SymbolicRoute<R>> contributions = _contributions.get(key);
+    if (contributions == null) {
+      return ImmutableMap.of();
+    }
+    ImmutableMap.Builder<SymbolicRouteContributionId, GuardedRibEntry<R>> entries =
+        ImmutableMap.builder();
+    for (Map.Entry<SymbolicRouteContributionId, SymbolicRoute<R>> contribution :
+        contributions.entrySet()) {
+      RouteGuard selectionGuard = contribution.getValue().getAvailabilityGuard();
+      for (SymbolicRoute<R> possibleHigherPriority : _routes.values()) {
+        if (sameRibScope(possibleHigherPriority.getKey(), key)
+            && _preferenceComparator.compare(
+                    possibleHigherPriority.getRoute(), contribution.getValue().getRoute())
+                < 0) {
+          selectionGuard = selectionGuard.and(possibleHigherPriority.getAvailabilityGuard().not());
+        }
+      }
+      entries.put(
+          contribution.getKey(),
+          new GuardedRibEntry<>(contribution.getValue(), selectionGuard.simplify()));
+    }
+    return entries.build();
   }
 
   private Map<SymbolicRouteKey, GuardedRibEntry<R>> computeEntries() {

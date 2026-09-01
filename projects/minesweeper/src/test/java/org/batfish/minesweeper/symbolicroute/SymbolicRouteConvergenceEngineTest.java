@@ -10,6 +10,7 @@ import com.microsoft.z3.Context;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.batfish.datamodel.Prefix;
 import org.batfish.datamodel.StaticRoute;
@@ -115,9 +116,7 @@ public final class SymbolicRouteConvergenceEngineTest {
             initial("a", route(30), GUARDS.variable("fifo_3"))));
 
     assertThat(
-        processed,
-        equalTo(
-            ImmutableList.of("origin->a:10", "origin->a:20", "origin->a:30")));
+        processed, equalTo(ImmutableList.of("origin->a:10", "origin->a:20", "origin->a:30")));
     assertThat(rib.getEntries(), hasSize(3));
   }
 
@@ -149,6 +148,64 @@ public final class SymbolicRouteConvergenceEngineTest {
         c.get(new SymbolicRouteKey("c", "default", route))
             .getAvailabilityGuard()
             .isEquivalentTo(seed.and(ab).and(bc)),
+        equalTo(true));
+  }
+
+  @Test
+  public void testDiamondPreservesIndependentGuardAndProvenanceBranches() {
+    RouteGuard seed = GUARDS.variable("diamond_seed");
+    RouteGuard ab = GUARDS.variable("diamond_ab");
+    RouteGuard ac = GUARDS.variable("diamond_ac");
+    RouteGuard bd = GUARDS.variable("diamond_bd");
+    RouteGuard cd = GUARDS.variable("diamond_cd");
+    StaticRoute route = route(10);
+    GuardedRib<StaticRoute> a = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> b = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> c = new GuardedRib<>(PREFERENCE);
+    GuardedRib<StaticRoute> d = new GuardedRib<>(PREFERENCE);
+    SymbolicRoutePropagationDependencies dependencies = new SymbolicRoutePropagationDependencies();
+    SymbolicRouteConvergenceEngine<StaticRoute> engine =
+        new SymbolicRouteConvergenceEngine<>(
+            ImmutableList.of(
+                processor("a", a), processor("b", b), processor("c", c), processor("d", d)),
+            ImmutableList.of(
+                exporter("a", "b", ab, (s, r, candidate) -> Optional.of(candidate), dependencies),
+                exporter("a", "c", ac, (s, r, candidate) -> Optional.of(candidate), dependencies),
+                exporter("b", "d", bd, (s, r, candidate) -> Optional.of(candidate), dependencies),
+                exporter("c", "d", cd, (s, r, candidate) -> Optional.of(candidate), dependencies)));
+
+    engine.converge(ImmutableList.of(initial("a", route, seed)));
+
+    SymbolicRouteKey dKey = new SymbolicRouteKey("d", "default", route);
+    assertThat(
+        d.get(dKey)
+            .getAvailabilityGuard()
+            .isEquivalentTo(seed.and(ab).and(bd).or(seed.and(ac).and(cd))),
+        equalTo(true));
+    Map<SymbolicRouteContributionId, GuardedRibEntry<StaticRoute>> branches =
+        d.getContributionEntries(dKey);
+    assertThat(branches.values(), hasSize(2));
+    assertThat(
+        branches.values().stream()
+            .anyMatch(
+                branch ->
+                    branch.getAvailabilityGuard().isEquivalentTo(seed.and(ab).and(bd))
+                        && branch
+                            .getSymbolicRoute()
+                            .getProvenance()
+                            .getRouterPath()
+                            .equals(ImmutableList.of("origin", "a", "b", "d"))),
+        equalTo(true));
+    assertThat(
+        branches.values().stream()
+            .anyMatch(
+                branch ->
+                    branch.getAvailabilityGuard().isEquivalentTo(seed.and(ac).and(cd))
+                        && branch
+                            .getSymbolicRoute()
+                            .getProvenance()
+                            .getRouterPath()
+                            .equals(ImmutableList.of("origin", "a", "c", "d"))),
         equalTo(true));
   }
 

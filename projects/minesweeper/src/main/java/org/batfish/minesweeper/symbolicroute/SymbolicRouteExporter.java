@@ -2,7 +2,6 @@ package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
 
-import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -48,11 +47,11 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
     _dependencies = requireNonNull(dependencies, "dependencies must be provided");
   }
 
-  /** Exports one selected RIB entry to this peer, if policy and guard permit it. */
+  /** Exports one selected contribution branch to this peer, if policy and guard permit it. */
   public Optional<SymbolicRouteMessage<R>> export(
-      GuardedRibEntry<R> entry, Iterable<SymbolicRouteContributionId> parents) {
+      GuardedRibEntry<R> entry, SymbolicRouteContributionId parent) {
     requireNonNull(entry, "entry must be provided");
-    requireNonNull(parents, "parents must be provided");
+    requireNonNull(parent, "parent must be provided");
     SymbolicRoute<R> symbolicRoute = entry.getSymbolicRoute();
     if (!symbolicRoute.getKey().getRouter().equals(_sender)) {
       throw new IllegalArgumentException("RIB entry does not belong to exporter sender");
@@ -71,28 +70,26 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
     if (!messageGuard.isSatisfiable()) {
       return Optional.empty();
     }
-    List<SymbolicRouteContributionId> parentList = new ArrayList<>();
-    parents.forEach(parentList::add);
-    String messageId =
+    String baseMessageId =
         requireNonNull(
             _messageIdFactory.create(
                 _sender, _receiver, symbolicRoute.getKey(), exportedRoute.get()),
             "messageIdFactory returned null");
+    String messageId = branchMessageId(baseMessageId, parent);
     SymbolicRouteContributionId child =
         new SymbolicRouteContributionId(messageId, _sender, _receiver);
-    _dependencies.replaceParents(child, parentList);
+    _dependencies.replaceParents(child, java.util.Collections.singleton(parent));
     SymbolicRouteProvenance oldProvenance = symbolicRoute.getProvenance();
     List<String> path = new ArrayList<>(oldProvenance.getRouterPath());
     path.add(_receiver);
-    String soleParentMessageId = parentList.size() == 1 ? parentList.get(0).getMessageId() : null;
     SymbolicRouteProvenance provenance =
         new SymbolicRouteProvenance(
             oldProvenance.getOriginRouter(),
             _receiver,
             _sender,
             null,
-            ImmutableList.copyOf(path),
-            soleParentMessageId);
+            com.google.common.collect.ImmutableList.copyOf(path),
+            parent.getMessageId());
     return Optional.of(
         new SymbolicRouteMessage<>(
             messageId,
@@ -103,6 +100,18 @@ public final class SymbolicRouteExporter<R extends AbstractRouteDecorator> {
             exportedRoute.get(),
             messageGuard,
             provenance));
+  }
+
+  private static String branchMessageId(String baseMessageId, SymbolicRouteContributionId parent) {
+    return String.format(
+        "%d:%s:%d:%s:%d:%s:%s",
+        baseMessageId.length(),
+        baseMessageId,
+        parent.getSender().length(),
+        parent.getSender(),
+        parent.getReceiver().length(),
+        parent.getReceiver(),
+        parent.getMessageId());
   }
 
   @Nonnull

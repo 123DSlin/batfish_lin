@@ -1,6 +1,7 @@
 package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -19,10 +20,15 @@ public final class BatfishBgpRedistributionReconciler {
   private static final class SourceKey {
     @Nonnull private final String _ruleId;
     @Nonnull private final SymbolicRouteKey _routeKey;
+    @Nonnull private final SymbolicRouteContributionId _sourceContributionId;
 
-    private SourceKey(String ruleId, SymbolicRouteKey routeKey) {
+    private SourceKey(
+        String ruleId,
+        SymbolicRouteKey routeKey,
+        SymbolicRouteContributionId sourceContributionId) {
       _ruleId = ruleId;
       _routeKey = routeKey;
+      _sourceContributionId = sourceContributionId;
     }
 
     @Override
@@ -34,12 +40,14 @@ public final class BatfishBgpRedistributionReconciler {
         return false;
       }
       SourceKey that = (SourceKey) object;
-      return _ruleId.equals(that._ruleId) && _routeKey.equals(that._routeKey);
+      return _ruleId.equals(that._ruleId)
+          && _routeKey.equals(that._routeKey)
+          && _sourceContributionId.equals(that._sourceContributionId);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(_ruleId, _routeKey);
+      return Objects.hash(_ruleId, _routeKey, _sourceContributionId);
     }
   }
 
@@ -141,31 +149,36 @@ public final class BatfishBgpRedistributionReconciler {
     for (BatfishBgpRedistributionRule rule : _rules) {
       Configuration configuration = _configurations.get(rule.getRouter());
       BgpProcess process = bgpProcess(configuration, rule.getTargetVrf());
-      for (GuardedRibEntry<AnnotatedRoute<AbstractRoute>> entry :
-          _mainNetwork.getRib(rule.getRouter()).getEntries()) {
-        SymbolicRoute<AnnotatedRoute<AbstractRoute>> symbolic = entry.getSymbolicRoute();
-        RoutingProtocol sourceProtocol = symbolic.getKey().getProtocol();
-        if (!symbolic.getKey().getVrf().equals(rule.getSourceVrf())
-            || sourceProtocol == RoutingProtocol.BGP
-            || sourceProtocol == RoutingProtocol.IBGP
-            || !entry.getSelectionGuard().isSatisfiable()) {
-          continue;
+      GuardedRib<AnnotatedRoute<AbstractRoute>> mainRib = _mainNetwork.getRib(rule.getRouter());
+      for (GuardedRibEntry<AnnotatedRoute<AbstractRoute>> candidate : mainRib.getEntries()) {
+        for (Map.Entry<SymbolicRouteContributionId, GuardedRibEntry<AnnotatedRoute<AbstractRoute>>>
+            contribution :
+                mainRib.getContributionEntries(candidate.getSymbolicRoute().getKey()).entrySet()) {
+          GuardedRibEntry<AnnotatedRoute<AbstractRoute>> entry = contribution.getValue();
+          SymbolicRoute<AnnotatedRoute<AbstractRoute>> symbolic = entry.getSymbolicRoute();
+          RoutingProtocol sourceProtocol = symbolic.getKey().getProtocol();
+          if (!symbolic.getKey().getVrf().equals(rule.getSourceVrf())
+              || sourceProtocol == RoutingProtocol.BGP
+              || sourceProtocol == RoutingProtocol.IBGP
+              || !entry.getSelectionGuard().isSatisfiable()) {
+            continue;
+          }
+          BatfishRoutingPolicyResult<Bgpv4Route> converted =
+              BatfishBgpRedistribution.redistribute(
+                  configuration,
+                  process,
+                  rule.getPolicyName(),
+                  symbolic.getRoute(),
+                  rule.getTargetVrf(),
+                  rule.getTargetProtocol());
+          if (converted.getOutcome() == BatfishRoutingPolicyResult.Outcome.POLICY_NOT_FOUND) {
+            throw new IllegalArgumentException(
+                "redistribution policy is missing: " + rule.getPolicyName());
+          }
+          desired.put(
+              new SourceKey(rule.getRuleId(), symbolic.getKey(), contribution.getKey()),
+              new Desired(converted, entry.getSelectionGuard()));
         }
-        BatfishRoutingPolicyResult<Bgpv4Route> converted =
-            BatfishBgpRedistribution.redistribute(
-                configuration,
-                process,
-                rule.getPolicyName(),
-                symbolic.getRoute(),
-                rule.getTargetVrf(),
-                rule.getTargetProtocol());
-        if (converted.getOutcome() == BatfishRoutingPolicyResult.Outcome.POLICY_NOT_FOUND) {
-          throw new IllegalArgumentException(
-              "redistribution policy is missing: " + rule.getPolicyName());
-        }
-        desired.put(
-            new SourceKey(rule.getRuleId(), symbolic.getKey()),
-            new Desired(converted, entry.getSelectionGuard()));
       }
     }
     return desired;
