@@ -158,6 +158,7 @@ public final class ToleranceFourRouterParsedPipelineTest {
     String rawReadableText = result.toRawReadableText();
     assertThat(readableText.contains("MAIN RIB (cross-protocol forwarding candidates)"), equalTo(true));
     assertThat(readableText.contains("BGP LOC-RIB (protocol detail)"), equalTo(true));
+    assertThat(readableText.matches("(?s).*Protocol\\s+NextHop\\s+NextHopIP.*"), equalTo(true));
     assertThat(readableText.contains("Network            RIB"), equalTo(false));
     assertThat(readableText.contains("(let"), equalTo(false));
     assertThat(rawReadableText.contains("(let"), equalTo(true));

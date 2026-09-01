@@ -1700,3 +1700,14 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 2026-09-01 13:34 CST 完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过。PMD 首轮仅在
   本次 builder 中发现一个迁移后未使用的 `ImmutableList` import，已删除；其余报告仍为既有
   Graph/Encoder/EncoderSlice/PropertyChecker 与旧 SMT symbolic-route 基线项。
+
+## Stage 8.2 symbolic RIB typed NextHop 展示（2026-09-01 13:38 CST）
+
+- `SymbolicRibRecord` 已经在内部和 JSON 中保存完整 typed next hop，但 readable/raw text renderer
+  之前只展示派生的 `NextHopIP` 与 `NextHopInterface`，对 discard、next-VRF 以及后续 next-hop 类型
+  不完整。本阶段在保留两个便于筛选的派生列同时，新增 `NextHop` 列并直接展示记录中的完整值。
+- 新增 text header/value 与 JSON `nextHop` 回归断言；不改变 route identity、guard、RIB selection
+  或协议传播语义。
+- 2026-09-01 13:44 CST 完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过；实际
+  `SmtReachabilityTest.testReachability` 通过，最新 `smt_output_0039/0_symbolic_routes.txt` 已显示
+  `NextHop`、`NextHopIP`、`NextHopInterface` 三列。

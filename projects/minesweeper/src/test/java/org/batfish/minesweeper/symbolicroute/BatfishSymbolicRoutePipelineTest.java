@@ -282,7 +282,9 @@ public final class BatfishSymbolicRoutePipelineTest {
     }
     assertThat(unknownRouterRejected, equalTo(true));
     assertThat(result.toJson(), containsString("\"availabilityGuard\""));
+    assertThat(result.toJson(), containsString("\"nextHop\""));
     assertThat(result.toJson(), containsString("connected_enabled"));
+    assertThat(result.toReadableText(), containsString(record.getNextHop()));
 
     SymbolicRouteContributionId connectedContribution =
         new SymbolicRouteContributionId("a-connected", "a", "a");

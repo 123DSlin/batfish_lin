@@ -398,11 +398,12 @@ public final class BatfishSymbolicRoutePipelineResult {
       StringBuilder output, SymbolicRibRecord.Plane plane, boolean simplifyGuards) {
     output.append(
         String.format(
-            "%-8s %-9s %-18s %-10s %-16s %-18s %-28s %-55s %s%n",
+            "%-8s %-9s %-18s %-10s %-34s %-16s %-18s %-28s %-55s %s%n",
             "Node",
             "VRF",
             "Network",
             "Protocol",
+            "NextHop",
             "NextHopIP",
             "NextHopInterface",
             "AvailabilityGuard",
@@ -416,11 +417,12 @@ public final class BatfishSymbolicRoutePipelineResult {
       }
       output.append(
           String.format(
-              "%-8s %-9s %-18s %-10s %-16s %-18s %-28s %-55s %s%n",
+              "%-8s %-9s %-18s %-10s %-34s %-16s %-18s %-28s %-55s %s%n",
               route.getRouter(),
               route.getVrf(),
               route.getPrefix(),
               route.getProtocol(),
+              route.getNextHop(),
               route.getNextHopIp(),
               route.getNextHopInterface(),
               oneLine(route.getAvailabilityGuard()),
