@@ -46,8 +46,10 @@ I(message, receiver) = E(message, sender) AND alive(l)
 
 Stage 1–3 已完成协议无关数据模型、Z3 guard algebra、guarded RIB、FIFO 收敛、传播依赖和
 recursive withdrawal。Stage 4 已接入 connected/static 和当前验收范围内的 IPv4 eBGP Batfish
-协议语义，并提供一次运行得到全网 router/VRF Symbolic RIB 的 typed pipeline。OSPF、IS-IS、
-iBGP、SR、`k`-failure pruning 和 tolerance 后续 SMT 绑定尚未实现。详细记录见
+协议语义。Stage 6 已实现 IS-IS L1/L2 guarded convergence 和 L1→L2 transition。Stage 7.8 已从
+Batfish 解析的 SID/SR policy 配置和稳定 IS-IS underlay 生成 guarded candidate 与 MPLS forwarding
+contribution，并接入 typed pipeline 及可读/raw/JSON 输出。OSPF、iBGP、递归 Binding-SID、
+`k`-failure pruning、symbolic traffic execution 和 tolerance 后续 SMT 绑定尚未实现。详细记录见
 [`IMPLEMENTATION_LOG.md`](IMPLEMENTATION_LOG.md)，代码审查要点见
 [`REVIEW_GUIDE.md`](REVIEW_GUIDE.md)。
 

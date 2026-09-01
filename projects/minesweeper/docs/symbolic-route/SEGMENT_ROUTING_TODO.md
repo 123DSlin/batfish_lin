@@ -11,9 +11,11 @@ SR reachability before the underlying guarded IGP state is available.
 
 Ordered typed segment resolution, per-branch numeric stacks, the vendor-independent SR policy/
 segment-list/candidate-path model, and the Cisco IOS explicit MPLS SR-TE parser/conversion path are
-implemented. Guarded SR-policy candidate selection and stable-snapshot lifecycle are also complete:
+implemented. Guarded SR-policy candidate selection and stable-boundary lifecycle are also complete:
 candidate availability and selection remain distinct, equal-preference candidates coexist, and
-dependent forwarding contributions are replaced or withdrawn as SID/underlay state changes. Next:
-add top-level output and parser-driven acceptance. Dynamic/PCEP candidates, adjacency segment-list
-syntax, OSPF, and additional vendor parser adapters remain independent follow-up work behind the
-protocol-neutral underlay interface.
+dependent forwarding contributions are replaced or withdrawn as SID/underlay state changes.
+Top-level pipeline integration, deterministic readable/raw/JSON output, and parser-driven IOS
+acceptance are complete. Dynamic/PCEP candidates, adjacency segment-list syntax, recursive
+Binding-SID segment expansion, OSPF, and additional vendor parser adapters remain independent
+follow-up work behind the protocol-neutral underlay interface. Ordinary typed Prefix/Node/Adjacency
+SID bindings are already supported.

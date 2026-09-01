@@ -206,6 +206,9 @@ public final class GuardedSrPolicyReconcilerTest {
         delta.getContributionUpdates().get(0).getType(),
         equalTo(GuardedSrPolicyDelta.Type.REPLACED));
     assertThat(
+        delta.getContributionUpdates().get(0).getOldValue().getKey(),
+        equalTo(delta.getContributionUpdates().get(0).getNewValue().getKey()));
+    assertThat(
         reconciler.getDatabase().getContributions().get(0).getBranch().getTopFirstLabels().get(0),
         equalTo(SrSidValue.mplsLabel(16002L)));
   }
@@ -237,6 +240,22 @@ public final class GuardedSrPolicyReconcilerTest {
         reconciler.getLastDelta().getContributionUpdates().stream()
             .anyMatch(update -> update.getType() == GuardedSrPolicyDelta.Type.ADDED),
         equalTo(true));
+    GuardedSrPolicyDelta.Update<GuardedSrPolicyContribution> removed =
+        reconciler.getLastDelta().getContributionUpdates().stream()
+            .filter(update -> update.getType() == GuardedSrPolicyDelta.Type.REMOVED)
+            .findFirst()
+            .get();
+    GuardedSrPolicyDelta.Update<GuardedSrPolicyContribution> added =
+        reconciler.getLastDelta().getContributionUpdates().stream()
+            .filter(update -> update.getType() == GuardedSrPolicyDelta.Type.ADDED)
+            .findFirst()
+            .get();
+    assertThat(removed.getOldValue().getKey().equals(added.getNewValue().getKey()), equalTo(false));
+    assertThat(
+        reconciler.getDatabase().getContributions().contains(added.getNewValue()), equalTo(true));
+    assertThat(
+        reconciler.getDatabase().getContributions().contains(removed.getOldValue()),
+        equalTo(false));
   }
 
   @Test

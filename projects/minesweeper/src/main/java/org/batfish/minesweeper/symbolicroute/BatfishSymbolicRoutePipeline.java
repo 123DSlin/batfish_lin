@@ -16,6 +16,7 @@ import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.IsisRoute;
 import org.batfish.datamodel.Vrf;
 import org.batfish.minesweeper.symbolicsr.GuardedSidReconciler;
+import org.batfish.minesweeper.symbolicsr.GuardedSrPolicyReconciler;
 
 /** Executes connected/static, IS-IS L1, redistribution, and eBGP to guarded stable state. */
 public final class BatfishSymbolicRoutePipeline {
@@ -95,6 +96,8 @@ public final class BatfishSymbolicRoutePipeline {
                 .addAll(input.getIsisSessions())
                 .addAll(input.getIsisL2Sessions())
                 .build());
+    GuardedSrPolicyReconciler srPolicyReconciler =
+        new GuardedSrPolicyReconciler(input.getConfigurations(), sidReconciler);
     return new BatfishSymbolicRoutePipelineResult(
         mainNetwork,
         bgpNetwork,
@@ -109,6 +112,7 @@ public final class BatfishSymbolicRoutePipeline {
         isisConvergence,
         isisL2Convergence,
         sidReconciler,
+        srPolicyReconciler,
         input.getConfigurations());
   }
 

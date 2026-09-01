@@ -581,6 +581,7 @@ import org.batfish.grammar.cisco.CiscoParser.If_ip_vrf_sitemapContext;
 import org.batfish.grammar.cisco.CiscoParser.If_ipv6_traffic_filterContext;
 import org.batfish.grammar.cisco.CiscoParser.If_isis_adjacency_sidContext;
 import org.batfish.grammar.cisco.CiscoParser.If_isis_metricContext;
+import org.batfish.grammar.cisco.CiscoParser.If_isis_networkContext;
 import org.batfish.grammar.cisco.CiscoParser.If_isis_prefix_sidContext;
 import org.batfish.grammar.cisco.CiscoParser.If_member_interfaceContext;
 import org.batfish.grammar.cisco.CiscoParser.If_mtuContext;
@@ -5126,6 +5127,13 @@ public class CiscoControlPlaneExtractor extends CiscoParserBaseListener
   public void exitIf_ip_router_isis(If_ip_router_isisContext ctx) {
     for (Interface iface : _currentInterfaces) {
       iface.setIsisInterfaceMode(IsisInterfaceMode.ACTIVE);
+    }
+  }
+
+  @Override
+  public void exitIf_isis_network(If_isis_networkContext ctx) {
+    for (Interface iface : _currentInterfaces) {
+      iface.setIsisPointToPoint(true);
     }
   }
 

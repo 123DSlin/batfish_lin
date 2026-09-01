@@ -8,7 +8,10 @@ import java.util.Map;
 import org.batfish.datamodel.Configuration;
 import org.batfish.minesweeper.symbolicroute.RouteGuard;
 
-/** Rebuilds selected SR forwarding outputs and emits semantic lifecycle deltas. */
+/**
+ * Reconciles selected SR forwarding outputs across stable underlay boundaries for fixed SR
+ * configuration and emits atomic semantic lifecycle deltas.
+ */
 public final class GuardedSrPolicyReconciler {
   private final ImmutableMap<String, Configuration> _configurations;
   private final SymbolicUnderlayReachability _underlay;
@@ -16,7 +19,7 @@ public final class GuardedSrPolicyReconciler {
   private GuardedSrPolicyDatabase _database;
   private GuardedSrPolicyDelta _lastDelta;
 
-  /** Production wiring: every stable underlay snapshot reconciles dependent policy output. */
+  /** Production wiring: every stable underlay boundary reconciles dependent policy output. */
   public GuardedSrPolicyReconciler(
       Map<String, Configuration> configurations, GuardedSidReconciler sidReconciler) {
     this(configurations, sidReconciler.getUnderlay(), sidReconciler.getDatabase());

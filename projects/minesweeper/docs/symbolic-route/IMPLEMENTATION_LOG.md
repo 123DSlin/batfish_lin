@@ -1600,6 +1600,40 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   recursive withdrawal、低优先级恢复、payload replacement 和等价 aggregate guard 下的 next-hop
   replacement。完整 Minesweeper tests 禁用缓存通过；Minesweeper PMD 仍只报告 Graph/Encoder/EncoderSlice/
   PropertyChecker 及旧 SMT symbolic-route 文件的 34 条基线违规，没有新增 `symbolicsr` 违规。
-- Stage 7.7 的边界是固定配置 + stable underlay snapshot。下一步 Stage 7.8 将把数据库接入顶层
-  pipeline/result report，并用 Batfish parser 产生的 Cisco SR-TE 配置做端到端验收；不进入 symbolic
-  traffic execution。
+- Stage 7.7 的准确边界是固定 SR 配置，并在每次 underlay stable boundary 上增量 reconcile；单份
+  database 是 snapshot，但 reconciler 不是 fixed-snapshot resolver。下一步 Stage 7.8 将把数据库接入
+  顶层 pipeline/result report，并用 Batfish parser 产生的 Cisco SR-TE 配置做端到端验收；不进入
+  symbolic traffic execution。
+
+## Stage 7.7 delta 契约审计（2026-08-31 22:46 CST）
+
+- 明确 `GuardedSrPolicyDelta` 是两个 stable state 之间的原子 batch，而不是按 list 顺序执行的事件流。
+  同 stable key、非 guard payload 改变为 `REPLACED`；identity/key 改变为同一 batch 内旧值 `REMOVED`
+  与新值 `ADDED`，消费者不得任意配对无关 remove/add。
+- 测试锁定两种边界：binding label payload 改变保持 key 并产生 `REPLACED`；next-hop identity 改变产生
+  不同 key 的 `REMOVED+ADDED`，且 reconcile 后数据库只包含新 contribution。
+- 能力边界统一为固定 SR 配置、逐 underlay stable boundary 增量 reconcile。普通 typed Prefix/Node/
+  Adjacency SID binding 已支持；递归 Binding-SID segment/policy expansion 尚未支持并 fail closed。
+
+## Stage 7.8 顶层 pipeline/output 与 parser-driven 验收（2026-09-01 10:12 CST）
+
+- `BatfishSymbolicRoutePipeline` 在 IS-IS/SID stable state 后构造 `GuardedSrPolicyReconciler`；同一
+  result 同时暴露 MAIN/BGP/IS-IS RIB、guarded SID database 和 guarded SR-policy database，没有把
+  SR policy 错装进 MAIN RIB，也没有进入 symbolic traffic/load execution。
+- 新增 `SymbolicSrPolicyRecord` 作为只读输出 DTO。它确定性展示 node/VRF、color/endpoint、policy、
+  candidate preference/weight/segment-list、numeric label stack、typed next-hop、canonical link
+  dependency、terminal 以及 availability/selection guard；report text 不参与任何 identity。
+- 顶层可读报告新增 SR candidate/forwarding 表，另提供简化 JSON 和 raw JSON。默认输出只做 Z3
+  display simplify；raw 输出保留 stable database 中的原公式。
+- 新增 `networks/sr-symbolic-route/configs` 两节点 IOS 验收配置。测试从 Batfish parser、concrete
+  dataplane/ISIS topology、parser-driven pipeline 一路运行到 guarded Prefix-SID、candidate selection
+  和 forwarding contribution，断言 label `16002`、next hop `r2/default/GigabitEthernet0/0` 与统一
+  canonical `LinkFailureKey(r1,r2)`。
+- 验收暴露旧 parser 闭环缺口：grammar 已接受 `isis network point-to-point`，但 extractor/vendor
+  conversion 未保存。以最小三点修改将该命令写入 Cisco interface representation 并转换到 Batfish
+  `IsisInterfaceSettings.pointToPoint`；未放宽 Minesweeper 对非 point-to-point IS-IS 的安全拒绝。
+- 能力边界不变：固定 SR 配置，在每次 stable underlay boundary 增量 reconcile；普通 typed SID
+  binding 已支持，递归 Binding-SID 尚未支持。下一阶段仍不包含 traffic execution。
+- 2026-09-01 10:12 CST 验证：完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过；Cisco
+  grammar/vendor representation 两个 PMD target 通过。Minesweeper PMD 仍失败于既有 Graph/Encoder/
+  EncoderSlice/PropertyChecker 和旧 SMT symbolic-route 共 34 条基线违规，本次新增/修改类零违规。

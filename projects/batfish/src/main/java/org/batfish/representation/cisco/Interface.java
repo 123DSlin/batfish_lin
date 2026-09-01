@@ -182,6 +182,8 @@ public class Interface implements Serializable {
 
   @Nullable private IsisInterfaceMode _isisInterfaceMode;
 
+  private boolean _isisPointToPoint;
+
   @Nullable private Long _isisPrefixSid;
 
   private boolean _isisPrefixSidAbsolute;
@@ -422,6 +424,10 @@ public class Interface implements Serializable {
     return _isisInterfaceMode;
   }
 
+  public boolean getIsisPointToPoint() {
+    return _isisPointToPoint;
+  }
+
   @Nullable
   public Long getIsisPrefixSid() {
     return _isisPrefixSid;
@@ -619,6 +625,10 @@ public class Interface implements Serializable {
 
   public void setIsisInterfaceMode(IsisInterfaceMode mode) {
     _isisInterfaceMode = mode;
+  }
+
+  public void setIsisPointToPoint(boolean isisPointToPoint) {
+    _isisPointToPoint = isisPointToPoint;
   }
 
   public void setIsisPrefixSid(long isisPrefixSid, boolean absolute) {

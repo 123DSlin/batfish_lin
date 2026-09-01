@@ -29,3 +29,8 @@ filegroup(
     name = "tolerance-symbolic-route",
     srcs = glob(["tolerance-symbolic-route/configs/**"]),
 )
+
+filegroup(
+    name = "sr-symbolic-route",
+    srcs = glob(["sr-symbolic-route/configs/**"]),
+)

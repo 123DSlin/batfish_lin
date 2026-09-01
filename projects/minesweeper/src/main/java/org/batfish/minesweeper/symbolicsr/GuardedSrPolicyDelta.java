@@ -5,7 +5,14 @@ import static java.util.Objects.requireNonNull;
 import com.google.common.collect.ImmutableList;
 import javax.annotation.Nullable;
 
-/** Candidate and forwarding-output changes from one guarded SR-policy reconciliation. */
+/**
+ * Atomic semantic difference between two stable guarded SR-policy states.
+ *
+ * <p>The two update lists are a batch, not an imperative event stream: their iteration order has no
+ * operational meaning. A stable key whose non-guard payload changes is {@link Type#REPLACED}. If
+ * the stable key itself changes, the old and new objects are reported in this same batch as {@link
+ * Type#REMOVED} and {@link Type#ADDED}; consumers must not pair unrelated additions and removals.
+ */
 public final class GuardedSrPolicyDelta {
   public enum Type {
     ADDED,
@@ -14,7 +21,12 @@ public final class GuardedSrPolicyDelta {
     REPLACED
   }
 
-  /** One typed old/new lifecycle transition. */
+  /**
+   * One typed old/new lifecycle transition.
+   *
+   * <p>{@link Type#GUARD_CHANGED} preserves both stable identity and concrete payload. {@link
+   * Type#REPLACED} preserves stable identity but changes concrete non-guard payload.
+   */
   public static final class Update<T> {
     private final Type _type;
     @Nullable private final T _oldValue;

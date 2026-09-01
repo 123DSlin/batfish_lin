@@ -51,7 +51,10 @@ junit_tests(
     srcs = glob([
         "src/test/java/**/*Test.java",
     ]),
-    data = ["//networks:tolerance-symbolic-route"],
+    data = [
+        "//networks:sr-symbolic-route",
+        "//networks:tolerance-symbolic-route",
+    ],
     tags = ["z3"],
     runtime_deps = [
         "@maven//:org_apache_logging_log4j_log4j_core",

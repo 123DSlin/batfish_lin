@@ -18,6 +18,9 @@ import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.IsisRoute;
 import org.batfish.minesweeper.symbolicsr.GuardedSidDatabase;
 import org.batfish.minesweeper.symbolicsr.GuardedSidReconciler;
+import org.batfish.minesweeper.symbolicsr.GuardedSrPolicyDatabase;
+import org.batfish.minesweeper.symbolicsr.GuardedSrPolicyReconciler;
+import org.batfish.minesweeper.symbolicsr.SymbolicSrPolicyRecord;
 
 /** Final stable state produced by one complete symbolic route pipeline run. */
 public final class BatfishSymbolicRoutePipelineResult {
@@ -36,6 +39,7 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull private final SymbolicRouteConvergenceResult _isisL1Convergence;
   @Nonnull private final SymbolicRouteConvergenceResult _isisL2Convergence;
   @Nonnull private final GuardedSidReconciler _guardedSidReconciler;
+  @Nonnull private final GuardedSrPolicyReconciler _guardedSrPolicyReconciler;
   @Nonnull private final ImmutableMap<String, ImmutableList<String>> _vrfsByRouter;
 
   BatfishSymbolicRoutePipelineResult(
@@ -52,6 +56,7 @@ public final class BatfishSymbolicRoutePipelineResult {
       SymbolicRouteConvergenceResult isisL1Convergence,
       SymbolicRouteConvergenceResult isisL2Convergence,
       GuardedSidReconciler guardedSidReconciler,
+      GuardedSrPolicyReconciler guardedSrPolicyReconciler,
       Map<String, Configuration> configurations) {
     _mainRibNetwork = requireNonNull(mainRibNetwork, "mainRibNetwork must be provided");
     _bgpRibNetwork = requireNonNull(bgpRibNetwork, "bgpRibNetwork must be provided");
@@ -71,6 +76,8 @@ public final class BatfishSymbolicRoutePipelineResult {
     _isisL2Convergence = requireNonNull(isisL2Convergence, "isisL2Convergence must be provided");
     _guardedSidReconciler =
         requireNonNull(guardedSidReconciler, "guardedSidReconciler must be provided");
+    _guardedSrPolicyReconciler =
+        requireNonNull(guardedSrPolicyReconciler, "guardedSrPolicyReconciler must be provided");
     ImmutableMap.Builder<String, ImmutableList<String>> vrfs = ImmutableMap.builder();
     requireNonNull(configurations, "configurations must be provided")
         .forEach(
@@ -151,6 +158,59 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull
   public GuardedSidReconciler getGuardedSidReconciler() {
     return _guardedSidReconciler;
+  }
+
+  @Nonnull
+  public GuardedSrPolicyDatabase getGuardedSrPolicyDatabase() {
+    return _guardedSrPolicyReconciler.getDatabase();
+  }
+
+  @Nonnull
+  public GuardedSrPolicyReconciler getGuardedSrPolicyReconciler() {
+    return _guardedSrPolicyReconciler;
+  }
+
+  /** Returns candidates followed by forwarding branches in deterministic semantic-key order. */
+  @Nonnull
+  public ImmutableList<SymbolicSrPolicyRecord> getAllSrPolicyRecords() {
+    return getAllSrPolicyRecords(true);
+  }
+
+  @Nonnull
+  private ImmutableList<SymbolicSrPolicyRecord> getAllSrPolicyRecords(boolean simplifyGuards) {
+    List<SymbolicSrPolicyRecord> records = new ArrayList<>();
+    getGuardedSrPolicyDatabase()
+        .getCandidates()
+        .forEach(
+            candidate ->
+                records.add(SymbolicSrPolicyRecord.fromCandidate(candidate, simplifyGuards)));
+    getGuardedSrPolicyDatabase()
+        .getContributions()
+        .forEach(
+            contribution ->
+                records.add(SymbolicSrPolicyRecord.fromContribution(contribution, simplifyGuards)));
+    records.sort(SymbolicSrPolicyRecord.ordering());
+    return ImmutableList.copyOf(records);
+  }
+
+  /** Produces a deterministic pretty-JSON SR policy/candidate/forwarding report. */
+  @Nonnull
+  public String toSrPolicyJson() {
+    return toSrPolicyJson(true);
+  }
+
+  /** Produces the SR report with exact guard expressions held by the stable database. */
+  @Nonnull
+  public String toRawSrPolicyJson() {
+    return toSrPolicyJson(false);
+  }
+
+  private String toSrPolicyJson(boolean simplifyGuards) {
+    try {
+      return BatfishObjectMapper.writePrettyString(getAllSrPolicyRecords(simplifyGuards));
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException("failed to serialize symbolic SR-policy report", e);
+    }
   }
 
   /** Returns every main, BGP, and IS-IS L1 candidate in deterministic router/VRF order. */
@@ -288,7 +348,50 @@ public final class BatfishSymbolicRoutePipelineResult {
     appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L1, simplifyGuards);
     output.append("\nIS-IS LEVEL-2 RIB (protocol detail)\n");
     appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L2, simplifyGuards);
+    output.append("\nSR POLICY CANDIDATES AND FORWARDING BRANCHES\n");
+    appendSrPolicyTable(output, simplifyGuards);
     return output.toString();
+  }
+
+  private void appendSrPolicyTable(StringBuilder output, boolean simplifyGuards) {
+    output.append(
+        String.format(
+            "%-18s %-8s %-9s %-8s %-16s %-20s %-18s %-8s %-8s %-18s %-20s %-18s %-24s %s%n",
+            "Kind",
+            "Node",
+            "VRF",
+            "Color",
+            "Endpoint",
+            "Policy",
+            "Candidate",
+            "Pref",
+            "Weight",
+            "SegmentList",
+            "Labels",
+            "NextHops",
+            "AvailabilityGuard",
+            "SelectionGuard"));
+    output.append(
+        "========================================================================================================================================================================\n");
+    for (SymbolicSrPolicyRecord record : getAllSrPolicyRecords(simplifyGuards)) {
+      output.append(
+          String.format(
+              "%-18s %-8s %-9s %-8d %-16s %-20s %-18s %-8d %-8d %-18s %-20s %-18s %-24s %s%n",
+              record.getKind(),
+              record.getNode(),
+              record.getVrf(),
+              record.getColor(),
+              record.getEndpoint(),
+              record.getPolicy(),
+              record.getCandidate(),
+              record.getPreference(),
+              record.getWeight(),
+              record.getSegmentList(),
+              record.getLabels().isEmpty() ? "-" : record.getLabels(),
+              record.getNextHops().isEmpty() ? "-" : record.getNextHops(),
+              oneLine(record.getAvailabilityGuard()),
+              oneLine(record.getSelectionGuard())));
+    }
   }
 
   private void appendReadableTable(

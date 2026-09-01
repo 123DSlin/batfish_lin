@@ -96,7 +96,9 @@ Guard ownership is:
 | Candidate path | configuration guard AND referenced segment-list guard |
 | SR policy | selection over candidate preference, with ECMP/weight retained as data |
 
-The Stage 7.7 policy database evaluates all candidates against one stable SID/underlay snapshot.
+Each Stage 7.7 policy database evaluates all candidates against one stable SID/underlay snapshot.
+The reconciler is not fixed to that snapshot: with fixed SR configuration it compares policy state
+again at every subsequent stable underlay boundary and emits the semantic difference.
 For candidate `c`, `availability(c)` is the disjunction of its satisfiable numeric forwarding
 branches. Its selection condition is:
 
@@ -108,12 +110,18 @@ Candidates in the same preference group do not suppress one another; their confi
 retained but are not interpreted as traffic load at this layer. Each selected branch keeps typed
 SID and canonical link dependencies. A stable candidate key excludes preference, weight, guards,
 and report text. A concrete payload change under that key is `REPLACED`; logical guard change is
-`GUARD_CHANGED`; a missing dependency recursively removes the candidate and its child forwarding
-contributions.
+`GUARD_CHANGED`. When forwarding identity itself changes, the old key is `REMOVED` and the new key
+is `ADDED` in the same atomic delta batch. Update-list order has no execution meaning, and consumers
+must not pair unrelated removals and additions. A missing dependency recursively removes the
+candidate and its child forwarding contributions.
 
-Policy reconciliation runs after every stable underlay snapshot, not only after a nonempty SID
+Policy reconciliation runs after every stable underlay boundary, not only after a nonempty SID
 delta. This distinction is required because ECMP/next-hop branches can change while their aggregate
-prefix availability formula remains logically equivalent.
+prefix availability formula remains logically equivalent. SR configuration is fixed for the
+lifetime of this reconciler; configuration changes require a newly constructed pipeline.
+
+Typed Prefix-SID, Node-SID, and Adjacency-SID bindings are supported. A Binding-SID segment that
+recursively expands another policy or segment list is not yet supported and fails closed.
 
 An MPLS index remains unresolved in the SID database. A global Prefix/Node-SID index is resolved
 against the SRGB of the concrete forwarding next hop; symbolic ECMP/failure branches may therefore
@@ -161,6 +169,13 @@ a replacement. No-op stable callbacks do not manufacture deltas.
 4. Add the protocol-independent Minesweeper underlay interface and IS-IS implementation.
 5. Add guarded SID database lifecycle, then segment-list and SR-policy resolution.
 6. Add deterministic readable/JSON output. Traffic/load execution remains a separate stage.
+
+Stage 7.8 completes item 6. `BatfishSymbolicRoutePipeline` constructs the guarded SID and SR-policy
+reconcilers from the same parsed configurations and converged symbolic IS-IS networks. Its result
+exposes the typed database plus deterministic candidate/forwarding records. Default text and JSON
+use display-simplified guards; raw variants retain the exact formulas stored by the database.
+Report records are views only and never participate in candidate, contribution, or dependency
+identity.
 
 Unsupported syntax or semantic combinations must produce an explicit warning or fail closed; they
 must never yield a partially populated SR object that appears successful.

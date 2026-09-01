@@ -1676,7 +1676,8 @@ public final class CiscoConfiguration extends VendorConfiguration {
         default:
           throw new VendorConversionException("Invalid IS-IS level");
       }
-      IsisInterfaceSettings.Builder isisInterfaceSettingsBuilder = IsisInterfaceSettings.builder();
+      IsisInterfaceSettings.Builder isisInterfaceSettingsBuilder =
+          IsisInterfaceSettings.builder().setPointToPoint(iface.getIsisPointToPoint());
       IsisInterfaceLevelSettings levelSettings =
           IsisInterfaceLevelSettings.builder()
               .setCost(iface.getIsisCost())
