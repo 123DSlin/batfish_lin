@@ -98,8 +98,8 @@ public class SmtReachabilityTest {
 
         // read the configurations from the filesystem
         Runfiles runfiles = Runfiles.create();
-        String configPath = runfiles.rlocation("batfish/networks/tolerance_sr_te_demo");
-        // String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
+        // String configPath = runfiles.rlocation("batfish/networks/tolerance_sr_te_demo");
+         String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_hard");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_accessment");
@@ -147,8 +147,7 @@ public class SmtReachabilityTest {
         RoutesAnswerer routesAnswerer = new RoutesAnswerer(routesQuestion, _batfish);
         AnswerElement routesAnswer = routesAnswerer.answer(_batfish.getSnapshot());
         RibPrinter.printRouteTable(routesAnswer, _dataPlaneWriter);
-        // Use writeSymbolicRoutes(dataPlane) for a snapshot without traffic input.
-        writeTrafficSymbolicRoutes(dataPlane, configPath);
+        writeSnapshotSymbolicRoutes(dataPlane, configPath);
         long end = System.currentTimeMillis();
         System.out.println("[Time taken to compute data plane and print RIBs: " + (end - start) + " ms]");
     }
@@ -156,6 +155,15 @@ public class SmtReachabilityTest {
     private void writeSymbolicRoutes(DataPlane dataPlane) throws IOException {
         try (Context context = new Context()) {
             writeSymbolicRouteFiles(runSymbolicRoutePipeline(dataPlane, context));
+        }
+    }
+
+    private void writeSnapshotSymbolicRoutes(DataPlane dataPlane, String configPath)
+            throws IOException {
+        if (Files.isRegularFile(Paths.get(configPath, "traffic.json"))) {
+            writeTrafficSymbolicRoutes(dataPlane, configPath);
+        } else {
+            writeSymbolicRoutes(dataPlane);
         }
     }
 
@@ -208,16 +216,17 @@ public class SmtReachabilityTest {
         final ReachabilityQuestion question = new ReachabilityQuestion();
 
         // tolerance-symbolic traffic
-        question.setIngressNodeRegex("x");
-        question.setFinalNodeRegex("d");
-        question.setDstIps(Set.of(IpWildcard.parse("10.0.15.2/32")));
-        question.setFailures(0);
+        // question.setIngressNodeRegex("s");
+        //question.setFinalNodeRegex("d");
+        // IpWildcard ipWildcard = IpWildcard.parse("10.0.15.2/32");
+        // question.setDstIps(Set.of(ipWildcard));
+
 
         // tolerance-symbolic-route
-        // question.setIngressNodeRegex("r1");
-        // question.setFinalNodeRegex("r4");
-        // IpWildcard ipWildcard = IpWildcard.parse("192.0.14.2/32");
-        // question.setDstIps(Set.of(ipWildcard));
+         question.setIngressNodeRegex("r1");
+         question.setFinalNodeRegex("r4");
+         IpWildcard ipWildcard = IpWildcard.parse("192.0.14.2/32");
+         question.setDstIps(Set.of(ipWildcard));
 
         // user-study specification 1: ECMP reachability
         // question.setIngressNodeRegex("r3");

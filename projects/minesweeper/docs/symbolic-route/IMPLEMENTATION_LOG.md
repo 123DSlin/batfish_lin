@@ -1760,3 +1760,16 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   相等；比较不经过 `dataplane.txt` 字符串。`RibPrinter`/concrete dataplane 输出逻辑保持零修改。
 - 2026-09-01 18:08 CST 验证：完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过，共
   277 个测试。用户工作区中的 `SmtReachabilityTest.java` 配置切换未修改、未暂存。
+
+## Stage 8.5 SMT 测试按 snapshot traffic 能力分发（2026-09-01 18:20 CST）
+
+- 修正 `SmtReachabilityTest.setup()` 无条件调用 traffic writer 的回归。新增单一 snapshot writer
+  入口：配置根目录存在常规文件 `traffic.json` 时调用 `writeTrafficSymbolicRoutes`，复制同一次输入
+  并运行 symbolic-route pipeline；不存在时直接调用 `writeSymbolicRoutes`，不要求或生成 traffic
+  副本。`writeTrafficSymbolicRoutes` 自身仍保留缺少输入时 fail-fast 的严格契约。
+- 保留当前 `tolerance-symbolic-route` 配置及 `r1 -> r4`、目的地址 `192.0.14.2/32` 的用户查询；
+  未修改 `RibPrinter` 或 concrete `dataplane.txt` 输出逻辑。
+- 2026-09-01 18:20 CST 先精确复现原失败：测试在 reachability 编码前因缺少
+  `networks/tolerance-symbolic-route/traffic.json` 抛出 `IOException`。修复后同一条
+  `SmtReachabilityTest.testReachability` 禁用缓存通过；`smt_output_0043` 同时包含 SMT 编码、
+  raw/readable symbolic RIB，且按预期不包含 `0_traffic.json`。
