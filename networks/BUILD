@@ -37,5 +37,5 @@ filegroup(
 
 filegroup(
     name = "tolerance-sr-te-demo",
-    srcs = glob(["tolerance_sr_te_demo/configs/**"]),
+    srcs = glob(["tolerance_sr_te_demo/**"]),
 )

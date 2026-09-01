@@ -1,8 +1,7 @@
-# Tolerance SR-TE concrete-failure demo input
+# Tolerance SR-TE concrete-failure demo
 
-This directory is the non-configuration input boundary for the first SR-TE tolerance demo.
-Router configurations remain under `networks/tolerance_sr_te_demo/configs`; generated scripts and
-results must not be written into the network snapshot.
+Device configurations are stored in `configs/`. The colocated `traffic.json` is experiment input,
+not a router configuration; Batfish must continue to parse only files under `configs/`.
 
 `traffic.json` defines a 20-Gbps ordinary IP flow from X to D and an 80-Gbps SR-policy flow from S
 to D. The initial SR split is 50/50. The logical integer parameter `h` denotes the upper-path

@@ -1659,7 +1659,8 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - SR 路径使用已支持的 explicit MPLS-label segment-list，并由本地 Adj-SID 精确绑定 S-A-D 与 S-B-D，
   避免 Node-SID 在故障后由 IGP 绕行而改变预期 candidate failure 语义。
 - 流量、canonical undirected links、每链路 95-Gbps 容量、0/1-link failure model 和逻辑整数变量
-  `h` 独立保存在 `tools/sr_te_failure_demo/traffic.json`；配置快照目录不包含脚本或生成结果。
+  `h` 保存在同一 demo 根目录 `networks/tolerance_sr_te_demo/traffic.json`；Batfish 仍只解析其
+  `configs/*.cfg`，脚本和生成结果不得写入该目录。
 - 预期解释性结果锁定为：仅 `d_x` 故障使 X flow 转移到 A-D，产生
   `load(A-D) = 20 + 0.8h < 95`，因此在整数百分比定义域内新增 TE 子规约 `h <= 93`。
 - parser-driven 验收从五份 IOS 配置运行到 concrete dataplane、IS-IS topology 和现有 symbolic-route/
@@ -1670,3 +1671,5 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   `ToleranceSrTeDemoConfigTest` 禁用缓存运行通过，证明配置不是仅通过文本/JSON 格式检查。
 - 2026-09-01 12:23 CST 补充断言并再次通过：无故障 concrete MAIN RIB 中 X 到 D loopback 的唯一
   longest-prefix-match next hop 是 X-D 对端 `10.0.15.2`，锁定 20-Gbps IP flow 的初始主路径。
+- 2026-09-01 12:29 CST 按实验输入组织要求将 `traffic.json` 与配置快照归入同一个 demo 根目录；
+  网络 BUILD data target 同步覆盖该输入，但设备 parser 边界仍严格保持为 `configs/`。
