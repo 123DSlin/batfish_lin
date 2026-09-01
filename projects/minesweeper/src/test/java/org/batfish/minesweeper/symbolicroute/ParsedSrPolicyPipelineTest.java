@@ -106,8 +106,14 @@ public final class ParsedSrPolicyPipelineTest {
     assertThat(
         result.toRawSrPolicyJson().contains("\"candidate\" : \"explicit:to-r2\""), equalTo(true));
     assertThat(
-        result.toReadableText().contains("SR POLICY CANDIDATES AND FORWARDING BRANCHES"),
+        result.toReadableText().contains("SR POLICY FORWARDING BRANCHES"),
         equalTo(true));
     assertThat(result.toReadableText().contains("primary-to-r2"), equalTo(true));
+    assertThat(result.toReadableText().contains("FORWARDING_BRANCH"), equalTo(false));
+    assertThat(
+        result.toRawReadableText().contains("SR POLICY CANDIDATES AND FORWARDING BRANCHES"),
+        equalTo(true));
+    assertThat(result.toRawReadableText().contains("CANDIDATE"), equalTo(true));
+    assertThat(result.toRawReadableText().contains("FORWARDING_BRANCH"), equalTo(true));
   }
 }

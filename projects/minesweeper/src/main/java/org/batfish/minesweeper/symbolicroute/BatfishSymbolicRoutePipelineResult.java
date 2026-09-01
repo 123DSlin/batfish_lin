@@ -381,12 +381,19 @@ public final class BatfishSymbolicRoutePipelineResult {
     appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L1, simplifyGuards, false);
     output.append("\nIS-IS LEVEL-2 RIB (protocol detail)\n");
     appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L2, simplifyGuards, false);
-    output.append("\nSR POLICY CANDIDATES AND FORWARDING BRANCHES\n");
+    output.append(
+        simplifyGuards
+            ? "\nSR POLICY FORWARDING BRANCHES\n"
+            : "\nSR POLICY CANDIDATES AND FORWARDING BRANCHES\n");
     appendSrPolicyTable(output, simplifyGuards);
     return output.toString();
   }
 
   private void appendSrPolicyTable(StringBuilder output, boolean simplifyGuards) {
+    if (simplifyGuards) {
+      appendSimplifiedSrPolicyTable(output);
+      return;
+    }
     String commonFormat =
         "%-18s %-8s %-9s %-8s %-16s %-20s %-18s %-8s %-8s %-18s %-20s %-18s";
     output.append(
@@ -404,10 +411,7 @@ public final class BatfishSymbolicRoutePipelineResult {
             "SegmentList",
             "Labels",
             "NextHops"));
-    output.append(
-        simplifyGuards
-            ? String.format(" %s%n", "SelectionGuard")
-            : String.format(" %-24s %s%n", "AvailabilityGuard", "SelectionGuard"));
+    output.append(String.format(" %-24s %s%n", "AvailabilityGuard", "SelectionGuard"));
     output.append(
         "========================================================================================================================================================================\n");
     for (SymbolicSrPolicyRecord record : getAllSrPolicyRecords(simplifyGuards)) {
@@ -427,10 +431,50 @@ public final class BatfishSymbolicRoutePipelineResult {
               record.getLabels().isEmpty() ? "-" : record.getLabels(),
               record.getNextHops().isEmpty() ? "-" : record.getNextHops());
       output.append(commonValues);
-      if (!simplifyGuards) {
-        output.append(String.format(" %-24s", oneLine(record.getAvailabilityGuard())));
-      }
+      output.append(String.format(" %-24s", oneLine(record.getAvailabilityGuard())));
       output.append(String.format(" %s%n", oneLine(record.getSelectionGuard())));
+    }
+  }
+
+  private void appendSimplifiedSrPolicyTable(StringBuilder output) {
+    String format =
+        "%-8s %-9s %-8s %-16s %-20s %-22s %-8s %-8s %-18s %-20s %-18s %s%n";
+    output.append(
+        String.format(
+            format,
+            "Node",
+            "VRF",
+            "Color",
+            "Endpoint",
+            "Policy",
+            "Candidate",
+            "Pref",
+            "Weight",
+            "SegmentList",
+            "Labels",
+            "NextHops",
+            "SelectionGuard"));
+    output.append(
+        "========================================================================================================================================================================\n");
+    for (SymbolicSrPolicyRecord record : getAllSrPolicyRecords(true)) {
+      if (record.getKind() != SymbolicSrPolicyRecord.Kind.FORWARDING_BRANCH) {
+        continue;
+      }
+      output.append(
+          String.format(
+              format,
+              record.getNode(),
+              record.getVrf(),
+              record.getColor(),
+              record.getEndpoint(),
+              record.getPolicy(),
+              record.getCandidate(),
+              record.getPreference(),
+              record.getWeight(),
+              record.getSegmentList(),
+              record.getLabels().isEmpty() ? "-" : record.getLabels(),
+              record.getNextHops().isEmpty() ? "-" : record.getNextHops(),
+              oneLine(record.getSelectionGuard())));
     }
   }
 

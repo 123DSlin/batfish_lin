@@ -1804,3 +1804,17 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   reachability 测试通过；实际 `smt_output_0048` 的两份文件符合上述边界。
 - 2026-09-01 18:54 CST 最终合并状态的完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存
   通过，共 277 个测试。
+
+## Stage 8.8 简化 SR policy forwarding-only 投影（2026-09-01 19:33 CST）
+
+- 消除 simplified symbolic RIB 中同一个 SR candidate 同时显示 `CANDIDATE` 与
+  `FORWARDING_BRANCH` 的重复。`0_symbolic_routes.txt` 的 SR 部分现在只展示已经解析成功、可供
+  forwarding/traffic 层消费的 contributions；由于所有行均为 forwarding branch，简化表同时移除
+  恒定的 `Kind` 列。
+- `0_symbolic_routes_init.txt` 继续保留 candidate 与 forwarding branch 两类记录、`Kind`、
+  availability 和 selection guards，用于审计 preference 选择、segment resolution 与依赖生命周期。
+  guarded SR database、JSON API 和 candidate selection 语义均未改变。
+- 新增输出契约测试：simplified report 不出现 kind value，raw init report 必须同时出现
+  `CANDIDATE` 与 `FORWARDING_BRANCH`。2026-09-01 19:32 CST 当前 S->D SMT 测试通过，实际
+  `smt_output_0050` 将 demo SR 表由 4 行压缩为 upper/lower 两条 forwarding branches；
+  2026-09-01 19:33 CST 完整 Minesweeper 277 个测试通过。
