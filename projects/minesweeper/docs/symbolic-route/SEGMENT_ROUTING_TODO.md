@@ -19,3 +19,11 @@ acceptance are complete. Dynamic/PCEP candidates, adjacency segment-list syntax,
 Binding-SID segment expansion, OSPF, and additional vendor parser adapters remain independent
 follow-up work behind the protocol-neutral underlay interface. Ordinary typed Prefix/Node/Adjacency
 SID bindings are already supported.
+
+Stage 7.9 is not a prerequisite for the current symbolic-route/SR correctness closure. It is a
+configuration-compatibility extension to schedule only when required by an experiment: IPv4
+address-based Prefix/Node segments are needed for the existing `traffic_demo` syntax, while parsed
+adjacency segments and recursive Binding-SID expansion broaden supported configurations further.
+Experiments restricted to explicit `mpls label` segment lists can use the completed Stage 7.8
+pipeline directly. Unsupported forms continue to fail closed rather than block or weaken the
+implemented semantics.

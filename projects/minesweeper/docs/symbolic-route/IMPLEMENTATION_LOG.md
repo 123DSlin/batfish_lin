@@ -1637,3 +1637,16 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 2026-09-01 10:12 CST 验证：完整 `//projects/minesweeper:minesweeper_tests` 禁用缓存通过；Cisco
   grammar/vendor representation 两个 PMD target 通过。Minesweeper PMD 仍失败于既有 Graph/Encoder/
   EncoderSlice/PropertyChecker 和旧 SMT symbolic-route 共 34 条基线违规，本次新增/修改类零违规。
+
+## Stage 7.9 是否必要的决策记录（2026-09-01 10:40 CST）
+
+- Stage 7.9 不作为当前 symbolic route/SR 算法闭环的强制前置条件。Stage 7.8 已完成从 parsed
+  configuration、stable guarded IS-IS underlay、typed SID 到 selected guarded SR forwarding
+  contribution 的正确性闭环。
+- 当前实验若使用已支持的 explicit `index ... mpls label ...` segment-list，可直接使用 Stage 7.8；
+  不因尚未覆盖更多配置语法而阻塞后续步骤。
+- `index ... address ipv4 ...` Prefix/Node segment 是运行现有 `networks/traffic_demo` 时才必须补充的
+  parser adapter；parsed adjacency segment、dynamic/PCEP candidate 和递归 Binding-SID expansion
+  同样改为需求驱动的独立扩展。
+- 普通 typed Prefix/Node/Adjacency SID binding 的内部解析语义已经实现。递归 Binding-SID 尚未支持，
+  继续明确 fail closed，不能把“不支持”静默解释为部分成功。
