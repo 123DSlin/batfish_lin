@@ -1,8 +1,10 @@
 package org.batfish.minesweeper.smt;
 
 import org.batfish.common.Answerer;
+import org.batfish.common.util.BatfishObjectMapper;
 // import org.batfish.common.NetworkSnapshot;
 import org.batfish.datamodel.IpWildcard;
+import org.batfish.datamodel.Prefix;
 import org.batfish.datamodel.DataPlane;
 import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.RoutingProtocol;
@@ -55,7 +57,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 import com.google.devtools.build.runfiles.Runfiles;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.Context;
 
 public class SmtReachabilityTest {
@@ -98,8 +102,8 @@ public class SmtReachabilityTest {
 
         // read the configurations from the filesystem
         Runfiles runfiles = Runfiles.create();
-        // String configPath = runfiles.rlocation("batfish/networks/tolerance_sr_te_demo");
-         String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
+         String configPath = runfiles.rlocation("batfish/networks/tolerance_sr_te_demo");
+        // String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_hard");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_accessment");
@@ -174,9 +178,34 @@ public class SmtReachabilityTest {
             throw new IOException("Missing traffic input: " + trafficInput);
         }
         Files.copy(trafficInput, Paths.get(_outputDir, "0_traffic.json"), REPLACE_EXISTING);
+        Set<Prefix> destinations = readTrafficDestinations(trafficInput);
         try (Context context = new Context()) {
-            writeSymbolicRouteFiles(runSymbolicRoutePipeline(dataPlane, context));
+            writeSymbolicRouteFiles(runSymbolicRoutePipeline(dataPlane, context), destinations);
         }
+    }
+
+    private Set<Prefix> readTrafficDestinations(Path trafficInput) throws IOException {
+        JsonNode flows = BatfishObjectMapper.mapper().readTree(trafficInput.toFile()).get("flows");
+        if (flows == null || !flows.isArray()) {
+            throw new IOException("traffic.json must contain a flows array");
+        }
+        ImmutableSet.Builder<Prefix> destinations = ImmutableSet.builder();
+        for (JsonNode flow : flows) {
+            JsonNode destination = flow.get("destination");
+            if (destination == null || !destination.isTextual()) {
+                throw new IOException("every traffic flow must contain a textual destination");
+            }
+            try {
+                destinations.add(Prefix.parse(destination.textValue()));
+            } catch (IllegalArgumentException e) {
+                throw new IOException("invalid traffic destination: " + destination.textValue(), e);
+            }
+        }
+        Set<Prefix> result = destinations.build();
+        if (result.isEmpty()) {
+            throw new IOException("traffic.json flows must not be empty");
+        }
+        return result;
     }
 
     private BatfishSymbolicRoutePipelineResult runSymbolicRoutePipeline(
@@ -199,12 +228,21 @@ public class SmtReachabilityTest {
 
     private void writeSymbolicRouteFiles(BatfishSymbolicRoutePipelineResult result)
             throws IOException {
+        writeSymbolicRouteFiles(result, null);
+    }
+
+    private void writeSymbolicRouteFiles(
+            BatfishSymbolicRoutePipelineResult result, Set<Prefix> destinations)
+            throws IOException {
         Files.write(
                 Paths.get(_outputDir, "0_symbolic_routes_init.txt"),
                 result.toRawReadableText().getBytes(StandardCharsets.UTF_8));
         Files.write(
                 Paths.get(_outputDir, "0_symbolic_routes.txt"),
-                result.toReadableText().getBytes(StandardCharsets.UTF_8));
+                (destinations == null
+                                ? result.toReadableText()
+                                : result.toReadableTextForDestinations(destinations))
+                        .getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -216,17 +254,17 @@ public class SmtReachabilityTest {
         final ReachabilityQuestion question = new ReachabilityQuestion();
 
         // tolerance-symbolic traffic
-        // question.setIngressNodeRegex("s");
-        //question.setFinalNodeRegex("d");
-        // IpWildcard ipWildcard = IpWildcard.parse("10.0.15.2/32");
-        // question.setDstIps(Set.of(ipWildcard));
+         question.setIngressNodeRegex("s");
+         question.setFinalNodeRegex("d");
+         IpWildcard ipWildcard = IpWildcard.parse("5.5.5.5/32");
+         question.setDstIps(Set.of(ipWildcard));
 
 
         // tolerance-symbolic-route
-         question.setIngressNodeRegex("r1");
-         question.setFinalNodeRegex("r4");
-         IpWildcard ipWildcard = IpWildcard.parse("192.0.14.2/32");
-         question.setDstIps(Set.of(ipWildcard));
+        // question.setIngressNodeRegex("r1");
+        // question.setFinalNodeRegex("r4");
+        // IpWildcard ipWildcard = IpWildcard.parse("192.0.14.2/32");
+        // question.setDstIps(Set.of(ipWildcard));
 
         // user-study specification 1: ECMP reachability
         // question.setIngressNodeRegex("r3");

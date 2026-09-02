@@ -7,6 +7,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.junit.Assert.assertThat;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.Context;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -23,6 +24,7 @@ import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.DataPlane;
 import org.batfish.datamodel.Ip;
+import org.batfish.datamodel.Prefix;
 import org.batfish.datamodel.answers.AnswerElement;
 import org.batfish.datamodel.isis.IsisTopology;
 import org.batfish.datamodel.route.nh.NextHopIp;
@@ -205,6 +207,15 @@ public final class ToleranceSrTeDemoConfigTest {
                         && route.getSelectionGuard().contains("d_x")
                         && route.getSelectionGuard().contains("not")),
         equalTo(true));
+
+    String destinationProjection =
+        result.toReadableTextForDestinations(ImmutableSet.of(Prefix.parse("5.5.5.5/32")));
+    assertThat(
+        destinationProjection.contains("Destination projection: [5.5.5.5/32]"), equalTo(true));
+    assertThat(destinationProjection.contains("5.5.5.5/32"), equalTo(true));
+    assertThat(destinationProjection.contains("10.0.15.0/30"), equalTo(false));
+    assertThat(destinationProjection.contains("upper-via-A"), equalTo(true));
+    assertThat(destinationProjection.contains("lower-via-B"), equalTo(true));
   }
 
   private static GuardedSrCandidate candidate(

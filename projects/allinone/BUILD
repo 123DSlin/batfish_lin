@@ -247,6 +247,7 @@ junit_tests(
         "//projects/minesweeper",
         "//projects/minesweeper:matchers",
         "//projects/lib/z3",
+        "@maven//:com_fasterxml_jackson_core_jackson_databind",
         "@maven//:com_google_guava_guava",
         "@maven//:junit_junit",
         "@maven//:org_hamcrest_hamcrest",

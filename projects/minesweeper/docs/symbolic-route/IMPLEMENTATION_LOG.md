@@ -1831,3 +1831,30 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 2026-09-02 11:57 CST 当前 S->D SMT reachability 测试通过；实际 `smt_output_0051` 的
   `0_data_plane.txt` 已无任何完全重复行，同时上述 A/B ECMP choices 均存在。完整
   `//projects/minesweeper:minesweeper_tests` 禁用缓存通过，共 277 个测试。
+
+## Stage 8.10 traffic 目标投影与 forwarding identity 边界（2026-09-02 12:31 CST）
+
+- 明确区分 route propagation provenance 与 traffic forwarding choice。当前 symbolic MAIN 报告可将
+  同一本地 next hop、但具有不同 downstream contribution path 的证明显示为多行；这些行用于审计
+  Algorithm 1 的传播与 withdrawal 依赖，不能直接解释为多条 ECMP traffic branches。
+- 后续 symbolic traffic 的 forwarding identity 固定为本地动作
+  `(node, vrf, matched-prefix, next-hop/egress-adjacency)`：相同本地动作的 contribution guards 做逻辑
+  OR，仅不同本地 adjacency 参与 ECMP/负载拆分；在同一 failure assignment 下再逐跳解析下游动作。
+  SR policy 中不同 explicit segment-list contribution 仍是独立 policy branch。该决策本阶段仅记录
+  traffic 层消费契约，不改 guarded RIB 的候选/依赖模型。
+- BGP demo 并未采用不同的候选合并规则；它之所以更简洁，是因为 BGP LOC-RIB 只传播单一业务前缀
+  `10.0.0.0/24`。MAIN 中的 CONNECTED/LOCAL 基础前缀仍存在，同 next-hop 的不同 provenance 也仍可
+  在原始报告中出现。
+- 对带 `traffic.json` 的运行，`0_symbolic_routes.txt` 现在从 `flows[].destination` 读取目标集合，只
+  展示与目标重叠的 MAIN/protocol routes 以及 endpoint 命中的 SR policy；报告头显式记录
+  `Destination projection`。`0_symbolic_routes_init.txt` 保持全量原始 guards/provenance，
+  `0_data_plane.txt` 保持完整 concrete dataplane，未修改其计算或输出范围。无 traffic 输入的网络仍
+  输出完整简化 symbolic RIB。
+- SR-TE demo 的 traffic、SR endpoint 与 reachability query 统一为 D 的直接 loopback
+  `5.5.5.5/32`。删除 A/B/S/X 未被 adjacency-SID segment lists 使用的 Loopback0/prefix-SID，保留
+  所有编号 transit interfaces、IS-IS adjacency 与 D 的目标 loopback；因此减少无关前缀而不改变
+  underlay 或 SR policy 的路径语义。
+- 2026-09-02 12:31 CST parser-driven demo 验收通过，包含 concrete/symbolic all-up RIB 一致性、
+  上下 SR candidate guard 和目标投影断言；当前 S->D `5.5.5.5/32` SMT reachability 通过。实际
+  `smt_output_0053` 中简化 symbolic 文件只含目标 `/32`，原始 symbolic 与 dataplane 仍含 transit
+  `/30`。

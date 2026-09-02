@@ -9,13 +9,17 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import javax.annotation.Nonnull;
 import org.batfish.common.util.BatfishObjectMapper;
 import org.batfish.datamodel.AbstractRoute;
 import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.Bgpv4Route;
 import org.batfish.datamodel.Configuration;
+import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.IsisRoute;
+import org.batfish.datamodel.Prefix;
 import org.batfish.minesweeper.symbolicsr.GuardedSidDatabase;
 import org.batfish.minesweeper.symbolicsr.GuardedSidReconciler;
 import org.batfish.minesweeper.symbolicsr.GuardedSrPolicyDatabase;
@@ -361,37 +365,52 @@ public final class BatfishSymbolicRoutePipelineResult {
   /** Produces a router/VRF report intended for direct human review. */
   @Nonnull
   public String toReadableText() {
-    return toReadableText(true);
+    return toReadableText(true, null);
+  }
+
+  /** Produces a human-readable projection for routes that overlap the requested destinations. */
+  @Nonnull
+  public String toReadableTextForDestinations(Set<Prefix> destinations) {
+    if (requireNonNull(destinations, "destinations must be provided").isEmpty()) {
+      throw new IllegalArgumentException("destinations must not be empty");
+    }
+    return toReadableText(true, destinations);
   }
 
   /** Produces the same report with the exact guard expressions held by the stable RIBs. */
   @Nonnull
   public String toRawReadableText() {
-    return toReadableText(false);
+    return toReadableText(false, null);
   }
 
-  private String toReadableText(boolean simplifyGuards) {
+  private String toReadableText(boolean simplifyGuards, Set<Prefix> destinations) {
     StringBuilder output = new StringBuilder("SYMBOLIC ROUTING INFORMATION BASE\n");
     output.append("Guards describe route availability and final selection conditions.\n");
+    if (destinations != null) {
+      output.append("Destination projection: ").append(new TreeSet<>(destinations)).append('\n');
+    }
     output.append("\nMAIN RIB (guarded forwarding selections)\n");
-    appendReadableTable(output, SymbolicRibRecord.Plane.MAIN, simplifyGuards, true);
+    appendReadableTable(output, SymbolicRibRecord.Plane.MAIN, simplifyGuards, true, destinations);
     output.append("\nBGP LOC-RIB (protocol detail)\n");
-    appendReadableTable(output, SymbolicRibRecord.Plane.BGP, simplifyGuards, false);
+    appendReadableTable(output, SymbolicRibRecord.Plane.BGP, simplifyGuards, false, destinations);
     output.append("\nIS-IS LEVEL-1 RIB (protocol detail)\n");
-    appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L1, simplifyGuards, false);
+    appendReadableTable(
+        output, SymbolicRibRecord.Plane.ISIS_L1, simplifyGuards, false, destinations);
     output.append("\nIS-IS LEVEL-2 RIB (protocol detail)\n");
-    appendReadableTable(output, SymbolicRibRecord.Plane.ISIS_L2, simplifyGuards, false);
+    appendReadableTable(
+        output, SymbolicRibRecord.Plane.ISIS_L2, simplifyGuards, false, destinations);
     output.append(
         simplifyGuards
             ? "\nSR POLICY FORWARDING BRANCHES\n"
             : "\nSR POLICY CANDIDATES AND FORWARDING BRANCHES\n");
-    appendSrPolicyTable(output, simplifyGuards);
+    appendSrPolicyTable(output, simplifyGuards, destinations);
     return output.toString();
   }
 
-  private void appendSrPolicyTable(StringBuilder output, boolean simplifyGuards) {
+  private void appendSrPolicyTable(
+      StringBuilder output, boolean simplifyGuards, Set<Prefix> destinations) {
     if (simplifyGuards) {
-      appendSimplifiedSrPolicyTable(output);
+      appendSimplifiedSrPolicyTable(output, destinations);
       return;
     }
     String commonFormat =
@@ -415,6 +434,9 @@ public final class BatfishSymbolicRoutePipelineResult {
     output.append(
         "========================================================================================================================================================================\n");
     for (SymbolicSrPolicyRecord record : getAllSrPolicyRecords(simplifyGuards)) {
+      if (!matchesSrEndpoint(record, destinations)) {
+        continue;
+      }
       String commonValues =
           String.format(
               commonFormat,
@@ -436,7 +458,7 @@ public final class BatfishSymbolicRoutePipelineResult {
     }
   }
 
-  private void appendSimplifiedSrPolicyTable(StringBuilder output) {
+  private void appendSimplifiedSrPolicyTable(StringBuilder output, Set<Prefix> destinations) {
     String format =
         "%-8s %-9s %-8s %-16s %-20s %-22s %-8s %-8s %-18s %-20s %-18s %s%n";
     output.append(
@@ -458,6 +480,9 @@ public final class BatfishSymbolicRoutePipelineResult {
         "========================================================================================================================================================================\n");
     for (SymbolicSrPolicyRecord record : getAllSrPolicyRecords(true)) {
       if (record.getKind() != SymbolicSrPolicyRecord.Kind.FORWARDING_BRANCH) {
+        continue;
+      }
+      if (!matchesSrEndpoint(record, destinations)) {
         continue;
       }
       output.append(
@@ -482,7 +507,8 @@ public final class BatfishSymbolicRoutePipelineResult {
       StringBuilder output,
       SymbolicRibRecord.Plane plane,
       boolean simplifyGuards,
-      boolean omitNeverSelected) {
+      boolean omitNeverSelected,
+      Set<Prefix> destinations) {
     String pathHeader =
         plane == SymbolicRibRecord.Plane.MAIN ? "ForwardingPath" : "AdvertisementPath";
     String commonFormat = "%-8s %-9s %-18s %-10s %-8s %-5s %-10s %-16s %-18s";
@@ -511,6 +537,9 @@ public final class BatfishSymbolicRoutePipelineResult {
             : getAllRoutes(simplifyGuards);
     for (SymbolicRibRecord route : routes) {
       if (route.getPlane() != plane) {
+        continue;
+      }
+      if (!matchesDestination(route, destinations)) {
         continue;
       }
       if (omitNeverSelected && !route.getSelectionSatisfiable()) {
@@ -542,6 +571,29 @@ public final class BatfishSymbolicRoutePipelineResult {
                       ? route.getForwardingPath()
                       : route.getRouterPath())));
     }
+  }
+
+  private static boolean matchesDestination(SymbolicRibRecord route, Set<Prefix> destinations) {
+    if (destinations == null) {
+      return true;
+    }
+    Prefix routePrefix = Prefix.parse(route.getPrefix());
+    return destinations.stream()
+        .anyMatch(
+            destination ->
+                routePrefix.containsPrefix(destination) || destination.containsPrefix(routePrefix));
+  }
+
+  private static boolean matchesSrEndpoint(
+      SymbolicSrPolicyRecord record, Set<Prefix> destinations) {
+    if (destinations == null) {
+      return true;
+    }
+    return Ip.tryParse(record.getEndpoint())
+        .map(
+            endpoint ->
+                destinations.stream().anyMatch(destination -> destination.containsIp(endpoint)))
+        .orElse(false);
   }
 
   private static String readableNextHopNode(
