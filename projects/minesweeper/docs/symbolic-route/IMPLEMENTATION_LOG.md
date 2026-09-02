@@ -1818,3 +1818,16 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   `CANDIDATE` 与 `FORWARDING_BRANCH`。2026-09-01 19:32 CST 当前 S->D SMT 测试通过，实际
   `smt_output_0050` 将 demo SR 表由 4 行压缩为 upper/lower 两条 forwarding branches；
   2026-09-01 19:33 CST 完整 Minesweeper 277 个测试通过。
+
+## Stage 8.9 concrete dataplane forwarding tuple 去重（2026-09-02 11:57 CST）
+
+- 修正 `RibPrinter` 将多个不同控制平面 route 投影为相同 forwarding 字段后重复打印的问题。
+  去重仅发生在人类可读 `0_data_plane.txt`：以当前实际打印的完整行作为 forwarding tuple，只有
+  Node、VRF、Network、Protocol、NextHopIP、NextHopInterface、NextHop、Metric、AD、Tag 全部相同
+  才合并；Batfish concrete RIB、`RoutesAnswerer` 的 route multiset 与 symbolic RIB 均不修改。
+- 该边界保留真正不同的 forwarding choices。新增 parser-driven demo 断言：B 对
+  `10.0.12.0/30` 经 D 的两个不同 IS-IS origin 投影为一行；S 对 `10.0.15.0/30` 经 A 的重复投影
+  为一行，但经 A 与经 B 的两个 next hops 必须各保留一行。
+- 2026-09-02 11:57 CST 当前 S->D SMT reachability 测试通过；实际 `smt_output_0051` 的
+  `0_data_plane.txt` 已无任何完全重复行，同时上述 A/B ECMP choices 均存在。完整
+  `//projects/minesweeper:minesweeper_tests` 禁用缓存通过，共 277 个测试。

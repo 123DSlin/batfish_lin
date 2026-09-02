@@ -7,9 +7,11 @@ import org.batfish.datamodel.Configuration;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.PrintWriter;
-import java.util.Comparator;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Utility class for printing a Batfish-style route table from an AnswerElement.
@@ -51,6 +53,7 @@ public class RibPrinter {
     // System.out.println(repeatChar('=', header.length()));
 
     // Iterate over each route entry and print its fields (default VRF only)
+    Set<String> printedForwardingRows = new HashSet<>();
     for (Row row : rows) {
       String vrf = getFieldAsText(row, "VRF");
       if (!Configuration.DEFAULT_VRF_NAME.equals(vrf)) {
@@ -66,8 +69,22 @@ public class RibPrinter {
       int adminDistance = getFieldAsInt(row, "Admin_Distance");
       String tag = row.hasNonNull("Tag") ? row.get("Tag").toString() : "-";
 
-      writer.printf(format, node, vrf, network, protocol, nextHopIp,
-          nextHopInterface, nextHop, metric, adminDistance, tag);
+      String forwardingRow =
+          String.format(
+              format,
+              node,
+              vrf,
+              network,
+              protocol,
+              nextHopIp,
+              nextHopInterface,
+              nextHop,
+              metric,
+              adminDistance,
+              tag);
+      if (printedForwardingRows.add(forwardingRow)) {
+        writer.print(forwardingRow);
+      }
       // System.out.printf(format, node, vrf, network, protocol, nextHopIp,
       //     nextHopInterface, nextHop, metric, adminDistance, tag);
     }
@@ -116,4 +133,3 @@ public class RibPrinter {
     return builder.toString();
   }
 }
-

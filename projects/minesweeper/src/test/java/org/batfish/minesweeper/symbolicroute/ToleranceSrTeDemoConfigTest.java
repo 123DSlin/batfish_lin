@@ -9,8 +9,11 @@ import static org.junit.Assert.assertThat;
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.Context;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.SortedMap;
@@ -20,6 +23,7 @@ import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.DataPlane;
 import org.batfish.datamodel.Ip;
+import org.batfish.datamodel.answers.AnswerElement;
 import org.batfish.datamodel.isis.IsisTopology;
 import org.batfish.datamodel.route.nh.NextHopIp;
 import org.batfish.datamodel.sr.SegmentRoutingVrfConfig;
@@ -29,6 +33,9 @@ import org.batfish.main.BatfishTestUtils;
 import org.batfish.main.TestrigText;
 import org.batfish.minesweeper.symbolicsr.GuardedSrCandidate;
 import org.batfish.minesweeper.symbolicsr.GuardedSrPolicyDatabase;
+import org.batfish.minesweeper.utils.RibPrinter;
+import org.batfish.question.routes.RoutesAnswerer;
+import org.batfish.question.routes.RoutesQuestion;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -73,6 +80,19 @@ public final class ToleranceSrTeDemoConfigTest {
 
     batfish.computeDataPlane(batfish.getSnapshot());
     DataPlane dataPlane = batfish.loadDataPlane(batfish.getSnapshot());
+    StringWriter concreteRibText = new StringWriter();
+    AnswerElement concreteRoutes =
+        new RoutesAnswerer(new RoutesQuestion(), batfish).answer(batfish.getSnapshot());
+    RibPrinter.printRouteTable(concreteRoutes, new PrintWriter(concreteRibText));
+    assertThat(
+        countForwardingRows(concreteRibText.toString(), "b", "10.0.12.0/30", "d"),
+        equalTo(1L));
+    assertThat(
+        countForwardingRows(concreteRibText.toString(), "s", "10.0.15.0/30", "a"),
+        equalTo(1L));
+    assertThat(
+        countForwardingRows(concreteRibText.toString(), "s", "10.0.15.0/30", "b"),
+        equalTo(1L));
     Set<AnnotatedRoute<AbstractRoute>> xRoutesToD =
         dataPlane
             .getRibs()
@@ -193,5 +213,17 @@ public final class ToleranceSrTeDemoConfigTest {
         .filter(candidate -> candidate.getKey().getCandidateName().equals(candidateName))
         .findFirst()
         .get();
+  }
+
+  private static long countForwardingRows(
+      String output, String node, String prefix, String nextHop) {
+    return Arrays.stream(output.split("\\R"))
+        .map(String::trim)
+        .map(line -> line.split("\\s+"))
+        .filter(fields -> fields.length >= 7)
+        .filter(fields -> fields[0].equals(node))
+        .filter(fields -> fields[2].equals(prefix))
+        .filter(fields -> fields[6].equals(nextHop))
+        .count();
   }
 }
