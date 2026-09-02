@@ -1858,3 +1858,37 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   上下 SR candidate guard 和目标投影断言；当前 S->D `5.5.5.5/32` SMT reachability 通过。实际
   `smt_output_0053` 中简化 symbolic 文件只含目标 `/32`，原始 symbolic 与 dataplane 仍含 transit
   `/30`。
+
+## Stage 9.1 无损 Symbolic Control Plane 导出契约（2026-09-02 14:41 CST）
+
+- 新增版本化 `SymbolicControlPlaneExport`，schema 为
+  `batfish-minesweeper-symbolic-control-plane` version 1。它直接遍历 MAIN、BGP、IS-IS L1/L2 的
+  `GuardedRib`，不解析 readable report，也不使用 route `toString()` 作为属性或身份。
+- 每个 candidate 导出稳定的 `candidate-v1-<sha256>`、plane/router/VRF/prefix/protocol、完整
+  Batfish concrete route JSON、source VRF、aggregate availability/selection guard，以及每个独立
+  contribution。route type 使用 Batfish 类名作 discriminator；`RoutePayload.decode()` 会先验证类型，
+  再恢复原 Batfish typed route。
+- 每个 contribution 保留 message/sender/receiver identity、protocol session ID、独立 availability
+  与 selection guards、完整 propagation provenance，以及从 Algorithm 1 recursive-withdrawal registry
+  读取的 parent contribution identities。guard 同时保留内部 raw 公式、display-simplified 公式和
+  satisfiable 标志。
+- 修补此前只存在于 `SymbolicRouteMessage`、安装后丢失的 session metadata：`GuardedRib` 现在随
+  contribution 生命周期保存/删除 session ID；candidate key、route payload、withdrawal identity 和
+  preference 语义均未改变。
+- `BatfishSymbolicRoutePipelineResult.toControlPlaneJson()` 暴露正式机器接口；一次
+  `SmtReachabilityTest` 运行会在同一 `smt_output_*` 目录额外写出
+  `0_symbolic_control_plane.json`。原始/简化 readable reports 保持原契约。
+- 测试覆盖 schema JSON round-trip、BGP typed-route round-trip、R4 local-pref 50/100/200、稳定且互异
+  的 candidate IDs、BGP session 与 parent dependency 不丢失、禁止 `AnnotatedRoute{...}` 字符串
+  payload，以及 session metadata 的安装/撤回生命周期。2026-09-02 14:38 CST 定向测试通过。
+- 2026-09-02 14:39 CST PMD 仍只报告 Graph/Encoder/EncoderSlice/PropertyChecker 和旧 SMT route
+  类的 34 项既有基线违规；本 Stage 新增/修改的 symbolic-route 文件没有新增 PMD 违规。核心
+  `Graph.java`、`Encoder.java`、`EncoderSlice.java`、`PropertyChecker.java` 均未修改。
+- 2026-09-02 14:43 CST 完整套件首次运行 279 个测试，唯一失败是用户工作区中原先未跟踪的
+  `TrafficDemoSingleLinkFailureTest`：其输入包含当前 Cisco parser 不接受的旧 SR extension syntax，
+  在进入 symbolic pipeline 前即解析失败。排除该已知独立测试后，其余 278 个 Minesweeper 测试
+  禁用缓存全部通过，本 Stage 没有引入协议或 SR 生命周期回归。
+- 2026-09-02 14:44 CST 当前 `SmtReachabilityTest.testReachability` 禁用缓存通过；同一次运行生成的
+  `smts/smt_output_0055/0_symbolic_control_plane.json` 已核验包含 schema/version、R4 BGP
+  local-preference 200、结构化 AS-path/communities/next-hop、`r2:default->r4:default` session、parent
+  contribution 和 exact/simplified guards。

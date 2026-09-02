@@ -4,6 +4,7 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.Optional;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import org.batfish.datamodel.AbstractRouteDecorator;
 
 /** Hoyan Algorithm 1 ingress-policy and guarded-RIB installation steps. */
@@ -14,11 +15,15 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
 
     @Nonnull private final SymbolicRouteContributionId _contributionId;
     @Nonnull private final SymbolicRoute<R> _candidate;
+    @Nullable private final String _sessionId;
 
     PreparedCandidate(
-        SymbolicRouteContributionId contributionId, SymbolicRoute<R> candidate) {
+        SymbolicRouteContributionId contributionId,
+        SymbolicRoute<R> candidate,
+        @Nullable String sessionId) {
       _contributionId = requireNonNull(contributionId, "contributionId must be provided");
       _candidate = requireNonNull(candidate, "candidate must be provided");
+      _sessionId = sessionId;
     }
 
     @Nonnull
@@ -29,6 +34,11 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
     @Nonnull
     SymbolicRoute<R> getCandidate() {
       return _candidate;
+    }
+
+    @Nullable
+    String getSessionId() {
+      return _sessionId;
     }
   }
 
@@ -82,14 +92,16 @@ public final class SymbolicRouteIngressProcessor<R extends AbstractRouteDecorato
         new PreparedCandidate<>(
             new SymbolicRouteContributionId(
                 message.getMessageId(), message.getSender(), message.getReceiver()),
-            candidate));
+            candidate,
+            message.getSessionId()));
   }
 
   /** Installs a previously prepared ingress candidate. */
   SymbolicRouteIngressResult<R> install(PreparedCandidate<R> prepared) {
     requireNonNull(prepared, "prepared candidate must be provided");
     SymbolicRoute<R> candidate = prepared.getCandidate();
-    GuardedRibDelta<R> delta = _rib.putContribution(prepared.getContributionId(), candidate);
+    GuardedRibDelta<R> delta =
+        _rib.putContribution(prepared.getContributionId(), candidate, prepared.getSessionId());
     return new SymbolicRouteIngressResult<>(candidate.getKey(), delta);
   }
 

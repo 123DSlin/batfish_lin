@@ -87,6 +87,21 @@ public final class GuardedRibTest {
   }
 
   @Test
+  public void testContributionSessionIdentityFollowsContributionLifecycle() {
+    SymbolicRoute<StaticRoute> route =
+        symbolicRoute("session-source", 10, GUARDS.variable("session_link"));
+    SymbolicRouteContributionId contributionId =
+        new SymbolicRouteContributionId("message", "r1", "r2");
+    GuardedRib<StaticRoute> rib = new GuardedRib<>(PREFERENCE);
+
+    rib.putContribution(contributionId, route, "r1:default->r2:default");
+
+    assertThat(rib.getContributionSessionId(contributionId), equalTo("r1:default->r2:default"));
+    rib.removeContribution(route.getKey(), contributionId);
+    assertThat(rib.getContributionSessionId(contributionId), nullValue());
+  }
+
+  @Test
   public void testRemovingHigherRouteRestoresLowerSelectionGuard() {
     RouteGuard lowAvailability = GUARDS.variable("remove_low_available");
     SymbolicRoute<StaticRoute> low = symbolicRoute("remove-low", 20, lowAvailability);

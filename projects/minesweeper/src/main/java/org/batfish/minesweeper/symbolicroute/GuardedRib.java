@@ -27,11 +27,14 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
   private final Map<SymbolicRouteKey, Map<SymbolicRouteContributionId, SymbolicRoute<R>>>
       _contributions;
 
+  @Nonnull private final Map<SymbolicRouteContributionId, String> _contributionSessionIds;
+
   public GuardedRib(Comparator<R> preferenceComparator) {
     _preferenceComparator =
         requireNonNull(preferenceComparator, "preferenceComparator must be provided");
     _routes = new LinkedHashMap<>();
     _contributions = new LinkedHashMap<>();
+    _contributionSessionIds = new LinkedHashMap<>();
   }
 
   /** Adds or replaces a candidate and returns every entry affected by the operation. */
@@ -48,6 +51,17 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
   /** Adds or replaces one advertisement contribution and ORs all contributions to its candidate. */
   public GuardedRibDelta<R> putContribution(
       SymbolicRouteContributionId contributionId, SymbolicRoute<R> route) {
+    return putContribution(contributionId, route, null);
+  }
+
+  /**
+   * Adds or replaces one advertisement contribution while retaining its protocol-session identity
+   * for lossless control-plane export.
+   */
+  public GuardedRibDelta<R> putContribution(
+      SymbolicRouteContributionId contributionId,
+      SymbolicRoute<R> route,
+      @Nullable String sessionId) {
     requireNonNull(contributionId, "contributionId must be provided");
     requireNonNull(route, "route must be provided");
     Map<SymbolicRouteKey, GuardedRibEntry<R>> before = computeEntries();
@@ -55,8 +69,14 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
         _contributions.computeIfAbsent(route.getKey(), unused -> new LinkedHashMap<>());
     if (route.getAvailabilityGuard().isSatisfiable()) {
       contributions.put(contributionId, route);
+      if (sessionId == null) {
+        _contributionSessionIds.remove(contributionId);
+      } else {
+        _contributionSessionIds.put(contributionId, sessionId);
+      }
     } else {
       contributions.remove(contributionId);
+      _contributionSessionIds.remove(contributionId);
     }
     rebuildCandidate(route.getKey());
     return changedEntries(before, computeEntries());
@@ -71,6 +91,7 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
     Map<SymbolicRouteContributionId, SymbolicRoute<R>> contributions = _contributions.get(key);
     if (contributions != null) {
       contributions.remove(contributionId);
+      _contributionSessionIds.remove(contributionId);
       rebuildCandidate(key);
     }
     return changedEntries(before, computeEntries());
@@ -81,7 +102,10 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
     requireNonNull(key, "key must be provided");
     Map<SymbolicRouteKey, GuardedRibEntry<R>> before = computeEntries();
     _routes.remove(key);
-    _contributions.remove(key);
+    Map<SymbolicRouteContributionId, SymbolicRoute<R>> removed = _contributions.remove(key);
+    if (removed != null) {
+      removed.keySet().forEach(_contributionSessionIds::remove);
+    }
     return changedEntries(before, computeEntries());
   }
 
@@ -122,6 +146,13 @@ public final class GuardedRib<R extends AbstractRouteDecorator> {
     requireNonNull(key, "key must be provided");
     Map<SymbolicRouteContributionId, SymbolicRoute<R>> contributions = _contributions.get(key);
     return contributions == null ? ImmutableSet.of() : ImmutableSet.copyOf(contributions.keySet());
+  }
+
+  /** Returns the directed protocol-session identity, or null for a locally originated source. */
+  @Nullable
+  public String getContributionSessionId(SymbolicRouteContributionId contributionId) {
+    return _contributionSessionIds.get(
+        requireNonNull(contributionId, "contributionId must be provided"));
   }
 
   /**

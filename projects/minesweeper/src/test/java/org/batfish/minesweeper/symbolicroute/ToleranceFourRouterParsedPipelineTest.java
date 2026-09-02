@@ -87,9 +87,62 @@ public final class ToleranceFourRouterParsedPipelineTest {
     assertCanonicalIdentity(batfish, input, "r3", "Ethernet34", "r4", "Ethernet43");
 
     BatfishSymbolicRoutePipelineResult result = BatfishSymbolicRoutePipeline.run(input);
-
     List<GuardedRibEntry<AnnotatedRoute<Bgpv4Route>>> r4Routes =
         result.getBgpRibNetwork().getRib("r4").getEntries();
+
+    SymbolicControlPlaneExport controlPlane = result.toControlPlaneExport();
+    String controlPlaneJson = controlPlane.toJson();
+    SymbolicControlPlaneExport decoded = SymbolicControlPlaneExport.fromJson(controlPlaneJson);
+    assertThat(decoded.getSchemaName(), equalTo(SymbolicControlPlaneExport.SCHEMA_NAME));
+    assertThat(decoded.getSchemaVersion(), equalTo(SymbolicControlPlaneExport.SCHEMA_VERSION));
+    assertThat(
+        org.batfish.common.util.BatfishObjectMapper.mapper().readTree(decoded.toJson()),
+        equalTo(org.batfish.common.util.BatfishObjectMapper.mapper().readTree(controlPlaneJson)));
+    List<SymbolicControlPlaneExport.Candidate> exportedR4Bgp =
+        controlPlane.getCandidates().stream()
+            .filter(
+                candidate ->
+                    candidate.getPlane() == SymbolicRibRecord.Plane.BGP
+                        && candidate.getRouter().equals("r4")
+                        && candidate.getPrefix().equals(PREFIX.toString()))
+            .collect(ImmutableList.toImmutableList());
+    assertThat(exportedR4Bgp, hasSize(3));
+    assertThat(
+        exportedR4Bgp.stream()
+            .map(candidate -> candidate.getRoute().getAttributes().get("localPreference").asLong())
+            .sorted()
+            .collect(ImmutableList.toImmutableList()),
+        equalTo(ImmutableList.of(50L, 100L, 200L)));
+    assertThat(
+        exportedR4Bgp.stream()
+            .map(candidate -> candidate.getRoute().decode(Bgpv4Route.class))
+            .allMatch(
+                decodedRoute ->
+                    r4Routes.stream()
+                        .anyMatch(
+                            entry ->
+                                entry
+                                    .getSymbolicRoute()
+                                    .getRoute()
+                                    .getRoute()
+                                    .equals(decodedRoute))),
+        equalTo(true));
+    assertThat(
+        exportedR4Bgp.stream()
+            .map(SymbolicControlPlaneExport.Candidate::getCandidateId)
+            .distinct()
+            .count(),
+        equalTo(3L));
+    assertThat(
+        exportedR4Bgp.stream()
+            .allMatch(
+                candidate ->
+                    candidate.getContributions().size() == 1
+                        && candidate.getContributions().get(0).getSessionId() != null
+                        && !candidate.getContributions().get(0).getParents().isEmpty()),
+        equalTo(true));
+    assertThat(controlPlaneJson.contains("AnnotatedRoute{"), equalTo(false));
+
     assertThat(r4Routes, hasSize(3));
     assertGuard(r4Routes, 200L, GUARDS.variable("r1_r2").and(GUARDS.variable("r2_r4")));
     assertGuard(

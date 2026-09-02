@@ -362,6 +362,18 @@ public final class BatfishSymbolicRoutePipelineResult {
     }
   }
 
+  /** Returns the versioned, lossless control-plane transport model for downstream analysis. */
+  @Nonnull
+  public SymbolicControlPlaneExport toControlPlaneExport() {
+    return SymbolicControlPlaneExport.from(this);
+  }
+
+  /** Produces the lossless machine-readable control-plane JSON integration contract. */
+  @Nonnull
+  public String toControlPlaneJson() {
+    return toControlPlaneExport().toJson();
+  }
+
   /** Produces a router/VRF report intended for direct human review. */
   @Nonnull
   public String toReadableText() {
