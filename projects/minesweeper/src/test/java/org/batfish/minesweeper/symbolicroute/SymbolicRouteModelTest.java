@@ -41,6 +41,17 @@ public final class SymbolicRouteModelTest {
     }
 
     @Override
+    public BooleanGuardAst getAst() {
+      if (isTrue()) {
+        return BooleanGuardAst.trueValue();
+      }
+      if (isFalse()) {
+        return BooleanGuardAst.falseValue();
+      }
+      return BooleanGuardAst.variable(_expression);
+    }
+
+    @Override
     public RouteGuard and(RouteGuard other) {
       return new TestRouteGuard("(" + _expression + " & " + other + ")");
     }

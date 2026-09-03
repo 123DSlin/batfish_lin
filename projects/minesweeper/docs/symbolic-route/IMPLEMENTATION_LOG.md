@@ -1892,3 +1892,25 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   `smts/smt_output_0055/0_symbolic_control_plane.json` 已核验包含 schema/version、R4 BGP
   local-preference 200、结构化 AS-path/communities/next-hop、`r2:default->r4:default` session、parent
   contribution 和 exact/simplified guards。
+
+## Stage 9.1.1 可重建 Guard AST 与变量语义表（2026-09-03 13:10 CST）
+
+- 将机器导出 schema 升级为 version 2。每个 availability/selection guard 现在额外保存与求解器
+  无关的 `BooleanGuardAst`，节点类型限定为 `TRUE`、`FALSE`、`VARIABLE`、`NOT`、`AND`、`OR`；
+  AND/OR 会扁平化、稳定排序并去重，因此 JSON 不依赖 Z3 AST 的打印格式或当前 `Context`。
+- `Z3RouteGuard` 在布尔运算期间同步维护等价 AST；`simplify()` 和展示化简只改变当前 Z3 表达式，
+  不丢弃原始等价 AST。`Z3RouteGuardFactory.fromAst()` 可在新的 Z3 `Context` 中重新编译 AST。
+  因此导出的 `ast` 是后续 Minesweeper/SR/traffic 消费者的正式输入，`raw` 和 `simplified` 字符串仅
+  用于审计和阅读，不作为解析接口。
+- 根级 `guardVariables` 给每个 AST 变量提供显式语义。parser-driven topology 产生的变量绑定到
+  canonical、无方向的 `LinkFailureKey`，并明确 `polarity=UP`；没有已知 link binding 的变量标记为
+  `UNINTERPRETED_BOOLEAN`，禁止通过变量名猜测链路或 up/down 含义。同一变量若被绑定到两个不同
+  canonical links，pipeline 会立即拒绝输入。
+- 新增 AST canonicalization、JSON round-trip、跨 Z3 Context 等价重建测试；四路由器端到端测试
+  同时断言 `r1_r2` 对应 canonical link `(r1,r2)`、极性为 UP，并在全新 Context 中将 R4
+  local-preference 200 的 selection AST 重建为与 `r1_r2 && r2_r4` 逻辑等价。
+- 2026-09-03 13:06 CST 定向测试共 20 个全部通过；2026-09-03 13:07 CST 完整 Minesweeper 回归
+  排除用户工作区中已知、未跟踪且 parser-failing 的 `TrafficDemoSingleLinkFailureTest` 后，共 281 个
+  测试全部通过。2026-09-03 13:10 CST PMD 仍仅报告原有 34 条 Graph/旧 SMT 基线违规，本阶段
+  symbolic-route 文件没有新增违规；`Graph.java`、`Encoder.java`、`EncoderSlice.java`、
+  `PropertyChecker.java` 均未修改。

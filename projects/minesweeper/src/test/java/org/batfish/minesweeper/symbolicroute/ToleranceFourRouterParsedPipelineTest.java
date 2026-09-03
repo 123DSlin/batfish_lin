@@ -107,6 +107,18 @@ public final class ToleranceFourRouterParsedPipelineTest {
                         && candidate.getPrefix().equals(PREFIX.toString()))
             .collect(ImmutableList.toImmutableList());
     assertThat(exportedR4Bgp, hasSize(3));
+    SymbolicControlPlaneExport.GuardVariable r1R2Variable =
+        controlPlane.getGuardVariables().stream()
+            .filter(variable -> variable.getVariableId().equals("r1_r2"))
+            .findFirst()
+            .get();
+    assertThat(
+        r1R2Variable.getKind(),
+        equalTo(SymbolicControlPlaneExport.GuardVariable.Kind.LINK_AVAILABILITY));
+    assertThat(
+        r1R2Variable.getPolarity(), equalTo(SymbolicControlPlaneExport.GuardVariable.Polarity.UP));
+    assertThat(r1R2Variable.getLink().getFirstRouter(), equalTo("r1"));
+    assertThat(r1R2Variable.getLink().getSecondRouter(), equalTo("r2"));
     assertThat(
         exportedR4Bgp.stream()
             .map(candidate -> candidate.getRoute().getAttributes().get("localPreference").asLong())
@@ -142,6 +154,21 @@ public final class ToleranceFourRouterParsedPipelineTest {
                         && !candidate.getContributions().get(0).getParents().isEmpty()),
         equalTo(true));
     assertThat(controlPlaneJson.contains("AnnotatedRoute{"), equalTo(false));
+    SymbolicControlPlaneExport.Candidate localPreference200 =
+        exportedR4Bgp.stream()
+            .filter(
+                candidate ->
+                    candidate.getRoute().getAttributes().get("localPreference").asLong() == 200L)
+            .findFirst()
+            .get();
+    try (Context restoredContext = new Context()) {
+      Z3RouteGuardFactory restoredGuards = new Z3RouteGuardFactory(restoredContext);
+      RouteGuard restored = restoredGuards.fromAst(localPreference200.getSelectionGuard().getAst());
+      assertThat(
+          restored.isEquivalentTo(
+              restoredGuards.variable("r1_r2").and(restoredGuards.variable("r2_r4"))),
+          equalTo(true));
+    }
 
     assertThat(r4Routes, hasSize(3));
     assertGuard(r4Routes, 200L, GUARDS.variable("r1_r2").and(GUARDS.variable("r2_r4")));

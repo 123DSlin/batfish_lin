@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import javax.annotation.Nonnull;
 import org.batfish.datamodel.AbstractRoute;
 import org.batfish.datamodel.AnnotatedRoute;
@@ -113,7 +114,62 @@ public final class BatfishSymbolicRoutePipeline {
         isisL2Convergence,
         sidReconciler,
         srPolicyReconciler,
-        input.getConfigurations());
+        input.getConfigurations(),
+        linkFailureKeysByGuardVariable(input));
+  }
+
+  private static Map<String, LinkFailureKey> linkFailureKeysByGuardVariable(
+      BatfishSymbolicRoutePipelineInput input) {
+    Map<String, LinkFailureKey> variables = new TreeMap<>();
+    input
+        .getMainSeeds()
+        .forEach(
+            seed -> registerLinkGuard(variables, seed.getGuard(), seed.getLinkFailureKey()));
+    input
+        .getIsisSeeds()
+        .forEach(
+            seed -> registerLinkGuard(variables, seed.getGuard(), seed.getLinkFailureKey()));
+    input
+        .getIsisL2Seeds()
+        .forEach(
+            seed -> registerLinkGuard(variables, seed.getGuard(), seed.getLinkFailureKey()));
+    input
+        .getBgpSessions()
+        .forEach(
+            session ->
+                registerLinkGuard(
+                    variables, session.getLinkGuard(), session.getLinkFailureKey()));
+    input
+        .getIsisSessions()
+        .forEach(
+            session ->
+                registerLinkGuard(
+                    variables, session.getLinkGuard(), session.getLinkFailureKey()));
+    input
+        .getIsisL2Sessions()
+        .forEach(
+            session ->
+                registerLinkGuard(
+                    variables, session.getLinkGuard(), session.getLinkFailureKey()));
+    return variables;
+  }
+
+  private static void registerLinkGuard(
+      Map<String, LinkFailureKey> variables,
+      RouteGuard guard,
+      LinkFailureKey linkFailureKey) {
+    if (linkFailureKey == null) {
+      return;
+    }
+    if (guard.getAst().getOperator() != BooleanGuardAst.Operator.VARIABLE) {
+      throw new IllegalArgumentException("canonical link guard must be one Boolean variable");
+    }
+    String variableId =
+        requireNonNull(guard.getAst().getVariableId(), "link guard variable id must be provided");
+    LinkFailureKey old = variables.put(variableId, linkFailureKey);
+    if (old != null && !old.equals(linkFailureKey)) {
+      throw new IllegalArgumentException("one guard variable cannot identify two links");
+    }
   }
 
   private static boolean rejectAttachedAtL1L2Router(

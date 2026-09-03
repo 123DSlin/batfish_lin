@@ -46,6 +46,8 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull private final GuardedSrPolicyReconciler _guardedSrPolicyReconciler;
   @Nonnull private final ImmutableMap<String, ImmutableList<String>> _vrfsByRouter;
 
+  @Nonnull private final ImmutableMap<String, LinkFailureKey> _linkFailureKeysByGuardVariable;
+
   BatfishSymbolicRoutePipelineResult(
       SymbolicRouteNetwork<AnnotatedRoute<AbstractRoute>> mainRibNetwork,
       SymbolicRouteNetwork<AnnotatedRoute<Bgpv4Route>> bgpRibNetwork,
@@ -61,7 +63,8 @@ public final class BatfishSymbolicRoutePipelineResult {
       SymbolicRouteConvergenceResult isisL2Convergence,
       GuardedSidReconciler guardedSidReconciler,
       GuardedSrPolicyReconciler guardedSrPolicyReconciler,
-      Map<String, Configuration> configurations) {
+      Map<String, Configuration> configurations,
+      Map<String, LinkFailureKey> linkFailureKeysByGuardVariable) {
     _mainRibNetwork = requireNonNull(mainRibNetwork, "mainRibNetwork must be provided");
     _bgpRibNetwork = requireNonNull(bgpRibNetwork, "bgpRibNetwork must be provided");
     _isisL1RibNetwork = requireNonNull(isisL1RibNetwork, "isisL1RibNetwork must be provided");
@@ -82,6 +85,11 @@ public final class BatfishSymbolicRoutePipelineResult {
         requireNonNull(guardedSidReconciler, "guardedSidReconciler must be provided");
     _guardedSrPolicyReconciler =
         requireNonNull(guardedSrPolicyReconciler, "guardedSrPolicyReconciler must be provided");
+    _linkFailureKeysByGuardVariable =
+        ImmutableMap.copyOf(
+            requireNonNull(
+                linkFailureKeysByGuardVariable,
+                "linkFailureKeysByGuardVariable must be provided"));
     ImmutableMap.Builder<String, ImmutableList<String>> vrfs = ImmutableMap.builder();
     requireNonNull(configurations, "configurations must be provided")
         .forEach(
@@ -172,6 +180,12 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull
   public GuardedSrPolicyReconciler getGuardedSrPolicyReconciler() {
     return _guardedSrPolicyReconciler;
+  }
+
+  /** Canonical link identity for each link-up guard variable discovered from parsed topology. */
+  @Nonnull
+  public ImmutableMap<String, LinkFailureKey> getLinkFailureKeysByGuardVariable() {
+    return _linkFailureKeysByGuardVariable;
   }
 
   /** Returns candidates followed by forwarding branches in deterministic semantic-key order. */

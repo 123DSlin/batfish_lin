@@ -16,10 +16,17 @@ public final class Z3RouteGuard implements RouteGuard {
 
   @Nonnull private final Context _context;
   @Nonnull private final BoolExpr _expression;
+  @Nonnull private final BooleanGuardAst _ast;
 
-  Z3RouteGuard(Context context, BoolExpr expression) {
+  Z3RouteGuard(Context context, BoolExpr expression, BooleanGuardAst ast) {
     _context = requireNonNull(context, "context must be provided");
     _expression = requireNonNull(expression, "expression must be provided");
+    _ast = requireNonNull(ast, "ast must be provided");
+  }
+
+  @Override
+  public BooleanGuardAst getAst() {
+    return _ast;
   }
 
   private Z3RouteGuard checked(RouteGuard other) {
@@ -35,22 +42,30 @@ public final class Z3RouteGuard implements RouteGuard {
 
   @Override
   public RouteGuard and(RouteGuard other) {
-    return new Z3RouteGuard(_context, _context.mkAnd(_expression, checked(other)._expression));
+    Z3RouteGuard checkedOther = checked(other);
+    return new Z3RouteGuard(
+        _context,
+        _context.mkAnd(_expression, checkedOther._expression),
+        BooleanGuardAst.and(_ast, checkedOther._ast));
   }
 
   @Override
   public RouteGuard or(RouteGuard other) {
-    return new Z3RouteGuard(_context, _context.mkOr(_expression, checked(other)._expression));
+    Z3RouteGuard checkedOther = checked(other);
+    return new Z3RouteGuard(
+        _context,
+        _context.mkOr(_expression, checkedOther._expression),
+        BooleanGuardAst.or(_ast, checkedOther._ast));
   }
 
   @Override
   public RouteGuard not() {
-    return new Z3RouteGuard(_context, _context.mkNot(_expression));
+    return new Z3RouteGuard(_context, _context.mkNot(_expression), BooleanGuardAst.not(_ast));
   }
 
   @Override
   public RouteGuard simplify() {
-    return new Z3RouteGuard(_context, (BoolExpr) _expression.simplify());
+    return new Z3RouteGuard(_context, (BoolExpr) _expression.simplify(), _ast);
   }
 
   @Override
@@ -67,7 +82,7 @@ public final class Z3RouteGuard implements RouteGuard {
     if (subgoals.length != 1) {
       return simplify();
     }
-    return new Z3RouteGuard(_context, (BoolExpr) subgoals[0].AsBoolExpr().simplify());
+    return new Z3RouteGuard(_context, (BoolExpr) subgoals[0].AsBoolExpr().simplify(), _ast);
   }
 
   @Override
@@ -87,7 +102,9 @@ public final class Z3RouteGuard implements RouteGuard {
 
   @Override
   public boolean isTrue() {
-    return _expression.isTrue() || isEquivalentTo(new Z3RouteGuard(_context, _context.mkTrue()));
+    return _expression.isTrue()
+        || isEquivalentTo(
+            new Z3RouteGuard(_context, _context.mkTrue(), BooleanGuardAst.trueValue()));
   }
 
   @Override

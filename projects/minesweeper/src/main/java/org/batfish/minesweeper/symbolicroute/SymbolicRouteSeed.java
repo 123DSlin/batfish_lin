@@ -59,6 +59,11 @@ public final class SymbolicRouteSeed<R extends AbstractRouteDecorator> {
     return _originRouter;
   }
 
+  @Nonnull
+  public RouteGuard getGuard() {
+    return _guard;
+  }
+
   @Nullable
   public LinkFailureKey getLinkFailureKey() {
     return _linkFailureKey;

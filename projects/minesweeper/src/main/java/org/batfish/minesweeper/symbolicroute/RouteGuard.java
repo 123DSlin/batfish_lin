@@ -8,6 +8,9 @@ package org.batfish.minesweeper.symbolicroute;
  */
 public interface RouteGuard {
 
+  /** Solver-independent syntax tree suitable for persistence and reconstruction. */
+  BooleanGuardAst getAst();
+
   RouteGuard and(RouteGuard other);
 
   RouteGuard or(RouteGuard other);

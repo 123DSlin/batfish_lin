@@ -14,6 +14,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.batfish.common.util.BatfishObjectMapper;
@@ -25,19 +28,22 @@ import org.batfish.datamodel.AnnotatedRoute;
 public final class SymbolicControlPlaneExport {
 
   public static final String SCHEMA_NAME = "batfish-minesweeper-symbolic-control-plane";
-  public static final int SCHEMA_VERSION = 1;
+  public static final int SCHEMA_VERSION = 2;
 
   /** Exact and display-simplified representations of one semantically identical guard. */
   public static final class Guard {
+    @Nonnull private final BooleanGuardAst _ast;
     @Nonnull private final String _raw;
     @Nonnull private final String _simplified;
     private final boolean _satisfiable;
 
     @JsonCreator
     private Guard(
+        @JsonProperty("ast") BooleanGuardAst ast,
         @JsonProperty("raw") String raw,
         @JsonProperty("simplified") String simplified,
         @JsonProperty("satisfiable") boolean satisfiable) {
+      _ast = requireNonNull(ast, "guard AST must be provided");
       _raw = requireNonNull(raw, "raw guard must be provided");
       _simplified = requireNonNull(simplified, "simplified guard must be provided");
       _satisfiable = satisfiable;
@@ -46,7 +52,16 @@ public final class SymbolicControlPlaneExport {
     private static Guard from(RouteGuard guard) {
       RouteGuard checked = requireNonNull(guard, "guard must be provided");
       return new Guard(
-          checked.toString(), checked.simplifyForDisplay().toString(), checked.isSatisfiable());
+          checked.getAst(),
+          checked.toString(),
+          checked.simplifyForDisplay().toString(),
+          checked.isSatisfiable());
+    }
+
+    @JsonProperty("ast")
+    @Nonnull
+    public BooleanGuardAst getAst() {
+      return _ast;
     }
 
     @JsonProperty("raw")
@@ -64,6 +79,107 @@ public final class SymbolicControlPlaneExport {
     @JsonProperty("satisfiable")
     public boolean getSatisfiable() {
       return _satisfiable;
+    }
+  }
+
+  /** Canonical, direction-independent physical-link identity. */
+  public static final class LinkIdentity {
+    @Nonnull private final String _firstRouter;
+    @Nonnull private final String _secondRouter;
+
+    @JsonCreator
+    private LinkIdentity(
+        @JsonProperty("firstRouter") String firstRouter,
+        @JsonProperty("secondRouter") String secondRouter) {
+      LinkFailureKey canonical = LinkFailureKey.of(firstRouter, secondRouter);
+      if (!canonical.getFirstRouter().equals(firstRouter)
+          || !canonical.getSecondRouter().equals(secondRouter)) {
+        throw new IllegalArgumentException("link identity endpoints must be canonicalized");
+      }
+      _firstRouter = firstRouter;
+      _secondRouter = secondRouter;
+    }
+
+    private static LinkIdentity from(LinkFailureKey key) {
+      return new LinkIdentity(key.getFirstRouter(), key.getSecondRouter());
+    }
+
+    @JsonProperty("firstRouter")
+    @Nonnull
+    public String getFirstRouter() {
+      return _firstRouter;
+    }
+
+    @JsonProperty("secondRouter")
+    @Nonnull
+    public String getSecondRouter() {
+      return _secondRouter;
+    }
+  }
+
+  /** Meaning of one Boolean variable referenced by a persisted guard AST. */
+  public static final class GuardVariable {
+    public enum Kind {
+      LINK_AVAILABILITY,
+      UNINTERPRETED_BOOLEAN
+    }
+
+    public enum Polarity {
+      UP
+    }
+
+    @Nonnull private final String _variableId;
+    @Nonnull private final Kind _kind;
+    @Nullable private final Polarity _polarity;
+    @Nullable private final LinkIdentity _link;
+
+    @JsonCreator
+    private GuardVariable(
+        @JsonProperty("variableId") String variableId,
+        @JsonProperty("kind") Kind kind,
+        @Nullable @JsonProperty("polarity") Polarity polarity,
+        @Nullable @JsonProperty("link") LinkIdentity link) {
+      _variableId = requireNonNull(variableId, "variableId must be provided");
+      _kind = requireNonNull(kind, "guard variable kind must be provided");
+      _polarity = polarity;
+      _link = link;
+      if ((_kind == Kind.LINK_AVAILABILITY) != (_link != null && _polarity == Polarity.UP)) {
+        throw new IllegalArgumentException(
+            "link availability variables require a canonical link and UP polarity");
+      }
+    }
+
+    private static GuardVariable link(String variableId, LinkFailureKey key) {
+      return new GuardVariable(
+          variableId, Kind.LINK_AVAILABILITY, Polarity.UP, LinkIdentity.from(key));
+    }
+
+    private static GuardVariable uninterpreted(String variableId) {
+      return new GuardVariable(variableId, Kind.UNINTERPRETED_BOOLEAN, null, null);
+    }
+
+    @JsonProperty("variableId")
+    @Nonnull
+    public String getVariableId() {
+      return _variableId;
+    }
+
+    @JsonProperty("kind")
+    @Nonnull
+    public Kind getKind() {
+      return _kind;
+    }
+
+    @JsonProperty("polarity")
+    @Nullable
+    public Polarity getPolarity() {
+      return _polarity;
+    }
+
+    @JsonProperty("link")
+    @Nullable
+    public LinkIdentity getLink() {
+      return _link;
     }
   }
 
@@ -403,18 +519,21 @@ public final class SymbolicControlPlaneExport {
 
   @Nonnull private final String _schemaName;
   private final int _schemaVersion;
+  @Nonnull private final ImmutableList<GuardVariable> _guardVariables;
   @Nonnull private final ImmutableList<Candidate> _candidates;
 
   @JsonCreator
   private SymbolicControlPlaneExport(
       @JsonProperty("schemaName") String schemaName,
       @JsonProperty("schemaVersion") int schemaVersion,
+      @Nullable @JsonProperty("guardVariables") List<GuardVariable> guardVariables,
       @Nullable @JsonProperty("candidates") List<Candidate> candidates) {
     _schemaName = requireNonNull(schemaName, "schemaName must be provided");
     if (!_schemaName.equals(SCHEMA_NAME) || schemaVersion != SCHEMA_VERSION) {
       throw new IllegalArgumentException("unsupported symbolic control-plane schema");
     }
     _schemaVersion = schemaVersion;
+    _guardVariables = ImmutableList.copyOf(firstNonNull(guardVariables, ImmutableList.of()));
     _candidates = ImmutableList.copyOf(firstNonNull(candidates, ImmutableList.of()));
   }
 
@@ -433,7 +552,33 @@ public final class SymbolicControlPlaneExport {
             .thenComparing(Candidate::getVrf)
             .thenComparing(Candidate::getPrefix)
             .thenComparing(Candidate::getCandidateId));
-    return new SymbolicControlPlaneExport(SCHEMA_NAME, SCHEMA_VERSION, candidates);
+    return new SymbolicControlPlaneExport(
+        SCHEMA_NAME,
+        SCHEMA_VERSION,
+        guardVariables(candidates, checked.getLinkFailureKeysByGuardVariable()),
+        candidates);
+  }
+
+  private static ImmutableList<GuardVariable> guardVariables(
+      List<Candidate> candidates, Map<String, LinkFailureKey> linkVariables) {
+    Set<String> variables = new TreeSet<>();
+    for (Candidate candidate : candidates) {
+      variables.addAll(candidate.getAvailabilityGuard().getAst().getVariables());
+      variables.addAll(candidate.getSelectionGuard().getAst().getVariables());
+      for (Contribution contribution : candidate.getContributions()) {
+        variables.addAll(contribution.getAvailabilityGuard().getAst().getVariables());
+        variables.addAll(contribution.getSelectionGuard().getAst().getVariables());
+      }
+    }
+    ImmutableList.Builder<GuardVariable> result = ImmutableList.builder();
+    for (String variable : variables) {
+      LinkFailureKey link = linkVariables.get(variable);
+      result.add(
+          link == null
+              ? GuardVariable.uninterpreted(variable)
+              : GuardVariable.link(variable, link));
+    }
+    return result.build();
   }
 
   private static <R extends AbstractRouteDecorator> void appendPlane(
@@ -516,6 +661,12 @@ public final class SymbolicControlPlaneExport {
   @JsonProperty("schemaVersion")
   public int getSchemaVersion() {
     return _schemaVersion;
+  }
+
+  @JsonProperty("guardVariables")
+  @Nonnull
+  public ImmutableList<GuardVariable> getGuardVariables() {
+    return _guardVariables;
   }
 
   @JsonProperty("candidates")
