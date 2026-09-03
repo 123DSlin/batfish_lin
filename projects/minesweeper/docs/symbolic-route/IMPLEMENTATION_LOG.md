@@ -1914,3 +1914,48 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   测试全部通过。2026-09-03 13:10 CST PMD 仍仅报告原有 34 条 Graph/旧 SMT 基线违规，本阶段
   symbolic-route 文件没有新增违规；`Graph.java`、`Encoder.java`、`EncoderSlice.java`、
   `PropertyChecker.java` 均未修改。
+
+## Stage 9.2 独立 0/1-link failure 验证 Oracle（2026-09-03 15:20 CST）
+
+- 本阶段只验证已稳定的 guarded routes 与 guarded SR forwarding branches，不实现 YU 的 symbolic
+  traffic propagation、动态 weight normalization 或链路负载聚合，也不把逐故障枚举嵌入 symbolic
+  convergence engine。
+- 新增版本化 `0_symbolic_sr_policies.json`（schema
+  `batfish-minesweeper-symbolic-sr-policies` version 1）。candidate 和 forwarding branch 的
+  availability/selection guard 除原始可读字符串外，现保存精确的、与求解器无关的
+  `BooleanGuardAst`；根级 `guardVariables` 使用与 symbolic control-plane export 相同的 canonical
+  `LinkFailureKey` 和 `polarity=UP`，因此该 SR 文件可被独立、安全地重新读取。
+- `SmtReachabilityTest.writeSymbolicRouteFiles()` 仅新增一次文件写入；已有 dataplane、SMT encoding、
+  readable symbolic RIB 的生成逻辑没有修改。此修改位于用户已经有其他未提交修改的文件中，提交时
+  必须只暂存新增 `0_symbolic_sr_policies.json` 的代码块。
+- 新增独立脚本 `tools/validate_symbolic_route_failures.py`。脚本以完整 symbolic run 为 base，对每个
+  all-up/单链路失败 assignment 求值 MAIN candidate 的 selection AST，再与对应故障配置重新运行
+  Batfish 得到的 `0_data_plane.txt` 比较；同时投影 base 的 guarded SR forwarding branches，并与对应
+  场景重新运行 pipeline 得到的 SR branches 比较。route 与 SR 文件若对同一变量给出不同 link
+  identity 或极性，脚本立即失败，禁止从变量名猜测语义。
+- MAIN 比较字段为 Node、VRF、Prefix、Protocol、NextHopIP、NextHopInterface、Metric、AD、Tag；
+  `0_data_plane.txt` 中的 NextHop 设备名是由显示器从下一跳解析得到的冗余列，当前不作为独立身份字段。
+  SR 比较覆盖 policy/candidate identity、preference、weight、segment list、label stack、guarded next-hop
+  sequence、link dependencies 和 terminal endpoint。
+- 典型运行方式（每个目录必须由当前 pipeline 重新生成，旧 schema/version 会被明确拒绝）：
+
+  ```text
+  python3 tools/validate_symbolic_route_failures.py \
+    --base smts/smt_output_0055 \
+    --scenario all-up=smts/smt_output_0055 \
+    --scenario r1_r2=smts/smt_output_0055_r1_r2 --down r1_r2=r1_r2 \
+    --scenario r1_r3=smts/smt_output_0055_r1_r3 --down r1_r3=r1_r3 \
+    --scenario r1_r4=smts/smt_output_0055_r1_r4 --down r1_r4=r1_r4 \
+    --scenario r2_r4=smts/smt_output_0055_r2_r4 --down r2_r4=r2_r4 \
+    --scenario r3_r4=smts/smt_output_0055_r3_r4 --down r3_r4=r3_r4 \
+    --report smts/smt_output_0055/0_failure_validation.json
+  ```
+
+- 2026-09-03 15:20 CST：Python AST/全 up/单链路失败投影测试 2 个全部通过；parser-driven SR
+  pipeline 定向 Bazel 测试通过。现有 `smt_output_0055*` 是 Stage 9.1.1 之前生成的旧输出，缺少新的 SR
+  JSON（base control-plane 也仍是 schema v1），不能伪称完成真实五场景验证；必须先分别重新运行五个
+  concrete failure 配置，再执行上述独立脚本。
+- 2026-09-03 15:38 CST：完整 Minesweeper 回归运行 281 个测试，280 个通过；唯一失败仍是用户工作区
+  未跟踪的 `TrafficDemoSingleLinkFailureTest`，失败点是其 demo 配置中旧 SR extension syntax 无法被
+  Cisco parser 接受，尚未进入本阶段代码。主源码 PMD 仍仅有原先 34 条 Graph/旧 SMT 基线违规，
+  本阶段修改的 symbolic route/SR 文件没有新增 PMD 违规。

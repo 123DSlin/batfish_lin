@@ -570,8 +570,14 @@ public final class SymbolicControlPlaneExport {
         variables.addAll(contribution.getSelectionGuard().getAst().getVariables());
       }
     }
+    return guardVariablesFor(variables, linkVariables);
+  }
+
+  /** Describes the meaning of every supplied guard variable without inferring it from its name. */
+  public static ImmutableList<GuardVariable> guardVariablesFor(
+      Set<String> variables, Map<String, LinkFailureKey> linkVariables) {
     ImmutableList.Builder<GuardVariable> result = ImmutableList.builder();
-    for (String variable : variables) {
+    for (String variable : new TreeSet<>(requireNonNull(variables, "variables must be provided"))) {
       LinkFailureKey link = linkVariables.get(variable);
       result.add(
           link == null

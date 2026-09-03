@@ -246,6 +246,9 @@ public class SmtReachabilityTest {
         Files.write(
                 Paths.get(_outputDir, "0_symbolic_control_plane.json"),
                 result.toControlPlaneJson().getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                Paths.get(_outputDir, "0_symbolic_sr_policies.json"),
+                result.toSrPolicyExportJson().getBytes(StandardCharsets.UTF_8));
     }
 
     /**

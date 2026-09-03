@@ -24,6 +24,7 @@ import org.batfish.minesweeper.symbolicsr.GuardedSidDatabase;
 import org.batfish.minesweeper.symbolicsr.GuardedSidReconciler;
 import org.batfish.minesweeper.symbolicsr.GuardedSrPolicyDatabase;
 import org.batfish.minesweeper.symbolicsr.GuardedSrPolicyReconciler;
+import org.batfish.minesweeper.symbolicsr.SymbolicSrPolicyExport;
 import org.batfish.minesweeper.symbolicsr.SymbolicSrPolicyRecord;
 
 /** Final stable state produced by one complete symbolic route pipeline run. */
@@ -221,6 +222,14 @@ public final class BatfishSymbolicRoutePipelineResult {
   @Nonnull
   public String toRawSrPolicyJson() {
     return toSrPolicyJson(false);
+  }
+
+  /** Produces the versioned SR export with exact, solver-independent guard ASTs. */
+  @Nonnull
+  public String toSrPolicyExportJson() {
+    return SymbolicSrPolicyExport.of(
+            getAllSrPolicyRecords(false), getLinkFailureKeysByGuardVariable())
+        .toJson();
   }
 
   private String toSrPolicyJson(boolean simplifyGuards) {

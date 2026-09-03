@@ -7,6 +7,7 @@ import javax.annotation.Nullable;
 import org.batfish.datamodel.sr.SrPolicyEndpoint;
 import org.batfish.datamodel.sr.SrPolicyKey;
 import org.batfish.datamodel.sr.SrSidValue;
+import org.batfish.minesweeper.symbolicroute.BooleanGuardAst;
 import org.batfish.minesweeper.symbolicroute.RouteGuard;
 
 /** Deterministic, serialization-safe view of one guarded SR candidate or forwarding branch. */
@@ -33,6 +34,8 @@ public final class SymbolicSrPolicyRecord {
   @Nullable private final String _terminalVrf;
   private final String _availabilityGuard;
   private final String _selectionGuard;
+  private final BooleanGuardAst _availabilityGuardAst;
+  private final BooleanGuardAst _selectionGuardAst;
 
   public static SymbolicSrPolicyRecord fromCandidate(GuardedSrCandidate candidate) {
     return fromCandidate(candidate, true);
@@ -51,7 +54,9 @@ public final class SymbolicSrPolicyRecord {
         null,
         null,
         guardText(candidate.getAvailabilityGuard(), simplifyGuards),
-        guardText(candidate.getSelectionGuard(), simplifyGuards));
+        guardText(candidate.getSelectionGuard(), simplifyGuards),
+        candidate.getAvailabilityGuard().getAst(),
+        candidate.getSelectionGuard().getAst());
   }
 
   public static SymbolicSrPolicyRecord fromContribution(GuardedSrPolicyContribution contribution) {
@@ -86,7 +91,9 @@ public final class SymbolicSrPolicyRecord {
         contribution.getBranch().getTerminalNode(),
         contribution.getBranch().getTerminalVrf(),
         guardText(contribution.getAvailabilityGuard(), simplifyGuards),
-        guardText(contribution.getSelectionGuard(), simplifyGuards));
+        guardText(contribution.getSelectionGuard(), simplifyGuards),
+        contribution.getAvailabilityGuard().getAst(),
+        contribution.getSelectionGuard().getAst());
   }
 
   private static String guardText(RouteGuard guard, boolean simplifyGuards) {
@@ -103,7 +110,9 @@ public final class SymbolicSrPolicyRecord {
       @Nullable String terminalNode,
       @Nullable String terminalVrf,
       String availabilityGuard,
-      String selectionGuard) {
+      String selectionGuard,
+      BooleanGuardAst availabilityGuardAst,
+      BooleanGuardAst selectionGuardAst) {
     _kind = kind;
     _node = policyKey.getNode();
     _vrf = policyKey.getVrf();
@@ -124,6 +133,8 @@ public final class SymbolicSrPolicyRecord {
     _terminalVrf = terminalVrf;
     _availabilityGuard = availabilityGuard;
     _selectionGuard = selectionGuard;
+    _availabilityGuardAst = availabilityGuardAst;
+    _selectionGuardAst = selectionGuardAst;
   }
 
   public static Comparator<SymbolicSrPolicyRecord> ordering() {
@@ -205,5 +216,15 @@ public final class SymbolicSrPolicyRecord {
 
   public String getSelectionGuard() {
     return _selectionGuard;
+  }
+
+  /** Exact solver-independent guard used to decide whether this record is available. */
+  public BooleanGuardAst getAvailabilityGuardAst() {
+    return _availabilityGuardAst;
+  }
+
+  /** Exact solver-independent guard used to decide whether this record is selected. */
+  public BooleanGuardAst getSelectionGuardAst() {
+    return _selectionGuardAst;
   }
 }

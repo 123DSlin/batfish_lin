@@ -19,6 +19,7 @@ import org.batfish.main.Batfish;
 import org.batfish.main.BatfishTestUtils;
 import org.batfish.main.TestrigText;
 import org.batfish.minesweeper.symbolicsr.GuardedSrPolicyContribution;
+import org.batfish.minesweeper.symbolicsr.SymbolicSrPolicyExport;
 import org.batfish.minesweeper.symbolicsr.SymbolicSrPolicyRecord;
 import org.junit.Rule;
 import org.junit.Test;
@@ -105,6 +106,12 @@ public final class ParsedSrPolicyPipelineTest {
         result.toSrPolicyJson().contains("\"candidate\" : \"explicit:to-r2\""), equalTo(true));
     assertThat(
         result.toRawSrPolicyJson().contains("\"candidate\" : \"explicit:to-r2\""), equalTo(true));
+    assertThat(
+        result.toSrPolicyExportJson().contains(SymbolicSrPolicyExport.SCHEMA_NAME), equalTo(true));
+    assertThat(result.toSrPolicyExportJson().contains("\"selectionGuardAst\""), equalTo(true));
+    assertThat(result.toSrPolicyExportJson().contains("\"guardVariables\""), equalTo(true));
+    assertThat(
+        branch.getSelectionGuardAst().getVariables(), equalTo(expected.getAst().getVariables()));
     assertThat(
         result.toReadableText().contains("SR POLICY FORWARDING BRANCHES"),
         equalTo(true));
