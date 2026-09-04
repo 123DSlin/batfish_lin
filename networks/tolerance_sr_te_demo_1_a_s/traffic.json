@@ -1,0 +1,80 @@
+{
+  "network": "networks/tolerance_sr_te_demo",
+  "failureModel": {
+    "type": "UNDIRECTED_LINK",
+    "maxFailures": 1,
+    "includeNoFailure": true
+  },
+  "weightVariable": {
+    "name": "h",
+    "type": "INTEGER_PERCENT",
+    "minimum": 0,
+    "maximum": 100,
+    "initial": 50,
+    "upperCandidate": "upper-via-A",
+    "upperWeight": "h",
+    "lowerCandidate": "lower-via-B",
+    "lowerWeight": "100-h"
+  },
+  "flows": [
+    {
+      "id": "x-ip-to-d",
+      "source": "x",
+      "destination": "5.5.5.5/32",
+      "demandGbps": 20,
+      "forwarding": "IP"
+    },
+    {
+      "id": "s-sr-to-d",
+      "source": "s",
+      "destination": "5.5.5.5/32",
+      "demandGbps": 80,
+      "forwarding": "SR_POLICY",
+      "color": 100,
+      "policy": "split-to-D"
+    }
+  ],
+  "links": [
+    {
+      "id": "a_d",
+      "endpoint1": {"node": "a", "interface": "GigabitEthernet0/1"},
+      "endpoint2": {"node": "d", "interface": "GigabitEthernet0/1"},
+      "capacityGbps": 95
+    },
+    {
+      "id": "a_s",
+      "endpoint1": {"node": "a", "interface": "GigabitEthernet0/2"},
+      "endpoint2": {"node": "s", "interface": "GigabitEthernet0/0"},
+      "capacityGbps": 95
+    },
+    {
+      "id": "a_x",
+      "endpoint1": {"node": "a", "interface": "GigabitEthernet0/0"},
+      "endpoint2": {"node": "x", "interface": "GigabitEthernet0/1"},
+      "capacityGbps": 95
+    },
+    {
+      "id": "b_d",
+      "endpoint1": {"node": "b", "interface": "GigabitEthernet0/1"},
+      "endpoint2": {"node": "d", "interface": "GigabitEthernet0/2"},
+      "capacityGbps": 95
+    },
+    {
+      "id": "b_s",
+      "endpoint1": {"node": "b", "interface": "GigabitEthernet0/0"},
+      "endpoint2": {"node": "s", "interface": "GigabitEthernet0/1"},
+      "capacityGbps": 95
+    },
+    {
+      "id": "d_x",
+      "endpoint1": {"node": "d", "interface": "GigabitEthernet0/0"},
+      "endpoint2": {"node": "x", "interface": "GigabitEthernet0/0"},
+      "capacityGbps": 95
+    }
+  ],
+  "property": {
+    "type": "STRICT_LINK_CAPACITY",
+    "operator": "<",
+    "expectedSubspecWithinDomain": "h <= 93"
+  }
+}

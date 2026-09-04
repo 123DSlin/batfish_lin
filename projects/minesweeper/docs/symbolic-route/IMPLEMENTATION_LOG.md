@@ -1959,3 +1959,19 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
   未跟踪的 `TrafficDemoSingleLinkFailureTest`，失败点是其 demo 配置中旧 SR extension syntax 无法被
   Cisco parser 接受，尚未进入本阶段代码。主源码 PMD 仍仅有原先 34 条 Graph/旧 SMT 基线违规，
   本阶段修改的 symbolic route/SR 文件没有新增 PMD 违规。
+
+## Stage 9.2 执行记录：真实 0/1-link oracle（2026-09-04 17:39 CST）
+
+- 用当前 pipeline 重新生成 all-up 与单链路失败目录。无 SR 的 control-plane 导出被 Jackson
+  `NON_EMPTY` 省略空 `guardVariables`/`records`；验证脚本把缺省数组视为空列表，合成测试增至 3 个。
+- 四路由器 BGP（`smt_output_0056` 为 base，`0058`–`0062` 为五条单链路失败）：6/6 MAIN RIB 与
+  SR branches 匹配。该网络没有 SR policy，SR 对比是空对空。
+- SR-TE demo（`smt_output_0063` 为 base，`0064`–`0069` 为 `a_d`/`a_s`/`a_x`/`b_d`/`b_s`/`d_x`）：
+  7/7 MAIN RIB 与 SR forwarding branches 匹配。报告写入
+  `smts/smt_output_0056/0_failure_validation.json` 与
+  `smts/smt_output_0063/0_failure_validation.json`（`smts/` 仍 gitignore）。
+- 为复现 SR-TE 失败场景，新增 parser-driven 快照 `networks/tolerance_sr_te_demo_1_*`，两端接口
+  `shutdown`。四路由器失败快照 `networks/tolerance-symbolic-route_1_*` 一并纳入版本库。
+- 本记录不宣称 YU Algorithm 1/2。oracle 只证明：把 base SRIB/SR 的 selection AST 赋成 0/1
+  故障后，与把对应链路 shutdown 再跑 pipeline 得到的 concrete MAIN/SR 一致。
+- 回退本执行记录与快照：`git revert` 本提交。

@@ -187,8 +187,10 @@ def _project_sr_branches(
 ) -> Set[SrBranchKey]:
     branches: Set[SrBranchKey] = set()
     records = sr_export.get("records")
+    if records is None:
+        records = []
     if not isinstance(records, list):
-        raise ValueError("SR-policy export is missing records")
+        raise ValueError("SR-policy export records must be a list")
     for record_value in records:
         if not isinstance(record_value, dict) or record_value.get("kind") != "FORWARDING_BRANCH":
             continue
@@ -218,8 +220,10 @@ def _parse_named_values(values: Iterable[str], option: str) -> Dict[str, str]:
 
 def _variable_table(control_plane: Mapping[str, object]) -> Dict[str, Mapping[str, object]]:
     variables = control_plane.get("guardVariables")
+    if variables is None:
+        variables = []
     if not isinstance(variables, list):
-        raise ValueError("control-plane export is missing guardVariables")
+        raise ValueError("export guardVariables must be a list")
     result: Dict[str, Mapping[str, object]] = {}
     for value in variables:
         if not isinstance(value, dict) or not isinstance(value.get("variableId"), str):

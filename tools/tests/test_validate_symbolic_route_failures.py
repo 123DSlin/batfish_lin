@@ -148,6 +148,35 @@ class ValidateSymbolicRouteFailuresTest(unittest.TestCase):
         self.assertTrue(VALIDATOR._evaluate_guard(ast, {"a": True, "b": False}))
         self.assertFalse(VALIDATOR._evaluate_guard(ast, {"a": True, "b": True}))
 
+    def test_empty_sr_export_matches_when_no_policies_exist(self):
+        self._write_json(
+            self.base / VALIDATOR.SR_POLICY_FILE,
+            {
+                "schemaName": VALIDATOR.SR_POLICY_SCHEMA,
+                "schemaVersion": VALIDATOR.SR_POLICY_VERSION,
+            },
+        )
+        self._write_json(
+            self.failed / VALIDATOR.SR_POLICY_FILE,
+            {
+                "schemaName": VALIDATOR.SR_POLICY_SCHEMA,
+                "schemaVersion": VALIDATOR.SR_POLICY_VERSION,
+            },
+        )
+        exit_code = VALIDATOR.main(
+            [
+                "--base",
+                str(self.base),
+                "--scenario",
+                "all-up={}".format(self.base),
+                "--scenario",
+                "r1-r2={}".format(self.failed),
+                "--down",
+                "r1-r2=r1_r2",
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
