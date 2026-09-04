@@ -1975,3 +1975,99 @@ iBGP/route reflection、multipath/add-path、guard-dependent IGP-cost tie-break�
 - 本记录不宣称 YU Algorithm 1/2。oracle 只证明：把 base SRIB/SR 的 selection AST 赋成 0/1
   故障后，与把对应链路 shutdown 再跑 pipeline 得到的 concrete MAIN/SR 一致。
 - 回退本执行记录与快照：`git revert` 本提交。
+
+## Stage 10.0 流量层原型与 YU Algorithm 1/2 差距（2026-09-04 18:00 CST）
+
+### 本阶段做了什么
+
+- traffic 不进入 Algorithm 1 控制面收敛。`traffic.json` 仍只提供 demand、链路容量和权重参数
+  `h`；pipeline 继续只输出 guarded MAIN/SR。
+- 新增 `tools/traffic_execution.py` 两条引擎，共用 per-link 仿射负载 `const + coeff·h`：
+  1. 手动枚举：故障目录的 `0_data_plane.txt` 逐跳 LPM/ECMP，加上该目录重算的 SR
+     forwarding branches，按 `h`/`100-h` 归一化；
+  2. 赋值后的 symbolic 执行：对 all-up SRIB/SR 的 `selectionGuard` AST 做同一故障赋值，再
+     走同样的逐跳与加权拆分。
+- `tolerance_sr_te_demo` 七个 0/1-link 场景两条引擎负载公式一致；`d_x` 下 `load(a_d)=20+0.8h`，
+  容量 95 得到 `h <= 93`，与 `traffic.json` 的 `expectedSubspecWithinDomain` 一致。
+- auto-netsubspec 增加独立轨道 `9_traffic_subspec.py`，读取 `0_traffic_loads.json` 写出
+  `Psi(h)`。不接入现有 BGP SpecLens 步骤 1–6。
+
+### YU Algorithm 1 在论文中做什么
+
+YU §4.3 Algorithm 1 `simulate(f)` 对**一条流**做一次符号化执行，覆盖全部故障，而不是按故障
+枚举：
+
+1. 状态是矩阵 `M[l, S]`：流 `f` 在链路 `l` 上、且报文带 label stack `S` 时的 symbolic traffic
+   fraction（STF），公式的自变量是链路/节点存活变量。
+2. 构造进入源路由器 `R` 的伪入边 `l_R`，令 `M0[l_R, ∅] = 1`（100% 流量、无标签）。
+3. 按跳迭代 `i = 1 … I`（`I` 由 TTL 决定）：对每个路由器 `R` 和每个 stack `S`，把进入 `R` 且
+   stack 为 `S` 的入边 STF 求和得到 `ω`，再调用 Algorithm 2 的 `forward(R, f, S, ω)` 累加到
+   `M_i`。
+4. 收敛或达到 TTL 后返回 `M_I`。链路负载 STL 为 `τ_l = Σ_{f,S} V_f · M_f[l,S]`。
+5. TLP 判定（§4.5）在**全体故障变量**上求解
+   `(Σ x_i ≤ k) ∧ (τ_l(x) > v2 ∨ τ_l(x) < v1)`，一次检查任意 `k` 故障，不枚举 `C(n,k)`。
+
+因此 Algorithm 1 的本质是：带 label-stack 维的符号化数据面固定点，输出的是故障变量上的函数。
+
+### YU Algorithm 2 在论文中做什么
+
+YU §4.4 Algorithm 2 是单路由器的 `forward`，也必须返回符号化矩阵：
+
+1. `S = ∅` 则 `forwardIp`，否则 `forwardSr`。
+2. **Route selection** `s_r`：dstip 不匹配则为 0；否则 `g_r ∧ ¬g_{r'}`（所有更优且匹配的
+   `r'`）。这是布尔公式，不是赋完值再看表。
+3. **ECMP** `c_r = s_r / Σ_{r'} s_{r'}`。分母是“当前有多少条被选中的等价规则”的**符号计数**，
+   随故障变化；不是先列出 next-hop 再 `1/n`。
+4. **SR 加权** `c_p = (g_p · w_p) / Σ_{p'} (g_{p'} · w_{p'})`。分子分母同时含路径 guard 和权重，
+   仍是故障变量上的有理式。
+5. **Route iteration** `VIGP_nip[l] = Σ_{r: nh_r=l} c_r^{nip}`：间接 next-hop 要再查 IGP，把
+   流量摊到直连边上。
+6. **`resolveNhIp`**：若 `(f, nip)` 命中 SR policy，则 `M[l,S] = ω · Σ_{p: stack(p)=S} VSR_p[l]`，
+   其中 `VSR_p[l] = c_p · VIGP_{first(p)}[l]`——先按权重选 path，再对 path 的第一跳做 IGP
+   解析，并**压入 label stack**。未命中 SR 则只更新 `M[l, ∅]`。
+7. **`forwardSr`**：令 `S = [R1,…,Rj]`。若当前路由器就是栈顶 `R1`，弹出后递归
+   `forward(R, f, rest, ω)`；否则按 `R1` 的地址做 `VIGP`，流量带着**同一个 stack** 走向第一跳。
+   图 7 的例子：iBGP 间接 NH 到 F，命中 SR 后在 D 上把流量分成 `[E,F]` / `[C,F]` 两条栈，再
+   用 IS-IS 解析 E/C。
+
+Algorithm 2 的本质是：把 RIB 查找、ECMP、间接 NH、SR policy 和 label 转发全部写成对 `M[l,S]`
+的符号化更新。
+
+### 当前实现对着 1/2 还缺什么
+
+控制面（Hoyan Algorithm 1 / 本仓库 Stage 1–9）已经提供 YU 当作输入的 guarded RIB 与 guarded
+SR：MAIN 的 `selectionGuard` 对应单前缀上的 `s_r`。差距全部在 **traffic 层**：
+
+| YU 构件 | 当前 `traffic_execution.py` | 差距 |
+| --- | --- | --- |
+| `M[l, S]` 矩阵 | 只有 `load[l] = const + coeff·h` | 无 label-stack 维，无故障变量上的 STF 公式 |
+| Algorithm 1 跳迭代到 TTL | 按赋值 DFS 到目的地；SR 一次把 path 上所有链路加上负载 | 不是符号化固定点；不能表达环、TTL、中途改栈 |
+| 一次执行覆盖全部故障 | 对每个 0/1 赋值分别跑 | 仍是 enumeration，复杂度随 `C(n,k)` 增长 |
+| `s_r` 布尔公式 | 先 `evaluate(selectionGuard)` 再查表 | 赋值后语义对，不是可组合的符号公式 |
+| `c_r = s_r / Σ s_{r'}` | 选出 next-hop 后 `1/n` | 无符号除法；不能把“ECMP 成员数随故障变”编进一个公式 |
+| `c_p = g_p w_p / Σ g_{p'} w_{p'}` | 先看哪些 path 存活，再对 `h` 做仿射 | 在**给定赋值**下与论文一致；不是 `g` 与 `w` 的联合有理式 |
+| `VIGP` / `VSR` | 无 | 间接 NH、第一跳 IGP 解析未实现 |
+| `resolveNhIp` 命中 SR 后压栈 | SR 被建模成源节点的独立 `SR_POLICY` flow | 没有“IP 查到间接 NH → 套 SR policy → 带栈转发” |
+| `forwardSr` 弹栈 / 向栈顶做 IGP | 用 selectionGuard 里的链路变量走出一条 Adj-SID 路径 | 只适用于 explicit Adj-SID 且 guard 恰好是路径边的合取；Node-SID / 中途 IGP 绕行会错 |
+| MTBDD 与 `k`-failure equivalence（§5） | 无 | 无紧凑 STL 表示，也无有界故障域化简 |
+| TLP SMT：`Σ x_i ≤ k ∧ τ_l ∉ [v1,v2]` | 枚举场景后对 `h` 求交仿射不等式 | 解释的是权重子规约，不是任意 `k` 下的负载违反搜索 |
+| iBGP 间接 NH（图 7） | 未实现 | 当前 demo 是 IS-IS + headend SR policy |
+
+### 当前实现**可以**声称的边界
+
+- 对 `tolerance_sr_te_demo`、`k∈{0,1}`、explicit Adj-SID、两条同 preference 的 SR candidate、
+  以及 `h`/`100-h` 权重，逐故障 concrete dataplane 与 SRIB 赋值后的逐跳负载公式一致。
+- 由此导出的故障感知子规约 `h <= 93` 与 demo 设计意图一致。
+- **不能**声称已实现 YU Algorithm 1、Algorithm 2、MTBDD、或任意 `k` 的 TLP 判定。
+
+### 下一阶段若要对齐论文，最小闭环
+
+1. 在 Java traffic 层实现 `M[l,S]` 与 Algorithm 2 的 `forwardIp` / `resolveNhIp` / `forwardSr`，
+   STF 用可求值的 guard AST + 有理式（或 MTBDD），不要先枚举故障。
+2. Algorithm 1 按跳迭代到固定点/TTL；用 Stage 9.2 的 concrete 场景作赋值投影基线。
+3. 把 `c_p` 保留为 `(g_p·w_p)/Σ(g·w)`，`h` 作为权重符号而不是“先存活再仿射”的后处理。
+4. TLP 检查走 `Σ x_i ≤ k ∧ τ_l ∉ [v1,v2]`；子规约再在该 STL 上松绑 `h`。
+
+- 实现文件：`tools/traffic_execution.py`、`tools/tests/test_traffic_execution.py`；
+  auto-netsubspec 侧 `9_traffic_subspec.py` 在独立仓库提交。
+- 回退：`git revert` 本提交。
