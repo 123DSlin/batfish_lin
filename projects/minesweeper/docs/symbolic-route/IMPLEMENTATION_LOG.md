@@ -2071,3 +2071,22 @@ SR：MAIN 的 `selectionGuard` 对应单前缀上的 `s_r`。差距全部在 **t
 - 实现文件：`tools/traffic_execution.py`、`tools/tests/test_traffic_execution.py`；
   auto-netsubspec 侧 `9_traffic_subspec.py` 在独立仓库提交。
 - 回退：`git revert` 本提交。
+
+## Stage 10.1 symbolic traffic execution 骨架（2026-09-04 18:25 CST）
+
+- 按 Minesweeper 原结构分两包，不按 `symbolicroute` 的 AI 风格拆生命周期类型。对照是：
+  `Graph`/`GraphEdge` 负责从配置解析拓扑；`smt.Encoder`/`EncoderSlice` 只消费 `Graph`，不读文件。
+- `org.batfish.minesweeper.symbolictraffic.parse`：**使用解析**。`TrafficGraph` /
+  `TrafficGraphEdge` / `TrafficFlow` 是 traffic 层的 Graph。JSON（`fromTrafficJson`）和 Batfish
+  snapshot（`fromBatfish` / `fromConfigurations`）入口已挂上，实现留空。内存构造给测试和后续
+  Algorithm 1 用。
+- `org.batfish.minesweeper.symbolictraffic.execution`：**不使用解析**。`SymbolicTrafficExecution`
+  对应 Encoder（Algorithm 1 `simulate(f)`）；package-private `SymbolicTrafficForwarding` 对应
+  EncoderSlice（Algorithm 2 `forward`）；`SymbolicTrafficMatrix` 是 `M[l,S]`；
+  `SymbolicTrafficLoad` 是 `τ_l`；`TrafficLabelStack` 是栈列。算法体全部
+  `UnsupportedOperationException`，等 Algorithm 1 指导后再写。
+- 未修改 `Graph`/`Encoder`/`EncoderSlice`/`PropertyChecker`、`symbolicroute`、`symbolicsr`、
+  BUILD（已有 `src/main/**/*.java` glob）。未实现 JSON 解析、未实现 YU 1/2。
+- 测试：`TrafficGraphTest` 覆盖内存图索引与 JSON 入口未实现；`SymbolicTrafficExecutionTest` 覆盖
+  空栈与 `simulate`/`forward` 未实现。不把 Python `traffic_execution.py` 当作本层实现。
+- 回退：`git revert` 本提交。
