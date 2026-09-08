@@ -2119,3 +2119,52 @@ SR：MAIN 的 `selectionGuard` 对应单前缀上的 `s_r`。差距全部在 **t
 - `SymbolicTrafficFraction` 支持常数、guard、加减乘除，可在赋值下求值。空 RIB 的 `forward` 返回空矩阵。
 - 测试覆盖 `s_r`/`c_r`、LPM、`VIGP`/`VSR`、直接/间接 NH、SR 压栈、弹栈、向栈顶 IGP。Algorithm 1 替身测试保留。
 - 回退：`git revert` 本提交。
+
+## Stage 10.4 Algorithm 1/2 审查与完备测试（2026-09-08 17:15 CST）
+
+- 审查结论（对照 YU listing，不改返回语义）：Algorithm 1 仍返回恰好 `I` 跳的 `M_I`，伪入边 `l_R` 只在
+  `simulate` 局部构造，`ω` 跳过图里已有的 pseudo incoming，只在源路由器计入 `l_R`。栈集合取自
+  `M_{i-1}` 的非零列。`trafficLoads`/`τ_l` 仍未实现，也不做论文散文里的不动点早停。
+- Algorithm 2：`VIGP` 跳过不匹配 `nip` 的规则（与把它们的 `c_r` 当成 0 再累加等价，矩阵更稀疏）。
+  空节点列表的 `SrPolicy.Path` 拒绝构造。`≺` 仍是更长前缀优先、同前缀更低 preference 优先。
+  IGP 优选/备份互斥（`s_high=y`、`s_low=¬y`），不把 Figure 7 印刷式 `0.75y+0.25` 当作互斥 IGP 的金标准。
+  `fromGuard` 对不含变量的 AST 做常数折叠（`true ∧ ¬true` → 0），使 LPM 落败规则的 `s_r=0` 成为常数
+  0 并从矩阵中丢掉，且不调用 Z3 `Expr.isFalse()`。
+- 测试补齐：`s_r` 三档 preference、等 preference 不 `≺`、三路 ECMP、分母为 0；`VIGP` 优选/备份、
+  非匹配前缀不入向量、path guard 下调权；`forwardIp` LPM/两路 ECMP/优选失效/ω=0；`resolveNhIp`
+  nip 不匹配 SR 走 VIGP、两 path 不同栈 0.75/0.25、同栈相加、缺 first-node 地址则跳过；
+  `forwardSr` 弹栈后余栈非空时对下一标签做 VIGP。分数式覆盖 AND/NOT/OR 与赋值下除零。
+- 新增 `SymbolicTrafficSimulateForwardingTest`：Algorithm 1 套真实 Algorithm 2（直线 I=1/2/3、
+  优选 failover、ECMP 菱形第二跳、SR 压栈后再弹余栈）。Algorithm 1 替身测试保留，并覆盖默认 TTL=255
+  与图中残留 pseudo incoming 不抬高 `ω`。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、`symbolicroute`、`symbolicsr`、BUILD，不改
+  `tools/traffic_execution.py`。
+- 回退：`git revert` 本提交。
+
+## Stage 10.5 删除 Python 流量原型（2026-09-08 17:15 CST）
+
+- `tools/traffic_execution.py` 不是 YU Algorithm 1/2：两条都是按故障赋值再逐跳/拆分的 walker，
+  输出 `const + coeff·h`，没有 `M[l,S]`、符号 `c_r`/`VIGP`/`forwardSr`。Java
+  `symbolictraffic.execution` 已实现 listing 中的 `simulate`/`forward`，不再依赖该脚本。
+- 删除 `tools/traffic_execution.py` 与 `tools/tests/test_traffic_execution.py`。不改
+  `Graph`/`Encoder`/`BUILD`。`trafficLoads`/`τ_l` 与 `0_traffic_loads.json` 仍待 Java 实现。
+- auto-netsubspec 的 `9_traffic_subspec.py` 只读 JSON、不 import 本脚本；其注释里的生产者路径作废，
+  在独立仓库另改。
+- 回退：`git revert` 本提交。
+
+## Stage 10.6 跳累计 STF、伪入边与 SR path 约束（2026-09-08 17:30 CST）
+
+- Algorithm 1：`simulateHopI(f)` 保留 listing，返回恰好 `I` 跳的 `M_I`。`simulate(f)` 改为真实链路
+  上的 `Σ_{i=1}^{I'} M_i`（不含 `l_R`），供后续 `τ_l` 使用。`I'` 在 in-flight 矩阵为 0 时结束；
+  **不以** `M_i = M_{i-1}` 早停（环上非零不动点会少计 TTL 穿越）。`simulateHopI` 跑满 `I` 跳。
+- 伪入边：图里已有的 pseudo incoming 仍不计入 `ω`；构造的 `l_R` **只在 hop 1** 注入源路由器，避免
+  第二跳把源再灌一次 1。
+- Algorithm 2：`g_p` 只进 `c_p`，Node-SID 第一跳仍乘 `VIGP`；Adj-SID 要求 source=当前路由器并走邻接，
+  不把 path guard 当成转发 guard。Node-SID 等于 headend 时弹栈，空余栈的 IP 查找不再套同一 SR
+  policy。`SrPolicy.Path`：segment 非空且非 null、weight>0、path id 不可重复；同 stack 仍允许（VSR
+  相加）。缺 Node-SID loopback 地址则该 path 为 0。
+- `trafficLoads` 仍未实现，javadoc 写明必须用累计 `simulate` 而不是 `M_I`。
+- 测试：累计直线/菱形/SR；`l_R` 不重注入；listing 不早停；ECMP/加权 SR 质量守恒；path guard 与 IGP
+  guard 分离；headend-only stack；Adj-SID source 约束。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、`symbolicroute`、`symbolicsr`、BUILD。
+- 回退：`git revert` 本提交。

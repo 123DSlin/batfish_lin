@@ -56,11 +56,26 @@ public class SymbolicTrafficMatrix {
 
   /** {@code this ← this + other}, the {@code M_i ← M_i + forward(...)} step. */
   public void add(SymbolicTrafficMatrix other) {
+    addInternal(other, false);
+  }
+
+  /**
+   * Same as {@link #add} but skips pseudo ingress cells. Accumulated STF for {@code τ_l} must not
+   * include {@code l_R}.
+   */
+  public void addRealLinks(SymbolicTrafficMatrix other) {
+    addInternal(other, true);
+  }
+
+  private void addInternal(SymbolicTrafficMatrix other, boolean skipPseudoIncoming) {
     for (Map.Entry<TrafficGraphEdge, Map<TrafficLabelStack, SymbolicTrafficFraction>> edgeEntry :
         other._values.entrySet()) {
+      TrafficGraphEdge edge = edgeEntry.getKey();
+      if (skipPseudoIncoming && edge.isPseudoIncoming()) {
+        continue;
+      }
       for (Map.Entry<TrafficLabelStack, SymbolicTrafficFraction> stackEntry :
           edgeEntry.getValue().entrySet()) {
-        TrafficGraphEdge edge = edgeEntry.getKey();
         TrafficLabelStack stack = stackEntry.getKey();
         put(edge, stack, get(edge, stack).plus(stackEntry.getValue()));
       }

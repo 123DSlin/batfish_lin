@@ -40,7 +40,9 @@ public class SymbolicTrafficExecutionTest {
     List<String> routers = new ArrayList<>();
     for (TrafficGraphEdge edge : edges) {
       routers.add(edge.getRouter());
-      routers.add(edge.getPeer());
+      if (edge.getPeer() != null) {
+        routers.add(edge.getPeer());
+      }
     }
     routers.add(flow.getSource());
     return new TrafficGraph(routers, Arrays.asList(edges), Collections.singleton(flow));
@@ -55,6 +57,13 @@ public class SymbolicTrafficExecutionTest {
   @Test(expected = IllegalArgumentException.class)
   public void testMaxIterationsMustBePositive() {
     new SymbolicTrafficExecution(graph(flow("a")), 0);
+  }
+
+  @Test
+  public void testDefaultMaxIterationsIsTtl() {
+    assertThat(
+        new SymbolicTrafficExecution(graph(flow("a"))).getMaxIterations(),
+        equalTo(SymbolicTrafficExecution.DEFAULT_MAX_ITERATIONS));
   }
 
   @Test
@@ -75,7 +84,7 @@ public class SymbolicTrafficExecutionTest {
     TrafficGraph g = graph(f, ab);
     CopyOmegaForward forward = new CopyOmegaForward(g);
     SymbolicTrafficMatrix result =
-        new SymbolicTrafficExecution(g, 1, forward).simulate(f);
+        new SymbolicTrafficExecution(g, 1, forward).simulateHopI(f);
 
     assertThat(result.get(ab, TrafficLabelStack.empty()), equalTo(SymbolicTrafficFraction.one()));
     assertThat(result.edges(), containsInAnyOrder(ab));
@@ -93,12 +102,12 @@ public class SymbolicTrafficExecutionTest {
     TrafficGraph g = graph(f, ab, bc);
     CopyOmegaForward forward = new CopyOmegaForward(g);
 
-    SymbolicTrafficMatrix hop1 = new SymbolicTrafficExecution(g, 1, forward).simulate(f);
+    SymbolicTrafficMatrix hop1 = new SymbolicTrafficExecution(g, 1, forward).simulateHopI(f);
     assertThat(hop1.get(ab, TrafficLabelStack.empty()).isOne(), equalTo(true));
     assertThat(hop1.get(bc, TrafficLabelStack.empty()).isZero(), equalTo(true));
 
     SymbolicTrafficMatrix hop2 =
-        new SymbolicTrafficExecution(g, 2, new CopyOmegaForward(g)).simulate(f);
+        new SymbolicTrafficExecution(g, 2, new CopyOmegaForward(g)).simulateHopI(f);
     assertThat(hop2.get(ab, TrafficLabelStack.empty()).isZero(), equalTo(true));
     assertThat(hop2.get(bc, TrafficLabelStack.empty()).isOne(), equalTo(true));
   }
@@ -114,11 +123,27 @@ public class SymbolicTrafficExecutionTest {
     TrafficGraph g = graph(f, ab, ac, bd, cd, de);
     CopyOmegaForward forward = new CopyOmegaForward(g);
 
-    SymbolicTrafficMatrix hop3 = new SymbolicTrafficExecution(g, 3, forward).simulate(f);
+    SymbolicTrafficMatrix hop3 = new SymbolicTrafficExecution(g, 3, forward).simulateHopI(f);
 
     assertThat(hop3.get(de, TrafficLabelStack.empty()), equalTo(SymbolicTrafficFraction.one()));
     assertThat(
         forward.omegas("d", TrafficLabelStack.empty()), equalTo(SymbolicTrafficFraction.one()));
+  }
+
+  @Test
+  public void testGraphPseudoIncomingDoesNotInflateOmega() {
+    TrafficFlow f = flow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraphEdge leftover =
+        new TrafficGraphEdge("l_stale", "b", null, null, null, 0.0, true);
+    TrafficGraph g = graph(f, ab, leftover);
+    CopyOmegaForward forward = new CopyOmegaForward(g);
+    SymbolicTrafficMatrix hop1 = new SymbolicTrafficExecution(g, 1, forward).simulateHopI(f);
+    assertThat(hop1.get(ab, TrafficLabelStack.empty()), equalTo(SymbolicTrafficFraction.one()));
+    assertThat(
+        forward.omegas("a", TrafficLabelStack.empty()), equalTo(SymbolicTrafficFraction.one()));
+    assertThat(
+        forward.omegas("b", TrafficLabelStack.empty()), equalTo(SymbolicTrafficFraction.zero()));
   }
 
   @Test
@@ -130,12 +155,12 @@ public class SymbolicTrafficExecutionTest {
     TrafficLabelStack pushed = new TrafficLabelStack(Collections.singletonList("E"));
     PushThenCopyForward forward = new PushThenCopyForward(g, "a", pushed);
 
-    SymbolicTrafficMatrix hop1 = new SymbolicTrafficExecution(g, 1, forward).simulate(f);
+    SymbolicTrafficMatrix hop1 = new SymbolicTrafficExecution(g, 1, forward).simulateHopI(f);
     assertThat(hop1.get(ab, pushed), equalTo(SymbolicTrafficFraction.one()));
     assertThat(hop1.get(ab, TrafficLabelStack.empty()).isZero(), equalTo(true));
 
     SymbolicTrafficMatrix hop2 =
-        new SymbolicTrafficExecution(g, 2, new PushThenCopyForward(g, "a", pushed)).simulate(f);
+        new SymbolicTrafficExecution(g, 2, new PushThenCopyForward(g, "a", pushed)).simulateHopI(f);
     assertThat(hop2.get(bc, pushed), equalTo(SymbolicTrafficFraction.one()));
     assertThat(hop2.get(bc, TrafficLabelStack.empty()).isZero(), equalTo(true));
   }
@@ -147,7 +172,7 @@ public class SymbolicTrafficExecutionTest {
     TrafficGraph g = graph(f, ab);
     TrafficLabelStack pushed = new TrafficLabelStack(Collections.singletonList("E"));
     PushThenCopyForward forward = new PushThenCopyForward(g, "a", pushed);
-    new SymbolicTrafficExecution(g, 2, forward).simulate(f);
+    new SymbolicTrafficExecution(g, 2, forward).simulateHopI(f);
 
     assertThat(forward.omegas("b", pushed), equalTo(SymbolicTrafficFraction.one()));
     assertThat(forward.calledStacks("b"), containsInAnyOrder(pushed));
@@ -159,7 +184,7 @@ public class SymbolicTrafficExecutionTest {
     TrafficGraphEdge ab = edge("a_b", "a", "b");
     TrafficGraph g = graph(f, ab);
     SymbolicTrafficMatrix hop2 =
-        new SymbolicTrafficExecution(g, 2, new CopyOmegaForward(g)).simulate(f);
+        new SymbolicTrafficExecution(g, 2, new CopyOmegaForward(g)).simulateHopI(f);
     assertThat(hop2.isZero(), equalTo(true));
     assertThat(hop2.edges(), empty());
   }
@@ -167,6 +192,45 @@ public class SymbolicTrafficExecutionTest {
   @Test(expected = UnsupportedOperationException.class)
   public void testTrafficLoadsNotImplemented() {
     new SymbolicTrafficExecution(graph(flow("a"))).trafficLoads();
+  }
+
+  @Test
+  public void testSimulateAccumulatesEveryHopOnRealLinks() {
+    TrafficFlow f = flow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraphEdge bc = edge("b_c", "b", "c");
+    TrafficGraph g = graph(f, ab, bc);
+    SymbolicTrafficExecution execution =
+        new SymbolicTrafficExecution(g, 10, new CopyOmegaForward(g));
+    SymbolicTrafficMatrix accumulated = execution.simulate(f);
+
+    assertThat(accumulated.get(ab, TrafficLabelStack.empty()).isOne(), equalTo(true));
+    assertThat(accumulated.get(bc, TrafficLabelStack.empty()).isOne(), equalTo(true));
+    assertThat(execution.getLastCompletedHops() < 10, equalTo(true));
+  }
+
+  @Test
+  public void testSimulateHopIDoesNotStopEarly() {
+    TrafficFlow f = flow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraph g = graph(f, ab);
+    SymbolicTrafficExecution execution =
+        new SymbolicTrafficExecution(g, 4, new CopyOmegaForward(g));
+    SymbolicTrafficMatrix hopI = execution.simulateHopI(f);
+    assertThat(hopI.isZero(), equalTo(true));
+    assertThat(execution.getLastCompletedHops(), equalTo(4));
+  }
+
+  @Test
+  public void testPseudoIngressIsNotReinjectedAfterHopOne() {
+    TrafficFlow f = flow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraph g = graph(f, ab);
+    CopyOmegaForward forward = new CopyOmegaForward(g);
+    new SymbolicTrafficExecution(g, 3, forward).simulateHopI(f);
+
+    int nonZeroSourceCalls = forward.nonZeroOmegaCalls("a");
+    assertThat(nonZeroSourceCalls, equalTo(1));
   }
 
   /**
@@ -220,6 +284,16 @@ public class SymbolicTrafficExecutionTest {
         }
       }
       return stacks;
+    }
+
+    int nonZeroOmegaCalls(String router) {
+      int count = 0;
+      for (ForwardCall call : _calls) {
+        if (call._router.equals(router) && !call._omega.isZero()) {
+          count++;
+        }
+      }
+      return count;
     }
   }
 

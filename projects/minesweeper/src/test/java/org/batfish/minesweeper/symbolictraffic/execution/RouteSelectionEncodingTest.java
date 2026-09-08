@@ -42,7 +42,7 @@ public class RouteSelectionEncodingTest {
     RouteGuard selected =
         RouteSelectionEncoding.selection(
             rule, Collections.singletonList(rule), Ip.parse("1.2.3.4"));
-    assertThat(selected.isFalse(), equalTo(true));
+    assertThat(selected.isEquivalentTo(GUARDS.falseGuard()), equalTo(true));
   }
 
   @Test
@@ -98,9 +98,62 @@ public class RouteSelectionEncodingTest {
     List<ForwardingRule> rib = Arrays.asList(def, exact);
 
     assertThat(RouteSelectionEncoding.strictlyPreferred(exact, def), equalTo(true));
+    assertThat(RouteSelectionEncoding.strictlyPreferred(def, exact), equalTo(false));
     assertThat(
         RouteSelectionEncoding.selection(def, rib, DST_IP)
             .isEquivalentTo(gDefault.and(gExact.not())),
         equalTo(true));
+  }
+
+  @Test
+  public void testEqualPreferenceIsNotStrictlyPreferred() {
+    ForwardingRule r1 = direct(GUARDS.variable("a"), 10);
+    ForwardingRule r2 = direct(GUARDS.variable("b"), 10);
+    assertThat(RouteSelectionEncoding.strictlyPreferred(r1, r2), equalTo(false));
+    assertThat(RouteSelectionEncoding.strictlyPreferred(r2, r1), equalTo(false));
+  }
+
+  @Test
+  public void testThreePreferenceLevels() {
+    RouteGuard g1 = GUARDS.variable("g1");
+    RouteGuard g2 = GUARDS.variable("g2");
+    RouteGuard g3 = GUARDS.variable("g3");
+    ForwardingRule r1 = direct(g1, 10);
+    ForwardingRule r2 = direct(g2, 20);
+    ForwardingRule r3 = direct(g3, 30);
+    List<ForwardingRule> rib = Arrays.asList(r1, r2, r3);
+    assertThat(
+        RouteSelectionEncoding.selection(r3, rib, DST_IP)
+            .isEquivalentTo(g3.and(g1.not()).and(g2.not())),
+        equalTo(true));
+  }
+
+  @Test
+  public void testNoSelectedRouteYieldsZeroEcmpRatio() {
+    ForwardingRule r1 = direct(GUARDS.falseGuard(), 10);
+    SymbolicTrafficFraction c =
+        RouteSelectionEncoding.ecmpRatio(r1, Collections.singletonList(r1), DST_IP);
+    assertThat(c.evaluate(new HashMap<String, Boolean>()), closeTo(0.0, 1e-9));
+  }
+
+  @Test
+  public void testThreeWayEcmp() {
+    ForwardingRule r1 = direct(GUARDS.variable("g1"), 10);
+    ForwardingRule r2 = direct(GUARDS.variable("g2"), 10);
+    ForwardingRule r3 = direct(GUARDS.variable("g3"), 10);
+    List<ForwardingRule> rib = Arrays.asList(r1, r2, r3);
+    Map<String, Boolean> allUp = new HashMap<>();
+    allUp.put("g1", true);
+    allUp.put("g2", true);
+    allUp.put("g3", true);
+    assertThat(
+        RouteSelectionEncoding.ecmpRatio(r1, rib, DST_IP).evaluate(allUp),
+        closeTo(1.0 / 3.0, 1e-9));
+    assertThat(
+        RouteSelectionEncoding.ecmpRatio(r2, rib, DST_IP).evaluate(allUp),
+        closeTo(1.0 / 3.0, 1e-9));
+    assertThat(
+        RouteSelectionEncoding.ecmpRatio(r3, rib, DST_IP).evaluate(allUp),
+        closeTo(1.0 / 3.0, 1e-9));
   }
 }

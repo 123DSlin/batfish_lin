@@ -20,7 +20,13 @@ public class TrafficLabelStack {
   }
 
   public TrafficLabelStack(List<String> labels) {
-    _labels = new ArrayList<>(labels);
+    _labels = new ArrayList<>();
+    for (String label : labels) {
+      if (label == null) {
+        throw new IllegalArgumentException("label stack segment cannot be null");
+      }
+      _labels.add(label);
+    }
   }
 
   public List<String> getLabels() {

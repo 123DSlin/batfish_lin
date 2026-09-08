@@ -1,6 +1,7 @@
 package org.batfish.minesweeper.symbolictraffic.execution;
 
 import static org.hamcrest.Matchers.closeTo;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertThat;
 
 import com.microsoft.z3.Context;
@@ -67,5 +68,54 @@ public class RouteIterationEncodingTest {
             .get(l1)
             .evaluate(new HashMap<>()),
         closeTo(0.75, 1e-9));
+  }
+
+  @Test
+  public void testVigpPreferredAndBackupAreMutuallyExclusive() {
+    TrafficGraphEdge l1 = edge("d_e", "d", "e");
+    TrafficGraphEdge l2 = edge("d_c", "d", "c");
+    ForwardingRule preferred = ForwardingRule.direct(NIP_PREFIX, GUARDS.variable("y"), 10, l1);
+    ForwardingRule backup = ForwardingRule.direct(NIP_PREFIX, GUARDS.trueGuard(), 20, l2);
+    List<ForwardingRule> rib = Arrays.asList(preferred, backup);
+
+    Map<String, Boolean> yUp = new HashMap<>();
+    yUp.put("y", true);
+    assertThat(RouteIterationEncoding.vigp(rib, NIP).get(l1).evaluate(yUp), closeTo(1.0, 1e-9));
+    assertThat(RouteIterationEncoding.vigp(rib, NIP).get(l2).evaluate(yUp), closeTo(0.0, 1e-9));
+
+    Map<String, Boolean> yDown = new HashMap<>();
+    yDown.put("y", false);
+    assertThat(RouteIterationEncoding.vigp(rib, NIP).get(l1).evaluate(yDown), closeTo(0.0, 1e-9));
+    assertThat(RouteIterationEncoding.vigp(rib, NIP).get(l2).evaluate(yDown), closeTo(1.0, 1e-9));
+  }
+
+  @Test
+  public void testPathShareRenormalizesWhenAPathGuardIsFalse() {
+    SrPolicy.Path p1 =
+        new SrPolicy.Path(GUARDS.variable("g1"), 75, Collections.singletonList("e"));
+    SrPolicy.Path p2 = new SrPolicy.Path(GUARDS.trueGuard(), 25, Collections.singletonList("c"));
+    List<SrPolicy.Path> paths = Arrays.asList(p1, p2);
+    Map<String, Boolean> p1Down = new HashMap<>();
+    p1Down.put("g1", false);
+    assertThat(RouteIterationEncoding.pathShare(p1, paths).evaluate(p1Down), closeTo(0.0, 1e-9));
+    assertThat(RouteIterationEncoding.pathShare(p2, paths).evaluate(p1Down), closeTo(1.0, 1e-9));
+  }
+
+  @Test
+  public void testVigpSkipsRulesThatDoNotMatchNextHopIp() {
+    TrafficGraphEdge l1 = edge("d_e", "d", "e");
+    TrafficGraphEdge l2 = edge("d_c", "d", "c");
+    ForwardingRule matching = ForwardingRule.direct(NIP_PREFIX, GUARDS.trueGuard(), 10, l1);
+    ForwardingRule otherPrefix =
+        ForwardingRule.direct(Prefix.parse("5.5.5.5/32"), GUARDS.trueGuard(), 10, l2);
+    Map<TrafficGraphEdge, SymbolicTrafficFraction> vector =
+        RouteIterationEncoding.vigp(Arrays.asList(matching, otherPrefix), NIP);
+    assertThat(vector.get(l1).evaluate(new HashMap<>()), closeTo(1.0, 1e-9));
+    assertThat(vector.containsKey(l2), equalTo(false));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testSrPathRejectsEmptyNodeList() {
+    new SrPolicy.Path(GUARDS.trueGuard(), 1, Collections.emptyList());
   }
 }

@@ -53,11 +53,11 @@ public class SymbolicTrafficFraction {
   }
 
   public static SymbolicTrafficFraction fromGuard(RouteGuard guard) {
-    BooleanGuardAst ast = guard.getAst();
-    if (ast.getOperator() == BooleanGuardAst.Operator.FALSE) {
+    Boolean folded = foldConstantAst(guard.getAst());
+    if (Boolean.FALSE.equals(folded)) {
       return zero();
     }
-    if (ast.getOperator() == BooleanGuardAst.Operator.TRUE) {
+    if (Boolean.TRUE.equals(folded)) {
       return one();
     }
     return new SymbolicTrafficFraction(Kind.GUARD, 0.0, guard, null, null);
@@ -113,8 +113,7 @@ public class SymbolicTrafficFraction {
     if (_kind == Kind.CONST) {
       return _const == 0.0;
     }
-    return _kind == Kind.GUARD
-        && _guard.getAst().getOperator() == BooleanGuardAst.Operator.FALSE;
+    return _kind == Kind.GUARD && Boolean.FALSE.equals(foldConstantAst(_guard.getAst()));
   }
 
   public boolean isOne() {
@@ -150,7 +149,57 @@ public class SymbolicTrafficFraction {
     }
   }
 
+  /**
+   * Fold an AST that does not depend on variables. {@code true ∧ ¬true} becomes {@code 0}, matching
+   * the paper's {@code s_r = 0} without calling Z3 {@code Expr.isFalse()}.
+   */
+  private static Boolean foldConstantAst(BooleanGuardAst ast) {
+    switch (ast.getOperator()) {
+      case TRUE:
+        return true;
+      case FALSE:
+        return false;
+      case VARIABLE:
+        return null;
+      case NOT:
+        Boolean negated = foldConstantAst(ast.getChildren().get(0));
+        return negated == null ? null : !negated;
+      case AND:
+        boolean andAllTrue = true;
+        for (BooleanGuardAst child : ast.getChildren()) {
+          Boolean value = foldConstantAst(child);
+          if (value == null) {
+            andAllTrue = false;
+            continue;
+          }
+          if (!value) {
+            return false;
+          }
+        }
+        return andAllTrue ? true : null;
+      case OR:
+        boolean orAllFalse = true;
+        for (BooleanGuardAst child : ast.getChildren()) {
+          Boolean value = foldConstantAst(child);
+          if (value == null) {
+            orAllFalse = false;
+            continue;
+          }
+          if (value) {
+            return true;
+          }
+        }
+        return orAllFalse ? false : null;
+      default:
+        return null;
+    }
+  }
+
   private static boolean evaluateAst(BooleanGuardAst ast, Map<String, Boolean> assignment) {
+    Boolean folded = foldConstantAst(ast);
+    if (folded != null) {
+      return folded;
+    }
     switch (ast.getOperator()) {
       case TRUE:
         return true;

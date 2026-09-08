@@ -21,7 +21,7 @@ public final class RouteIterationEncoding {
     Map<TrafficGraphEdge, SymbolicTrafficFraction> vector = new LinkedHashMap<>();
     for (ForwardingRule rule : rib) {
       TrafficGraphEdge link = rule.getDirectNextHop();
-      if (link == null) {
+      if (link == null || !rule.matches(nextHopIp)) {
         continue;
       }
       SymbolicTrafficFraction share = RouteSelectionEncoding.ecmpRatio(rule, rib, nextHopIp);
