@@ -18,8 +18,9 @@ import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
  * {@link RouteIterationEncoding}.
  *
  * <p>Policy-path guard {@code g_p} is only the numerator of {@code c_p}. Node-SID forwarding still
- * multiplies {@code VIGP} (IGP availability). Adj-SID forwarding uses the adjacency and requires
- * its source to be the current router.
+ * multiplies {@code VIGP}. Adj-SID forwarding pops the Adj-SID, keeps the remaining typed stack,
+ * and requires {@code source = router}. After the SR stack is consumed, IP lookup does not apply
+ * another SR policy at the same router.
  */
 class SymbolicTrafficForwarding {
 
@@ -45,8 +46,8 @@ class SymbolicTrafficForwarding {
       Map<String, List<SrPolicy>> srPolicies,
       Map<String, Ip> routerAddresses) {
     _graph = graph;
-    _ribs = new HashMap<>(ribs);
-    _srPolicies = new HashMap<>(srPolicies);
+    _ribs = copyLists(ribs);
+    _srPolicies = copyLists(srPolicies);
     _routerAddresses = new HashMap<>(routerAddresses);
   }
 
@@ -88,14 +89,10 @@ class SymbolicTrafficForwarding {
         if (applySrPolicy) {
           matrix.add(resolveNhIp(router, flow, rule.getIndirectNextHop(), share));
         } else {
-          matrix.add(resolveNhIpWithoutSr(router, flow, rule.getIndirectNextHop(), share));
+          matrix.add(resolveNhIpWithoutSr(router, rule.getIndirectNextHop(), share));
         }
       } else {
-        TrafficGraphEdge link = rule.getDirectNextHop();
-        matrix.put(
-            link,
-            TrafficLabelStack.empty(),
-            matrix.get(link, TrafficLabelStack.empty()).plus(share));
+        putOnLink(matrix, rule.getDirectNextHop(), TrafficLabelStack.empty(), share);
       }
     }
     return matrix;
@@ -114,41 +111,28 @@ class SymbolicTrafficForwarding {
       }
       return matrix;
     }
-    SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
-    for (Map.Entry<TrafficGraphEdge, SymbolicTrafficFraction> entry :
-        RouteIterationEncoding.vigp(rib(router), nextHopIp).entrySet()) {
-      TrafficGraphEdge link = entry.getKey();
-      matrix.put(
-          link,
-          TrafficLabelStack.empty(),
-          matrix
-              .get(link, TrafficLabelStack.empty())
-              .plus(incomingFraction.times(entry.getValue())));
-    }
-    return matrix;
+    return resolveNhIpWithoutSr(router, nextHopIp, incomingFraction);
   }
 
-  /** Indirect next hop resolved with IGP only; used after a headend SID has already been popped. */
+  /** Indirect next hop resolved with IGP only; used after SR SIDs have been consumed. */
   private SymbolicTrafficMatrix resolveNhIpWithoutSr(
-      String router, TrafficFlow flow, Ip nextHopIp, SymbolicTrafficFraction incomingFraction) {
+      String router, Ip nextHopIp, SymbolicTrafficFraction incomingFraction) {
     SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
     for (Map.Entry<TrafficGraphEdge, SymbolicTrafficFraction> entry :
         RouteIterationEncoding.vigp(rib(router), nextHopIp).entrySet()) {
-      TrafficGraphEdge link = entry.getKey();
-      matrix.put(
-          link,
+      putOnLink(
+          matrix,
+          entry.getKey(),
           TrafficLabelStack.empty(),
-          matrix
-              .get(link, TrafficLabelStack.empty())
-              .plus(incomingFraction.times(entry.getValue())));
+          incomingFraction.times(entry.getValue()));
     }
     return matrix;
   }
 
   /**
    * {@code g_p} contributes only {@code c_p}. Node-SID first hops go through {@code VIGP}. Adj-SID
-   * first hops require {@code source = router} and use that adjacency. A Node-SID equal to the
-   * current router pops instead of looking up IGP to self.
+   * first hops pop and require {@code source = router}. A Node-SID equal to the current router pops
+   * instead of looking up IGP to self; an empty remainder does not re-apply SR.
    */
   private SymbolicTrafficMatrix resolveSrPath(
       String router,
@@ -156,40 +140,7 @@ class SymbolicTrafficForwarding {
       SrPolicy.Path path,
       List<ForwardingRule> igp,
       SymbolicTrafficFraction share) {
-    SrPolicy.Segment first = path.getFirstSegment();
-    if (first.isAdjacency()) {
-      SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
-      if (!router.equals(first.getRouter())) {
-        return matrix;
-      }
-      TrafficGraphEdge link = outgoingTo(router, first.getPeer());
-      if (link == null) {
-        return matrix;
-      }
-      matrix.put(link, path.toStack(), share);
-      return matrix;
-    }
-    if (router.equals(first.getRouter())) {
-      List<String> rest = new ArrayList<>(path.toStack().getLabels());
-      rest.remove(0);
-      if (rest.isEmpty()) {
-        return forwardIp(router, flow, share, false);
-      }
-      return forward(router, flow, new TrafficLabelStack(rest), share);
-    }
-    Ip firstIp = _routerAddresses.get(first.getRouter());
-    SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
-    if (firstIp == null) {
-      return matrix;
-    }
-    TrafficLabelStack stack = path.toStack();
-    for (Map.Entry<TrafficGraphEdge, SymbolicTrafficFraction> entry :
-        RouteIterationEncoding.vigp(igp, firstIp).entrySet()) {
-      TrafficGraphEdge link = entry.getKey();
-      matrix.put(
-          link, stack, matrix.get(link, stack).plus(share.times(entry.getValue())));
-    }
-    return matrix;
+    return forwardSr(router, flow, path.toStack(), share, igp);
   }
 
   SymbolicTrafficMatrix forwardSr(
@@ -197,26 +148,75 @@ class SymbolicTrafficForwarding {
       TrafficFlow flow,
       TrafficLabelStack stack,
       SymbolicTrafficFraction incomingFraction) {
-    List<String> labels = stack.getLabels();
-    String first = labels.get(0);
-    if (router.equals(first)) {
-      List<String> rest = new ArrayList<>(labels.subList(1, labels.size()));
-      return forward(router, flow, new TrafficLabelStack(rest), incomingFraction);
+    return forwardSr(router, flow, stack, incomingFraction, rib(router));
+  }
+
+  private SymbolicTrafficMatrix forwardSr(
+      String router,
+      TrafficFlow flow,
+      TrafficLabelStack stack,
+      SymbolicTrafficFraction incomingFraction,
+      List<ForwardingRule> igp) {
+    SrPolicy.Segment first = stack.getFirst();
+    if (first.isAdjacency()) {
+      return forwardAdjacency(router, first, stack.pop(), incomingFraction);
     }
-    Ip firstIp = _routerAddresses.get(first);
+    if (router.equals(first.getRouter())) {
+      TrafficLabelStack rest = stack.pop();
+      if (rest.isEmpty()) {
+        return forwardIp(router, flow, incomingFraction, false);
+      }
+      return forward(router, flow, rest, incomingFraction);
+    }
+    Ip firstIp = _routerAddresses.get(first.getRouter());
     SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
     if (firstIp == null) {
       return matrix;
     }
     for (Map.Entry<TrafficGraphEdge, SymbolicTrafficFraction> entry :
-        RouteIterationEncoding.vigp(rib(router), firstIp).entrySet()) {
-      TrafficGraphEdge link = entry.getKey();
-      matrix.put(
-          link,
-          stack,
-          matrix.get(link, stack).plus(incomingFraction.times(entry.getValue())));
+        RouteIterationEncoding.vigp(igp, firstIp).entrySet()) {
+      putOnLink(matrix, entry.getKey(), stack, incomingFraction.times(entry.getValue()));
     }
     return matrix;
+  }
+
+  /**
+   * Execute a local Adj-SID: pop it, place {@code ω} on the adjacency, keep the remaining typed
+   * stack. Source must equal the current router.
+   */
+  private SymbolicTrafficMatrix forwardAdjacency(
+      String router,
+      SrPolicy.Segment adjacency,
+      TrafficLabelStack rest,
+      SymbolicTrafficFraction incomingFraction) {
+    SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
+    if (!router.equals(adjacency.getRouter())) {
+      return matrix;
+    }
+    TrafficGraphEdge link = outgoingTo(router, adjacency.getPeer());
+    if (link == null) {
+      return matrix;
+    }
+    putOnLink(matrix, link, rest, adjacencyShare(adjacency, incomingFraction));
+    return matrix;
+  }
+
+  private SymbolicTrafficFraction adjacencyShare(
+      SrPolicy.Segment adjacency,
+      SymbolicTrafficFraction share) {
+    SymbolicTrafficFraction out = share;
+    if (adjacency.getAvailability() != null) {
+      out = out.times(SymbolicTrafficFraction.fromGuard(adjacency.getAvailability()));
+    }
+    return out;
+  }
+
+  private void putOnLink(
+      SymbolicTrafficMatrix matrix,
+      TrafficGraphEdge link,
+      TrafficLabelStack stack,
+      SymbolicTrafficFraction share) {
+    matrix.put(link, stack, matrix.get(link, stack).plus(share));
   }
 
   private TrafficGraphEdge outgoingTo(String router, String peer) {
@@ -236,16 +236,39 @@ class SymbolicTrafficForwarding {
     return rules;
   }
 
+  /**
+   * Unique most-specific matching policy. Color and name are required when the policy sets them. A
+   * tie at the same specificity is an error.
+   */
   private SrPolicy matchingSrPolicy(String router, TrafficFlow flow, Ip nextHopIp) {
     List<SrPolicy> policies = _srPolicies.get(router);
     if (policies == null) {
       return null;
     }
+    SrPolicy best = null;
+    int bestSpecificity = -1;
     for (SrPolicy policy : policies) {
-      if (policy.matches(router, flow, nextHopIp)) {
-        return policy;
+      if (!policy.matches(router, flow, nextHopIp)) {
+        continue;
+      }
+      int specificity = policy.matchSpecificity();
+      if (best != null && specificity == bestSpecificity) {
+        throw new IllegalArgumentException(
+            "ambiguous SR policies at " + router + " for " + flow.getId());
+      }
+      if (specificity > bestSpecificity) {
+        best = policy;
+        bestSpecificity = specificity;
       }
     }
-    return null;
+    return best;
+  }
+
+  private static <T> Map<String, List<T>> copyLists(Map<String, List<T>> values) {
+    Map<String, List<T>> copied = new HashMap<>();
+    for (Map.Entry<String, List<T>> entry : values.entrySet()) {
+      copied.put(entry.getKey(), Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
+    }
+    return copied;
   }
 }

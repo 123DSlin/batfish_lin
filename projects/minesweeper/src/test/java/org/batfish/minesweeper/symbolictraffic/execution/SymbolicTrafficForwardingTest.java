@@ -144,7 +144,7 @@ public class SymbolicTrafficForwardingTest {
     SymbolicTrafficForwarding forwarding =
         new SymbolicTrafficForwarding(g, ribs, Collections.emptyMap(), Collections.emptyMap());
 
-    TrafficLabelStack stack = new TrafficLabelStack(Collections.singletonList("e"));
+    TrafficLabelStack stack = TrafficLabelStack.nodes("e");
     SymbolicTrafficMatrix matrix =
         forwarding.forward("e", f, stack, SymbolicTrafficFraction.one());
     assertThat(
@@ -165,7 +165,7 @@ public class SymbolicTrafficForwardingTest {
     SymbolicTrafficForwarding forwarding =
         new SymbolicTrafficForwarding(g, ribs, Collections.emptyMap(), addresses);
 
-    TrafficLabelStack stack = new TrafficLabelStack(java.util.Arrays.asList("e", "f"));
+    TrafficLabelStack stack = TrafficLabelStack.nodes("e", "f");
     SymbolicTrafficMatrix matrix =
         forwarding.forward("d", f, stack, SymbolicTrafficFraction.one());
     assertThat(matrix.get(de, stack).evaluate(new HashMap<>()), closeTo(1.0, 1e-9));
@@ -364,8 +364,8 @@ public class SymbolicTrafficForwardingTest {
     SymbolicTrafficForwarding forwarding =
         new SymbolicTrafficForwarding(g, ribs, Collections.emptyMap(), addresses);
 
-    TrafficLabelStack stack = new TrafficLabelStack(java.util.Arrays.asList("e", "f"));
-    TrafficLabelStack remainder = new TrafficLabelStack(Collections.singletonList("f"));
+    TrafficLabelStack stack = TrafficLabelStack.nodes("e", "f");
+    TrafficLabelStack remainder = TrafficLabelStack.nodes("f");
     SymbolicTrafficMatrix matrix =
         forwarding.forward("e", f, stack, SymbolicTrafficFraction.one());
     assertThat(matrix.get(ef, remainder).evaluate(new HashMap<>()), closeTo(1.0, 1e-9));
@@ -544,9 +544,147 @@ public class SymbolicTrafficForwardingTest {
         new SymbolicTrafficForwarding(g, ribs, policies, Collections.emptyMap());
     SymbolicTrafficMatrix matrix =
         forwarding.forward("d", f, TrafficLabelStack.empty(), SymbolicTrafficFraction.one());
-    assertThat(matrix.get(de, ok.toStack()).evaluate(new HashMap<>()), closeTo(0.5, 1e-9));
+    assertThat(
+        matrix.get(de, TrafficLabelStack.empty()).evaluate(new HashMap<>()), closeTo(0.5, 1e-9));
+    assertThat(matrix.get(de, ok.toStack()).isZero(), equalTo(true));
     assertThat(matrix.get(de, wrongSource.toStack()).isZero(), equalTo(true));
     assertThat(mass(matrix, new HashMap<String, Boolean>()), closeTo(0.5, 1e-9));
+  }
+
+  @Test
+  public void testSecondAdjSidStaysTypedAndPopsOntoAdjacency() {
+    TrafficFlow f = flow("e");
+    TrafficGraphEdge ef = edge("e_f", "e", "f");
+    TrafficGraph g = graph(f, ef);
+    SymbolicTrafficForwarding forwarding =
+        new SymbolicTrafficForwarding(
+            g, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    TrafficLabelStack stack =
+        new TrafficLabelStack(
+            java.util.Arrays.asList(
+                SrPolicy.Segment.adjacency("e", "f"), SrPolicy.Segment.node("x")));
+    TrafficLabelStack remainder =
+        new TrafficLabelStack(Collections.singletonList(SrPolicy.Segment.node("x")));
+    SymbolicTrafficMatrix matrix =
+        forwarding.forward("e", f, stack, SymbolicTrafficFraction.one());
+    assertThat(matrix.get(ef, remainder).evaluate(new HashMap<>()), closeTo(1.0, 1e-9));
+    assertThat(matrix.get(ef, TrafficLabelStack.nodes("f", "x")).isZero(), equalTo(true));
+  }
+
+  @Test
+  public void testAdjSidAvailabilityGuardIsApplied() {
+    TrafficFlow f =
+        new TrafficFlow(
+            "d-sr", "d", DEST, 80.0, TrafficFlow.ForwardingType.SR_POLICY, 100, "split-to-D");
+    TrafficGraphEdge de = edge("d_e", "d", "e");
+    TrafficGraph g = graph(f, de);
+    ForwardingRule bgp = ForwardingRule.indirect(DEST, GUARDS.trueGuard(), 10, NIP);
+    SrPolicy.Path path =
+        new SrPolicy.Path(
+            "ok",
+            GUARDS.trueGuard(),
+            1,
+            Collections.singletonList(
+                SrPolicy.Segment.adjacency("d", "e", GUARDS.variable("adj"))));
+    SrPolicy policy =
+        new SrPolicy("d", DEST, 100, "split-to-D", NIP, Collections.singletonList(path));
+    Map<String, List<ForwardingRule>> ribs = new HashMap<>();
+    ribs.put("d", Collections.singletonList(bgp));
+    Map<String, List<SrPolicy>> policies = new HashMap<>();
+    policies.put("d", Collections.singletonList(policy));
+    SymbolicTrafficForwarding forwarding =
+        new SymbolicTrafficForwarding(g, ribs, policies, Collections.emptyMap());
+    SymbolicTrafficMatrix matrix =
+        forwarding.forward("d", f, TrafficLabelStack.empty(), SymbolicTrafficFraction.one());
+    Map<String, Boolean> down = new HashMap<>();
+    down.put("adj", false);
+    assertThat(matrix.get(de, TrafficLabelStack.empty()).evaluate(down), closeTo(0.0, 1e-9));
+    Map<String, Boolean> up = new HashMap<>();
+    up.put("adj", true);
+    assertThat(matrix.get(de, TrafficLabelStack.empty()).evaluate(up), closeTo(1.0, 1e-9));
+  }
+
+  @Test
+  public void testAdjSidDoesNotInheritRibDirectAvailability() {
+    TrafficFlow f =
+        new TrafficFlow(
+            "d-sr", "d", DEST, 80.0, TrafficFlow.ForwardingType.SR_POLICY, 100, "split-to-D");
+    TrafficGraphEdge de = edge("d_e", "d", "e");
+    TrafficGraph g = graph(f, de);
+    ForwardingRule bgp = ForwardingRule.indirect(DEST, GUARDS.trueGuard(), 10, NIP);
+    SrPolicy.Path path =
+        new SrPolicy.Path(
+            "ok",
+            GUARDS.trueGuard(),
+            1,
+            Collections.singletonList(SrPolicy.Segment.adjacency("d", "e")));
+    SrPolicy policy =
+        new SrPolicy("d", DEST, 100, "split-to-D", NIP, Collections.singletonList(path));
+    ForwardingRule directToE =
+        ForwardingRule.direct(
+            Prefix.parse("10.0.0.6/32"), GUARDS.variable("igp_down"), 10, de);
+    Map<String, List<ForwardingRule>> ribs = new HashMap<>();
+    ribs.put("d", java.util.Arrays.asList(bgp, directToE));
+    Map<String, List<SrPolicy>> policies = new HashMap<>();
+    policies.put("d", Collections.singletonList(policy));
+    SymbolicTrafficForwarding forwarding =
+        new SymbolicTrafficForwarding(g, ribs, policies, Collections.emptyMap());
+    SymbolicTrafficMatrix matrix =
+        forwarding.forward("d", f, TrafficLabelStack.empty(), SymbolicTrafficFraction.one());
+
+    Map<String, Boolean> directDown = new HashMap<>();
+    directDown.put("igp_down", false);
+    assertThat(
+        matrix.get(de, TrafficLabelStack.empty()).evaluate(directDown), closeTo(1.0, 1e-9));
+  }
+
+  @Test
+  public void testPolicyColorMismatchDoesNotApplySr() {
+    TrafficFlow f =
+        new TrafficFlow("d-sr", "d", DEST, 80.0, TrafficFlow.ForwardingType.IP, null, null);
+    TrafficGraphEdge de = edge("d_e", "d", "e");
+    TrafficGraph g = graph(f, de);
+    Prefix nipPrefix = Prefix.parse("10.0.0.6/32");
+    ForwardingRule bgp = ForwardingRule.indirect(DEST, GUARDS.trueGuard(), 10, NIP);
+    ForwardingRule igp = ForwardingRule.direct(nipPrefix, GUARDS.trueGuard(), 10, de);
+    SrPolicy.Path path =
+        new SrPolicy.Path(GUARDS.trueGuard(), 1, java.util.Arrays.asList("e", "f"));
+    SrPolicy policy =
+        new SrPolicy("d", DEST, 100, "split-to-D", NIP, Collections.singletonList(path));
+    Map<String, List<ForwardingRule>> ribs = new HashMap<>();
+    ribs.put("d", java.util.Arrays.asList(bgp, igp));
+    Map<String, List<SrPolicy>> policies = new HashMap<>();
+    policies.put("d", Collections.singletonList(policy));
+    Map<String, Ip> addresses = new HashMap<>();
+    addresses.put("e", Ip.parse("10.0.0.5"));
+    SymbolicTrafficForwarding forwarding =
+        new SymbolicTrafficForwarding(g, ribs, policies, addresses);
+    SymbolicTrafficMatrix matrix =
+        forwarding.forward("d", f, TrafficLabelStack.empty(), SymbolicTrafficFraction.one());
+    assertThat(
+        matrix.get(de, TrafficLabelStack.empty()).evaluate(new HashMap<>()), closeTo(1.0, 1e-9));
+    assertThat(matrix.get(de, path.toStack()).isZero(), equalTo(true));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testAmbiguousPoliciesAtSameSpecificityThrow() {
+    TrafficFlow f =
+        new TrafficFlow(
+            "d-sr", "d", DEST, 80.0, TrafficFlow.ForwardingType.SR_POLICY, 100, "split-to-D");
+    TrafficGraphEdge de = edge("d_e", "d", "e");
+    TrafficGraph g = graph(f, de);
+    ForwardingRule bgp = ForwardingRule.indirect(DEST, GUARDS.trueGuard(), 10, NIP);
+    SrPolicy.Path path = new SrPolicy.Path(GUARDS.trueGuard(), 1, Collections.singletonList("e"));
+    SrPolicy p1 = new SrPolicy("d", DEST, 100, "split-to-D", NIP, Collections.singletonList(path));
+    SrPolicy p2 =
+        new SrPolicy("d", DEST, 100, "split-to-D", NIP, Collections.singletonList(path));
+    Map<String, List<ForwardingRule>> ribs = new HashMap<>();
+    ribs.put("d", Collections.singletonList(bgp));
+    Map<String, List<SrPolicy>> policies = new HashMap<>();
+    policies.put("d", java.util.Arrays.asList(p1, p2));
+    SymbolicTrafficForwarding forwarding =
+        new SymbolicTrafficForwarding(g, ribs, policies, Collections.emptyMap());
+    forwarding.forward("d", f, TrafficLabelStack.empty(), SymbolicTrafficFraction.one());
   }
 
   private static double mass(SymbolicTrafficMatrix matrix, Map<String, Boolean> assignment) {
