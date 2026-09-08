@@ -2090,3 +2090,18 @@ SR：MAIN 的 `selectionGuard` 对应单前缀上的 `s_r`。差距全部在 **t
 - 测试：`TrafficGraphTest` 覆盖内存图索引与 JSON 入口未实现；`SymbolicTrafficExecutionTest` 覆盖
   空栈与 `simulate`/`forward` 未实现。不把 Python `traffic_execution.py` 当作本层实现。
 - 回退：`git revert` 本提交。
+
+## Stage 10.2 Algorithm 1 `simulate(f)`（2026-09-08 16:20 CST）
+
+- 实现 YU Algorithm 1 的跳迭代，**不实现** Algorithm 2 `forward`。默认 `SymbolicTrafficForwarding`
+  仍抛 `UnsupportedOperationException`；测试通过 package-private 构造注入替身 `forward` 来核对循环。
+- `simulate(f)` 按 listing：构造伪入边 `l_R`（不改 `TrafficGraph`），`M0[l_R, ∅] = 1`；第 `i`
+  轮新建 `M_i`，对每个路由器和 `M_{i-1}` 中出现的栈 `S`，令 `ω = Σ incoming M_{i-1}[l,S]`（源路由器
+  计入 `l_R`），再 `M_i += forward(R, f, S, ω)`；返回 `M_I`（恰好 `I` 跳的 STF，不是 hop 求和）。
+  `I` 默认 255（TTL），测试用更小的 `I`。
+- `SymbolicTrafficFraction` 目前是常数格点（Algorithm 1 的 `0`/`1` 与加法）。`trafficLoads`/`τ_l`
+  仍未实现。
+- 测试：I=1 把入流量放到出边；I=2 返回第二跳而非第一跳；菱形汇聚处 `ω` 为入边之和；栈作为 `M`
+  的列传到下一跳；sink 的 `forward` 为空矩阵；未注入时 `forward` 仍未实现。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、`symbolicroute`、`symbolicsr`、BUILD。
+- 回退：`git revert` 本提交。

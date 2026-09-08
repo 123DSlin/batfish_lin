@@ -6,9 +6,8 @@ import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraph;
 /**
  * YU Algorithm 2 {@code forward(R, f, S, ω)}: symbolic forwarding at one router.
  *
- * <p>Analogous to {@link org.batfish.minesweeper.smt.EncoderSlice} in role (per-unit encoding) and
- * kept package-private so Algorithm 1 is the only public driver. Not implemented; Algorithm 1 will
- * call this after it is specified.
+ * <p>Analogous to {@link org.batfish.minesweeper.smt.EncoderSlice}. Algorithm 1 calls this each
+ * iteration; the body is not implemented yet.
  */
 class SymbolicTrafficForwarding {
 
@@ -23,7 +22,10 @@ class SymbolicTrafficForwarding {
   }
 
   SymbolicTrafficMatrix forward(
-      String router, TrafficFlow flow, TrafficLabelStack stack, Object incomingFraction) {
+      String router,
+      TrafficFlow flow,
+      TrafficLabelStack stack,
+      SymbolicTrafficFraction incomingFraction) {
     throw new UnsupportedOperationException(
         "YU Algorithm 2 forward is not implemented yet: "
             + router
