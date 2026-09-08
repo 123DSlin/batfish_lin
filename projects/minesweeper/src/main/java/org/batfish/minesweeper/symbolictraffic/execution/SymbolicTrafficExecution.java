@@ -11,7 +11,7 @@ import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
  *
  * <p>Analogous to {@link org.batfish.minesweeper.smt.Encoder}: consumes an already-parsed {@link
  * TrafficGraph} and never opens configs or {@code traffic.json}. Per-router forwarding is {@link
- * SymbolicTrafficForwarding} and is not implemented in this stage.
+ * SymbolicTrafficForwarding} (YU Algorithm 2).
  *
  * <p>This method follows the paper listing: initialize {@code M0[l_R, ∅] = 1}, then for {@code i =
  * 1..I} build a fresh {@code M_i} by summing incoming STF into {@code ω} and adding {@code

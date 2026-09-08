@@ -19,8 +19,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /**
- * Checks YU Algorithm 1 {@code simulate(f)} against a stand-in {@code forward}. Algorithm 2 is not
- * under test.
+ * Checks YU Algorithm 1 {@code simulate(f)} against a stand-in {@code forward}. Algorithm 2 has
+ * its own tests; the stand-in is only used to isolate the hop loop.
  */
 @RunWith(JUnit4.class)
 public class SymbolicTrafficExecutionTest {
@@ -57,11 +57,15 @@ public class SymbolicTrafficExecutionTest {
     new SymbolicTrafficExecution(graph(flow("a")), 0);
   }
 
-  @Test(expected = UnsupportedOperationException.class)
-  public void testDefaultForwardStillUnimplemented() {
-    TrafficFlow f = flow("a");
-    TrafficGraph g = graph(f, edge("a_b", "a", "b"));
-    new SymbolicTrafficExecution(g, 1).simulate(f);
+  @Test
+  public void testEmptyRibForwardsNothing() {
+    TrafficFlow f = flow("x");
+    TrafficGraph g = graph(f);
+    SymbolicTrafficMatrix matrix =
+        new SymbolicTrafficExecution(g)
+            .getForwarding()
+            .forward("x", f, TrafficLabelStack.empty(), SymbolicTrafficFraction.one());
+    assertThat(matrix.isZero(), equalTo(true));
   }
 
   @Test
@@ -158,15 +162,6 @@ public class SymbolicTrafficExecutionTest {
         new SymbolicTrafficExecution(g, 2, new CopyOmegaForward(g)).simulate(f);
     assertThat(hop2.isZero(), equalTo(true));
     assertThat(hop2.edges(), empty());
-  }
-
-  @Test(expected = UnsupportedOperationException.class)
-  public void testForwardNotImplemented() {
-    TrafficFlow f = flow("x");
-    TrafficGraph g = graph(f);
-    new SymbolicTrafficExecution(g)
-        .getForwarding()
-        .forward("x", f, TrafficLabelStack.empty(), SymbolicTrafficFraction.one());
   }
 
   @Test(expected = UnsupportedOperationException.class)

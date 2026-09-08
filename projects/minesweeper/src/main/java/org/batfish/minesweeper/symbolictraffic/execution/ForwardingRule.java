@@ -1,0 +1,80 @@
+package org.batfish.minesweeper.symbolictraffic.execution;
+
+import javax.annotation.Nullable;
+import org.batfish.datamodel.Ip;
+import org.batfish.datamodel.Prefix;
+import org.batfish.minesweeper.symbolicroute.RouteGuard;
+import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
+
+/**
+ * One guarded RIB rule used by YU route selection and iteration.
+ *
+ * <p>A rule is either a direct next hop ({@code l = nh_r}) or an indirect next-hop IP {@code nip}.
+ * Lower {@code preference} is strictly better; longer prefixes are strictly better than shorter
+ * ones, encoding LPM as part of {@code ≺}.
+ */
+public class ForwardingRule {
+
+  private final Prefix _prefix;
+
+  private final RouteGuard _availability;
+
+  private final int _preference;
+
+  @Nullable private final TrafficGraphEdge _directNextHop;
+
+  @Nullable private final Ip _indirectNextHop;
+
+  public static ForwardingRule direct(
+      Prefix prefix, RouteGuard availability, int preference, TrafficGraphEdge nextHop) {
+    return new ForwardingRule(prefix, availability, preference, nextHop, null);
+  }
+
+  public static ForwardingRule indirect(
+      Prefix prefix, RouteGuard availability, int preference, Ip nextHopIp) {
+    return new ForwardingRule(prefix, availability, preference, null, nextHopIp);
+  }
+
+  private ForwardingRule(
+      Prefix prefix,
+      RouteGuard availability,
+      int preference,
+      @Nullable TrafficGraphEdge directNextHop,
+      @Nullable Ip indirectNextHop) {
+    _prefix = prefix;
+    _availability = availability;
+    _preference = preference;
+    _directNextHop = directNextHop;
+    _indirectNextHop = indirectNextHop;
+  }
+
+  public Prefix getPrefix() {
+    return _prefix;
+  }
+
+  public RouteGuard getAvailability() {
+    return _availability;
+  }
+
+  public int getPreference() {
+    return _preference;
+  }
+
+  @Nullable
+  public TrafficGraphEdge getDirectNextHop() {
+    return _directNextHop;
+  }
+
+  @Nullable
+  public Ip getIndirectNextHop() {
+    return _indirectNextHop;
+  }
+
+  public boolean isIndirect() {
+    return _indirectNextHop != null;
+  }
+
+  public boolean matches(Ip dstIp) {
+    return _prefix.containsIp(dstIp);
+  }
+}

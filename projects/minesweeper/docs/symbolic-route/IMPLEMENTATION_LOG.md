@@ -2105,3 +2105,17 @@ SR：MAIN 的 `selectionGuard` 对应单前缀上的 `s_r`。差距全部在 **t
   的列传到下一跳；sink 的 `forward` 为空矩阵；未注入时 `forward` 仍未实现。
 - 未修改 `Graph`/`Encoder`/`PropertyChecker`、`symbolicroute`、`symbolicsr`、BUILD。
 - 回退：`git revert` 本提交。
+
+## Stage 10.3 Algorithm 2 encodings and `forward`（2026-09-08 16:40 CST）
+
+- 按 YU §4.4 实现 route selection、route iteration 与 Algorithm 2，不改 `Graph`/`Encoder`。
+- `RouteSelectionEncoding`：`s_r = 0`（dst 不匹配）否则 `g_r ∧ ∧_{r' ≺ r} ¬g_{r'}`（更长前缀更优，同前缀更低
+  preference 更优）；`c_r = s_r / Σ s_{r'}`（分母为 0 则 0）。
+- `RouteIterationEncoding`：`VIGP_nip[l] = Σ_{nh_r=l} c^{nip}_r`；`c_p = (g_p w_p)/Σ(g w)`；
+  `VSR_p[l] = c_p · VIGP_{ip}[l]`。
+- `SymbolicTrafficForwarding`：`S=∅` → `forwardIp`（直接 NH 写 `M[l,∅]+=ω c_r`，间接 NH 走
+  `resolveNhIp`）；命中 SR policy 则按 path 栈写入 `ω · VSR`；否则 `M[l,∅]=ω · VIGP`。`forwardSr`：
+  当前节点为栈顶则弹出后递归 `forward`，否则带着同一栈对栈顶地址做 `VIGP`。
+- `SymbolicTrafficFraction` 支持常数、guard、加减乘除，可在赋值下求值。空 RIB 的 `forward` 返回空矩阵。
+- 测试覆盖 `s_r`/`c_r`、LPM、`VIGP`/`VSR`、直接/间接 NH、SR 压栈、弹栈、向栈顶 IGP。Algorithm 1 替身测试保留。
+- 回退：`git revert` 本提交。
