@@ -115,6 +115,9 @@ public final class ParsedSrPolicyPipelineTest {
     assertThat(
         result.toReadableText().contains("SR POLICY FORWARDING BRANCHES"),
         equalTo(true));
+    assertThat(
+        result.toSrPolicyReadableText().contains("SR POLICY FORWARDING BRANCHES"),
+        equalTo(true));
     assertThat(result.toReadableText().contains("primary-to-r2"), equalTo(true));
     assertThat(result.toReadableText().contains("FORWARDING_BRANCH"), equalTo(false));
     assertThat(

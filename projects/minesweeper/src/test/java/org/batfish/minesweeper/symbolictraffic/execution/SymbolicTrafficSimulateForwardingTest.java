@@ -222,7 +222,7 @@ public class SymbolicTrafficSimulateForwardingTest {
     addresses.put("f", fPrefix.getStartIp());
 
     TrafficLabelStack pushed = path.toStack();
-    TrafficLabelStack remainder = new TrafficLabelStack(Collections.singletonList("f"));
+    TrafficLabelStack remainder = TrafficLabelStack.nodes("f");
 
     SymbolicTrafficMatrix hop1 =
         new SymbolicTrafficExecution(
@@ -246,5 +246,77 @@ public class SymbolicTrafficSimulateForwardingTest {
             .simulate(f);
     assertThat(accumulated.get(de, pushed).evaluate(new HashMap<>()), closeTo(1.0, 1e-9));
     assertThat(accumulated.get(ef, remainder).evaluate(new HashMap<>()), closeTo(1.0, 1e-9));
+  }
+
+  @Test
+  public void testTerminalLocalRouteAbsorbsMassAndDoesNotLoop() {
+    TrafficFlow f = ipFlow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraphEdge ba = edge("b_a", "b", "a");
+    TrafficGraph g = graph(f, ab, ba);
+    Map<String, List<ForwardingRule>> ribs = new HashMap<>();
+    ribs.put(
+        "a",
+        Collections.singletonList(ForwardingRule.direct(DEST, GUARDS.trueGuard(), 10, ab)));
+    ribs.put(
+        "b",
+        Arrays.asList(
+            ForwardingRule.terminal(DEST, GUARDS.trueGuard(), 0),
+            ForwardingRule.direct(DEST, GUARDS.trueGuard(), 115, ba)));
+    SymbolicTrafficExecution execution =
+        new SymbolicTrafficExecution(
+            g,
+            255,
+            new SymbolicTrafficForwarding(
+                g, ribs, Collections.emptyMap(), Collections.emptyMap()));
+    SymbolicTrafficMatrix accumulated = execution.simulate(f);
+    assertThat(
+        accumulated.get(ab, TrafficLabelStack.empty()).evaluate(new HashMap<>()),
+        closeTo(1.0, 1e-9));
+    assertThat(accumulated.get(ba, TrafficLabelStack.empty()).isZero(), equalTo(true));
+    assertThat(execution.getLastCompletedHops() < 10, equalTo(true));
+  }
+
+  @Test
+  public void testK1ExecutionPrintsYuStyleCompactStf() {
+    TrafficFlow f = ipFlow("x");
+    TrafficGraphEdge xd = edge("d_x", "x", "d");
+    TrafficGraphEdge dx = edge("d_x", "d", "x");
+    TrafficGraphEdge xa = edge("a_x", "x", "a");
+    TrafficGraphEdge ax = edge("a_x", "a", "x");
+    TrafficGraphEdge ad = edge("a_d", "a", "d");
+    TrafficGraphEdge da = edge("a_d", "d", "a");
+    TrafficGraph g =
+        new TrafficGraph(
+            Arrays.asList("x", "a", "d"),
+            Arrays.asList(xd, dx, xa, ax, ad, da),
+            Collections.singleton(f),
+            1);
+    Map<String, List<ForwardingRule>> ribs = new HashMap<>();
+    ribs.put(
+        "x",
+        Arrays.asList(
+            ForwardingRule.direct(DEST, GUARDS.variable("d_x"), 10, xd),
+            ForwardingRule.direct(
+                DEST, GUARDS.variable("d_x").not().and(GUARDS.variable("a_x")), 20, xa)));
+    ribs.put(
+        "a",
+        Collections.singletonList(ForwardingRule.direct(DEST, GUARDS.variable("a_d"), 10, ad)));
+    ribs.put("d", Collections.singletonList(ForwardingRule.terminal(DEST, GUARDS.trueGuard(), 0)));
+    SymbolicTrafficExecution execution =
+        new SymbolicTrafficExecution(
+            g,
+            255,
+            new SymbolicTrafficForwarding(
+                g, ribs, Collections.emptyMap(), Collections.emptyMap()));
+    SymbolicTrafficMatrix matrix = execution.simulate(f);
+    assertThat(matrix.get(xd, TrafficLabelStack.empty()).toDisplayString(64), equalTo("d_x"));
+    assertThat(
+        matrix.get(xa, TrafficLabelStack.empty()).toDisplayString(64), equalTo("(not d_x)"));
+    assertThat(
+        matrix.get(ad, TrafficLabelStack.empty()).toDisplayString(64), equalTo("(not d_x)"));
+    assertThat(matrix.get(ax, TrafficLabelStack.empty()).isZero(), equalTo(true));
+    assertThat(matrix.get(da, TrafficLabelStack.empty()).isZero(), equalTo(true));
+    assertThat(execution.getLastCompletedHops() < 10, equalTo(true));
   }
 }

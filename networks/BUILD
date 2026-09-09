@@ -37,5 +37,16 @@ filegroup(
 
 filegroup(
     name = "tolerance-sr-te-demo",
-    srcs = glob(["tolerance_sr_te_demo/**"]),
+    srcs = glob([
+        "tolerance_sr_te_demo/**",
+        "tolerance_sr_te_demo_1_*/**",
+    ]),
+)
+
+filegroup(
+    name = "traffic-demo-single-link-failures",
+    srcs = glob([
+        "traffic_demo/**",
+        "traffic_demo_1_*/**",
+    ]),
 )

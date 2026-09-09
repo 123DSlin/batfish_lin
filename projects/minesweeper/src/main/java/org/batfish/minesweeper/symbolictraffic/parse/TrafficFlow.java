@@ -16,6 +16,21 @@ public class TrafficFlow {
     SR_POLICY
   }
 
+  /** Accepts {@code IP}, {@code SR_POLICY}, and the short alias {@code SR}. */
+  public static ForwardingType parseForwardingType(String raw) {
+    if (raw == null) {
+      throw new IllegalArgumentException("forwarding type cannot be null");
+    }
+    String name = raw.trim().toUpperCase();
+    if ("IP".equals(name)) {
+      return ForwardingType.IP;
+    }
+    if ("SR".equals(name) || "SR_POLICY".equals(name)) {
+      return ForwardingType.SR_POLICY;
+    }
+    throw new IllegalArgumentException("unsupported forwarding type: " + raw);
+  }
+
   private final String _id;
 
   private final String _source;

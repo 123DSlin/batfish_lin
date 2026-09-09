@@ -1,6 +1,7 @@
 package org.batfish.minesweeper.symbolictraffic.execution;
 
 import java.util.Collections;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -97,5 +98,32 @@ public class SymbolicTrafficMatrix {
 
   public Set<TrafficGraphEdge> edges() {
     return Collections.unmodifiableSet(_values.keySet());
+  }
+
+  /** Non-zero stacks on one edge. */
+  public Set<TrafficLabelStack> stacks(TrafficGraphEdge edge) {
+    Map<TrafficLabelStack, SymbolicTrafficFraction> columns = _values.get(edge);
+    if (columns == null) {
+      return Collections.emptySet();
+    }
+    return Collections.unmodifiableSet(columns.keySet());
+  }
+
+  /**
+   * Replace every cell with its {@code k}-failure equivalent polynomial (YU §5.2). Cells that
+   * reduce to 0 are dropped, so a matrix that is identically 0 on all ≤k-failure assignments
+   * becomes {@link #isZero()}.
+   */
+  public SymbolicTrafficMatrix kReduce(int k, Collection<String> variables) {
+    SymbolicTrafficMatrix reduced = new SymbolicTrafficMatrix();
+    for (Map.Entry<TrafficGraphEdge, Map<TrafficLabelStack, SymbolicTrafficFraction>> edgeEntry :
+        _values.entrySet()) {
+      TrafficGraphEdge edge = edgeEntry.getKey();
+      for (Map.Entry<TrafficLabelStack, SymbolicTrafficFraction> stackEntry :
+          edgeEntry.getValue().entrySet()) {
+        reduced.put(edge, stackEntry.getKey(), stackEntry.getValue().kReduce(k, variables));
+      }
+    }
+    return reduced;
   }
 }

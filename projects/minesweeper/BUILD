@@ -55,6 +55,7 @@ junit_tests(
         "//networks:sr-symbolic-route",
         "//networks:tolerance-sr-te-demo",
         "//networks:tolerance-symbolic-route",
+        "//networks:traffic-demo-single-link-failures",
     ],
     tags = ["z3"],
     runtime_deps = [

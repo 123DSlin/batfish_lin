@@ -85,6 +85,9 @@ class SymbolicTrafficForwarding {
       }
       SymbolicTrafficFraction share =
           incomingFraction.times(RouteSelectionEncoding.ecmpRatio(rule, rib, dstIp));
+      if (rule.isTerminal() || share.isZero()) {
+        continue;
+      }
       if (rule.isIndirect()) {
         if (applySrPolicy) {
           matrix.add(resolveNhIp(router, flow, rule.getIndirectNextHop(), share));
@@ -216,6 +219,9 @@ class SymbolicTrafficForwarding {
       TrafficGraphEdge link,
       TrafficLabelStack stack,
       SymbolicTrafficFraction share) {
+    if (link == null || share.isZero()) {
+      return;
+    }
     matrix.put(link, stack, matrix.get(link, stack).plus(share));
   }
 

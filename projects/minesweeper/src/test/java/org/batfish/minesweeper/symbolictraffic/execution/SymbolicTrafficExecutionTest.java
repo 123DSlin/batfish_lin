@@ -152,7 +152,7 @@ public class SymbolicTrafficExecutionTest {
     TrafficGraphEdge ab = edge("a_b", "a", "b");
     TrafficGraphEdge bc = edge("b_c", "b", "c");
     TrafficGraph g = graph(f, ab, bc);
-    TrafficLabelStack pushed = new TrafficLabelStack(Collections.singletonList("E"));
+    TrafficLabelStack pushed = TrafficLabelStack.nodes("E");
     PushThenCopyForward forward = new PushThenCopyForward(g, "a", pushed);
 
     SymbolicTrafficMatrix hop1 = new SymbolicTrafficExecution(g, 1, forward).simulateHopI(f);
@@ -170,7 +170,7 @@ public class SymbolicTrafficExecutionTest {
     TrafficFlow f = flow("a");
     TrafficGraphEdge ab = edge("a_b", "a", "b");
     TrafficGraph g = graph(f, ab);
-    TrafficLabelStack pushed = new TrafficLabelStack(Collections.singletonList("E"));
+    TrafficLabelStack pushed = TrafficLabelStack.nodes("E");
     PushThenCopyForward forward = new PushThenCopyForward(g, "a", pushed);
     new SymbolicTrafficExecution(g, 2, forward).simulateHopI(f);
 
@@ -189,9 +189,16 @@ public class SymbolicTrafficExecutionTest {
     assertThat(hop2.edges(), empty());
   }
 
-  @Test(expected = UnsupportedOperationException.class)
-  public void testTrafficLoadsNotImplemented() {
-    new SymbolicTrafficExecution(graph(flow("a"))).trafficLoads();
+  @Test
+  public void testTrafficLoadsScalesDemandOnAccumulatedMatrix() {
+    TrafficFlow f = flow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraphEdge bc = edge("b_c", "b", "c");
+    TrafficGraph g = graph(f, ab, bc);
+    SymbolicTrafficLoad loads =
+        new SymbolicTrafficExecution(g, 10, new CopyOmegaForward(g)).trafficLoads();
+    assertThat(loads.get(ab).getValue(), equalTo(20.0));
+    assertThat(loads.get(bc).getValue(), equalTo(20.0));
   }
 
   @Test
@@ -206,7 +213,99 @@ public class SymbolicTrafficExecutionTest {
 
     assertThat(accumulated.get(ab, TrafficLabelStack.empty()).isOne(), equalTo(true));
     assertThat(accumulated.get(bc, TrafficLabelStack.empty()).isOne(), equalTo(true));
-    assertThat(execution.getLastCompletedHops() < 10, equalTo(true));
+    assertThat(accumulated.edges(), containsInAnyOrder(ab, bc));
+    assertThat(execution.getLastCompletedHops(), equalTo(3));
+  }
+
+  @Test
+  public void testSimulateHopIOnShortDagReturnsZeroMatrix() {
+    TrafficFlow f = flow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraph g = graph(f, ab);
+    SymbolicTrafficExecution execution =
+        new SymbolicTrafficExecution(g, 5, new CopyOmegaForward(g));
+    SymbolicTrafficMatrix hopI = execution.simulateHopI(f);
+    assertThat(hopI.isZero(), equalTo(true));
+    assertThat(execution.getLastCompletedHops(), equalTo(5));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testNullFlowIsRejected() {
+    new SymbolicTrafficExecution(graph(flow("a"))).simulate(null);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testSourceMustExistInGraph() {
+    TrafficFlow missing = flow("missing");
+    TrafficGraph g = graph(flow("a"), edge("a_b", "a", "b"));
+    new SymbolicTrafficExecution(g).simulate(missing);
+  }
+
+  @Test
+  public void testSimulateDoesNotMutateGraphOrShareMatrices() {
+    TrafficFlow f = flow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraph g = graph(f, ab);
+    int edgeCount = g.getEdges().size();
+    SymbolicTrafficExecution execution =
+        new SymbolicTrafficExecution(g, 3, new CopyOmegaForward(g));
+    SymbolicTrafficMatrix first = execution.simulate(f);
+    SymbolicTrafficMatrix second = execution.simulate(f);
+
+    assertThat(g.getEdges().size(), equalTo(edgeCount));
+    assertThat(first.get(ab, TrafficLabelStack.empty()).isOne(), equalTo(true));
+    assertThat(second.get(ab, TrafficLabelStack.empty()).isOne(), equalTo(true));
+    assertThat(execution.getLastCompletedHops(), equalTo(2));
+  }
+
+  @Test
+  public void testForwardingLoopAccumulatesBeyondOneUntilTtl() {
+    TrafficFlow f = flow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraphEdge ba = edge("b_a", "b", "a");
+    TrafficGraph g = graph(f, ab, ba);
+    SymbolicTrafficExecution execution =
+        new SymbolicTrafficExecution(g, 4, new CopyOmegaForward(g));
+    SymbolicTrafficMatrix accumulated = execution.simulate(f);
+
+    assertThat(accumulated.get(ab, TrafficLabelStack.empty()).getValue(), equalTo(2.0));
+    assertThat(accumulated.get(ba, TrafficLabelStack.empty()).getValue(), equalTo(2.0));
+    assertThat(execution.getLastCompletedHops(), equalTo(4));
+
+    SymbolicTrafficExecution hopIExecution =
+        new SymbolicTrafficExecution(g, 4, new CopyOmegaForward(g));
+    SymbolicTrafficMatrix hopI = hopIExecution.simulateHopI(f);
+    assertThat(hopI.get(ab, TrafficLabelStack.empty()).isZero(), equalTo(true));
+    assertThat(hopI.get(ba, TrafficLabelStack.empty()).isOne(), equalTo(true));
+    assertThat(hopIExecution.getLastCompletedHops(), equalTo(4));
+  }
+
+  @Test
+  public void testLastCompletedHopsIsOneWhenFirstHopForwardsNothing() {
+    TrafficFlow f = flow("a");
+    TrafficGraph g = graph(f);
+    SymbolicTrafficExecution execution = new SymbolicTrafficExecution(g, 10);
+    SymbolicTrafficMatrix accumulated = execution.simulate(f);
+    assertThat(accumulated.isZero(), equalTo(true));
+    assertThat(execution.getLastCompletedHops(), equalTo(1));
+
+    SymbolicTrafficExecution hopIExecution = new SymbolicTrafficExecution(g, 7);
+    SymbolicTrafficMatrix hopI = hopIExecution.simulateHopI(f);
+    assertThat(hopI.isZero(), equalTo(true));
+    assertThat(hopIExecution.getLastCompletedHops(), equalTo(7));
+  }
+
+  @Test
+  public void testEmptyForwardAtSinkIsDropNotResurrection() {
+    TrafficFlow f = flow("a");
+    TrafficGraphEdge ab = edge("a_b", "a", "b");
+    TrafficGraph g = graph(f, ab);
+    SymbolicTrafficExecution execution =
+        new SymbolicTrafficExecution(g, 8, new CopyOmegaForward(g));
+    SymbolicTrafficMatrix accumulated = execution.simulate(f);
+    assertThat(accumulated.get(ab, TrafficLabelStack.empty()).isOne(), equalTo(true));
+    assertThat(accumulated.edges(), containsInAnyOrder(ab));
+    assertThat(execution.getLastCompletedHops(), equalTo(2));
   }
 
   @Test

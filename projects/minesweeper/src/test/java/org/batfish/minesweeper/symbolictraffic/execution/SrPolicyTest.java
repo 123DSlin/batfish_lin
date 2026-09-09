@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import org.batfish.datamodel.Prefix;
 import org.batfish.minesweeper.symbolicroute.Z3RouteGuardFactory;
+import org.batfish.minesweeper.symbolictraffic.parse.TrafficFlow;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -71,12 +72,34 @@ public class SrPolicyTest {
   @Test
   public void testHeadendOnlyNodeListIsAllowed() {
     SrPolicy.Path path = new SrPolicy.Path(GUARDS.trueGuard(), 1, Collections.singletonList("d"));
-    assertThat(path.getFirstNode(), equalTo("d"));
-    assertThat(path.toStack().getLabels(), equalTo(Collections.singletonList("d")));
+    assertThat(path.getFirstSegment().getRouter(), equalTo("d"));
+    assertThat(
+        path.toStack().getSegments(),
+        equalTo(Collections.singletonList(SrPolicy.Segment.node("d"))));
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void testLabelStackRejectsNullSegment() {
     new TrafficLabelStack(Collections.singletonList(null));
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void testPolicyRejectsEmptyPathList() {
+    new SrPolicy("d", DEST, 100, "split-to-D", null, Collections.emptyList());
+  }
+
+  @Test
+  public void testColorRequiredWhenPolicySetsColor() {
+    SrPolicy.Path path = new SrPolicy.Path(GUARDS.trueGuard(), 1, Collections.singletonList("e"));
+    SrPolicy policy =
+        new SrPolicy("d", DEST, 100, "split-to-D", null, Collections.singletonList(path));
+    TrafficFlow noColor =
+        new TrafficFlow(
+            "f", "d", DEST, 1.0, TrafficFlow.ForwardingType.SR_POLICY, null, "split-to-D");
+    TrafficFlow colored =
+        new TrafficFlow(
+            "f", "d", DEST, 1.0, TrafficFlow.ForwardingType.SR_POLICY, 100, "split-to-D");
+    assertThat(policy.matches("d", noColor, null), equalTo(false));
+    assertThat(policy.matches("d", colored, null), equalTo(true));
   }
 }

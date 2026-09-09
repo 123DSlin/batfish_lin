@@ -28,6 +28,8 @@ import org.batfish.minesweeper.symbolicroute.BatfishParsedSnapshotPipelineInputB
 import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipeline;
 import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipelineResult;
 import org.batfish.minesweeper.symbolicroute.Z3RouteGuardFactory;
+import org.batfish.minesweeper.symbolictraffic.execution.SymbolicTrafficPipeline;
+import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraph;
 import static org.batfish.minesweeper.smt.Encoder.createOutputDirectory;
 import static org.batfish.common.topology.TopologyUtil.synthesizeL3Topology;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
@@ -102,7 +104,7 @@ public class SmtReachabilityTest {
 
         // read the configurations from the filesystem
         Runfiles runfiles = Runfiles.create();
-         String configPath = runfiles.rlocation("batfish/networks/tolerance_sr_te_demo");
+         String configPath = runfiles.rlocation("batfish/networks/tolerance_sr_te_demo_1_d_x");
         // String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_hard");
@@ -179,9 +181,40 @@ public class SmtReachabilityTest {
         }
         Files.copy(trafficInput, Paths.get(_outputDir, "0_traffic.json"), REPLACE_EXISTING);
         Set<Prefix> destinations = readTrafficDestinations(trafficInput);
+        TrafficGraph trafficGraph = TrafficGraph.fromTrafficJson(trafficInput);
         try (Context context = new Context()) {
-            writeSymbolicRouteFiles(runSymbolicRoutePipeline(dataPlane, context), destinations);
+            BatfishSymbolicRoutePipelineResult controlPlaneResult = runSymbolicRoutePipeline(dataPlane, context);
+            writeSymbolicRouteFiles(controlPlaneResult, destinations);
+            writeSymbolicTrafficFiles(
+                    trafficGraph,
+                    runSymbolicTrafficPipeline(dataPlane, trafficGraph, controlPlaneResult));
         }
+    }
+
+    private SymbolicTrafficPipeline.Result runSymbolicTrafficPipeline(
+            DataPlane dataPlane,
+            TrafficGraph trafficGraph,
+            BatfishSymbolicRoutePipelineResult controlPlaneResult) {
+        SortedMap<String, org.batfish.datamodel.Configuration> configurations =
+                _batfish.loadConfigurations(_batfish.getSnapshot());
+        return SymbolicTrafficPipeline.run(
+                trafficGraph, controlPlaneResult, configurations, dataPlane);
+    }
+
+    private void writeSymbolicTrafficFiles(
+            TrafficGraph trafficGraph, SymbolicTrafficPipeline.Result result) throws IOException {
+        Files.write(
+                Paths.get(_outputDir, "0_traffic_graph.txt"),
+                trafficGraph.toInputText().getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                Paths.get(_outputDir, "0_symbolic_traffic_execution.txt"),
+                result.toExecutionText().getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                Paths.get(_outputDir, "0_symbolic_traffic_loads.json"),
+                result.toYuJson().getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                Paths.get(_outputDir, "0_traffic_loads.json"),
+                result.toConcreteJson().getBytes(StandardCharsets.UTF_8));
     }
 
     private Set<Prefix> readTrafficDestinations(Path trafficInput) throws IOException {
@@ -249,6 +282,12 @@ public class SmtReachabilityTest {
         Files.write(
                 Paths.get(_outputDir, "0_symbolic_sr_policies.json"),
                 result.toSrPolicyExportJson().getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                Paths.get(_outputDir, "0_symbolic_sr_policies.txt"),
+                (destinations == null
+                                ? result.toSrPolicyReadableText()
+                                : result.toSrPolicyReadableTextForDestinations(destinations))
+                        .getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -715,6 +754,9 @@ public class SmtReachabilityTest {
             if (!configPathStr.endsWith("/") && !configPathStr.endsWith("\\")) {
                 configPathStr += System.getProperty("file.separator");
             }
+            if (!Files.isDirectory(Paths.get(configPathStr, "configs"))) {
+                throw new IOException("missing configs directory: " + configPathStr + "configs");
+            }
 
             SortedMap<String, byte[]> configurationsBytes =
                 ConfigLoader.loadAllFiles(configPathStr + "configs", ".cfg");
@@ -730,8 +772,8 @@ public class SmtReachabilityTest {
                 .build();
 
         } catch (IOException e) {
-            System.err.println("Failed to load configurations from " + configPathStr + ": " + e.getMessage());
-            return TestrigText.builder().build();
+            throw new IllegalArgumentException(
+                    "Failed to load configurations from " + configPathStr + ": " + e.getMessage(), e);
         }
     }
 }

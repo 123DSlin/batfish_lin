@@ -5,17 +5,6 @@
     "maxFailures": 1,
     "includeNoFailure": true
   },
-  "weightVariable": {
-    "name": "h",
-    "type": "INTEGER_PERCENT",
-    "minimum": 0,
-    "maximum": 100,
-    "initial": 50,
-    "upperCandidate": "upper-via-A",
-    "upperWeight": "h",
-    "lowerCandidate": "lower-via-B",
-    "lowerWeight": "100-h"
-  },
   "flows": [
     {
       "id": "x-ip-to-d",
@@ -74,7 +63,6 @@
   ],
   "property": {
     "type": "STRICT_LINK_CAPACITY",
-    "operator": "<",
-    "expectedSubspecWithinDomain": "h <= 93"
+    "operator": "<"
   }
 }

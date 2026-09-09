@@ -2168,3 +2168,109 @@ SR：MAIN 的 `selectionGuard` 对应单前缀上的 `s_r`。差距全部在 **t
   guard 分离；headend-only stack；Adj-SID source 约束。
 - 未修改 `Graph`/`Encoder`/`PropertyChecker`、`symbolicroute`、`symbolicsr`、BUILD。
 - 回退：`git revert` 本提交。
+
+## Stage 10.7 typed SR stack 与 policy 匹配（2026-09-08 17:45 CST）
+
+- 审计确认：`TrafficLabelStack` 只存 String，Adj-SID 只有第一跳能碰巧工作；首个 Adj 不 pop；空栈 IP
+  会再次套 SR；`matches` 在 flow 的 color/name 为 null 时仍命中带 color/name 的 policy；`div(0)=0`
+  已实现但未写进契约；direct NH 的链路可用只在 `g_r` 里，Adj 边原先只用 `c_p`；多 policy 取第一条；
+  空 policy/null 构造与可变内部 list 未拦；Algorithm 1 对 ω=0 仍调 `forward`。
+- `TrafficLabelStack` 改为保存 typed `SrPolicy.Segment`。Adj-SID 在 owner 上 pop，余栈带着
+  adjacency identity 传到对端；后续 Adj 不再被当成 Node-SID。
+- 弹空栈后的 IP 查找不再套 SR（`applySr=false`）。`matches`：policy 声明了 color/name 则 flow
+  必须提供相同值。`div(0)` 在构造期与求值期都是 0。Adj 边再 AND segment guard 以及同边 direct
+  RIB 的 `g_r`。同 specificity 的多 policy 命中抛歧义。空 policy / null 字段拒绝；path 与 RIB
+  列表防御拷贝。Algorithm 1 跳过 syntactically zero 的 arrival。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、`symbolicroute`、`symbolicsr`、BUILD。
+- 回退：`git revert` 本提交。
+
+## Stage 10.8 Algorithm 1 `simulate(f)` 清单 A1–A6（2026-09-08 17:50 CST）
+
+- 审计：A2 每跳独立 `M_i`、只读 `M_{i-1}`、按入边同栈求和、跳过图内 pseudo、`l_R` 仅 hop 1
+  注入，已对齐。A3 `simulateHopI` 跑满 `I`、返回 `M_I`、不求和，已对齐。A5 累计只在
+  in-flight 为零时早停，不用 `M_i=M_{i-1}` 或累计不变。A4 已排除 `l_R`/`M_0`。
+- 缺口：null flow / 源不在图里原先静默得到零矩阵；环上累计可大于 1 未写进 javadoc、未测；
+  第一跳空流量的 `_lastCompletedHops=1` 未约定；未写明只建模链路穿越、TTL 余量丢弃、空
+  `forward` 即 drop 且不会再出现。
+- 修复：`simulate`/`simulateHopI` 拒绝 null flow 与不在图中的 source；路由器集合只读快照；
+  javadoc 写明累计格子是 hop-traversal、环上可 `>1`、TTL 到期不继续传播、无 terminal-state
+  矩阵。`getLastCompletedHops`：listing 恒为 `I`；累计在第一跳为空时为 `1`。
+- 测试：null/缺源；两次 `simulate` 不共享矩阵且不改图；A↔B 环 `I=4` 累计为 2；短 DAG 的
+  `M_I=0`；sink 空 forward 不复活；第一跳空 RIB 的 hops=1。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、`symbolicroute`、`symbolicsr`、BUILD。
+  `trafficLoads` 仍未实现。
+- 回退：`git revert` 本提交。
+
+## Stage 10.9 双引擎接入主 pipeline（2026-09-08 19:50 CST）
+
+- 有 `traffic.json` 时主入口走完整链路：解析 `TrafficGraph` → 控制面 guarded RIB/SR → **两条并行
+  流量引擎**，互不替代。
+- YU 引擎：`GuardedTrafficForwarding` 把 MAIN/SR 编成 `ForwardingRule`/`SrPolicy`，Algorithm 1
+  对每条 flow 做累计 `simulate`，`trafficLoads` 编码 `τ_l = Σ V_f M_f[l,S]`，写出
+  `0_symbolic_traffic_loads.json`。显式 MPLS label 经 SID DB 还原为 typed Adj/Node-SID。
+- Tolerance/原引擎：`ConcreteTrafficExecution` 在一份 Batfish dataplane 上做 LPM/ECMP 与
+  headend SR 加权拆分，**不**构造 `M[l,S]`，写出 `0_traffic_loads.json`。Encoder SMT 仍按原
+  pipeline 跑 reachability，但 ingress/dst 改为来自 traffic flows。
+- `TrafficGraph.fromTrafficJson` 接受 `IP`/`SR_POLICY`/`SR`。未改 `Graph`/`Encoder`/
+  `PropertyChecker` 实现体。
+- 回退：`git revert` 本提交。
+
+## Stage 10.10 目的地终止与 JSON 序列化卡死（2026-09-08 20:05 CST）
+
+- `smt_tests` 60s 超时：Loopback/discard 原先被丢掉，D 上 ISIS 把流量送回，YU 跑满 TTL；写出
+  `0_symbolic_traffic_loads.json` 时 `tau.toString()` 调用 Z3 `Expr.toString()`，公式树爆炸。
+- `ForwardingRule.terminal`：本地/discard/对不上 traffic 边的接口路由仍参与 `≺`，但不写真实链路。
+- `SymbolicTrafficFraction.toString` 改为 AST 文本，不再走 Z3。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、BUILD。
+- 回退：`git revert` 本提交。
+
+## Stage 10.11 τ JSON 按 DAG 写出，禁止展开共享公式（2026-09-08 20:15 CST）
+
+- `smt_tests` 在 36s 以 `OutOfMemoryError` 失败：Stage 10.10 不再调 Z3 `Expr.toString()`，但
+  `tau.toString()` 仍把 `PLUS`/`TIMES` 当树递归拼接。Algorithm 1 累计是共享 DAG（每跳
+  `acc = acc + M_i`，备份 ISIS 在 guard 下会跑满 TTL），展开后字符串指数级，堆爆在
+  `SymbolicTrafficFraction.toString`。
+- 常量/单 guard 仍写标量；复合公式写 `{root, nodes}`，`toString()` 同样按节点 id 线性打印。
+  40 次 `acc=acc+acc` 的字符串长度有上界。`fromGuard` 把 `x ∧ ¬x` 和 `true` 吸收折成 0/1，避免
+  恒假 `s_r` 在 TTL 上堆出十万节点；DAG 超过 2048 个节点时 JSON 只保留计数。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、BUILD。
+- 回退：`git revert` 本提交。
+
+## Stage 10.12 Algorithm 1 文本报告与 SR policy txt（2026-09-08 20:50 CST）
+
+- `0_symbolic_sr_policies.txt`：与 JSON 成对的 SR forwarding-branch 表。
+- `0_traffic_graph.txt` 标明只是解析后的输入。Algorithm 1 写出
+  `0_symbolic_traffic_execution.txt`：先 `M_f[l,S]`，再 `Σ_S M_f[l,S]`，再
+  `τ_l = Σ_{f,S} V_f · M_f[l,S]`。`simulateAll()` 保留 per-flow 矩阵。TLP SMT 尚未接入。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、BUILD。
+- 回退：`git revert` 本提交。
+
+## Stage 10.13 初始 traffic.json 不含 symbolic 权重（2026-09-08 21:50 CST）
+
+- `traffic.json` 只保留 demand、链路容量、flow 与 TLP 性质类型。删除 `weightVariable`
+  （`h` / `100-h`）和 `expectedSubspecWithinDomain`。SR 权重用配置里的具体 50/50。
+  解开哪个 weight、求 `Psi(h)` 属于 Verifying TLPs / 子规约，不进 Algorithm 1 输入。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、BUILD。
+- 回退：`git revert` 本提交。
+
+## Stage 10.14 Algorithm 1 输出对齐 YU Figure 5（k-failure KREDUCE）（2026-09-08 22:10 CST）
+
+- 论文执行完是紧凑 STF：Figure 5 的 `1*x1 + 0.5*¬x1¬x2¬x3`，Figure 7c 的 `0.75y` 矩阵。先前
+  `0_symbolic_traffic_execution.txt` 对 IP 流写出 `dag(75k nodes)`，并把 2-failure 环路质量
+  累计满 TTL，与例子不符。AllUp 数值碰巧对，公式不是 YU 的输出。
+- `traffic.json` 的 `failureModel.maxFailures` 读进 `TrafficGraph`。Algorithm 1 每跳对
+  `M_i` 做 §5.2 `k`-failure 等价多项式（Möbius：`Σ_{|S|≤k} α_S Π (not x)`）。k=1 下 IP 的
+  `M[d_x]=d_x`、`M[a_x]=M[a_d]=(not d_x)`，多故障环路项变为 0，迭代在交付后停止。
+- 报告用 infix（与 Figure 5 同类），共享 hop-DAG 仍不展开。未实现 MTBDD。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、BUILD。
+- 回退：`git revert` 本提交。
+
+## Stage 10.15 回退到 smt_output_0064 输入/输出（2026-09-09 13:05 CST）
+
+- 今天 0066/0068/0070 坏掉：`traffic.json` 去掉了 `failureModel`，Algorithm 1 不再做 k=1
+  约简，IP 流又变成 `dag(75k nodes)`；测试也不再写 `0_traffic_graph.txt` /
+  `0_traffic_loads.json` / `0_symbolic_sr_policies.txt`。
+- 恢复 0064 的 `traffic.json`（含 `failureModel.maxFailures=1`）、图文本、concrete JSON、
+  SR policy txt，以及共享 DAG 不展开 infix。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker`、BUILD。
+- 回退：`git revert` 本提交。

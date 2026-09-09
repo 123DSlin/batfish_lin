@@ -232,6 +232,28 @@ public final class BatfishSymbolicRoutePipelineResult {
         .toJson();
   }
 
+  /** Human-readable SR forwarding branches, matching {@code 0_symbolic_routes.txt}. */
+  @Nonnull
+  public String toSrPolicyReadableText() {
+    return toSrPolicyReadableText(true, null);
+  }
+
+  /** Same table, restricted to SR endpoints that cover {@code destinations}. */
+  @Nonnull
+  public String toSrPolicyReadableTextForDestinations(Set<Prefix> destinations) {
+    return toSrPolicyReadableText(true, destinations);
+  }
+
+  private String toSrPolicyReadableText(boolean simplifyGuards, Set<Prefix> destinations) {
+    StringBuilder output = new StringBuilder();
+    output.append(
+        simplifyGuards
+            ? "SR POLICY FORWARDING BRANCHES\n"
+            : "SR POLICY CANDIDATES AND FORWARDING BRANCHES\n");
+    appendSrPolicyTable(output, simplifyGuards, destinations);
+    return output.toString();
+  }
+
   private String toSrPolicyJson(boolean simplifyGuards) {
     try {
       return BatfishObjectMapper.writePrettyString(getAllSrPolicyRecords(simplifyGuards));
