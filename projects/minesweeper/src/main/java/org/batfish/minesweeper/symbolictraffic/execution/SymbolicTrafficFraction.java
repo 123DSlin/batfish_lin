@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import javax.annotation.Nullable;
+import org.batfish.minesweeper.symbolicroute.AstRouteGuard;
 import org.batfish.minesweeper.symbolicroute.BooleanGuardAst;
 import org.batfish.minesweeper.symbolicroute.RouteGuard;
 
@@ -18,9 +20,10 @@ import org.batfish.minesweeper.symbolicroute.RouteGuard;
  */
 public class SymbolicTrafficFraction {
 
-  private enum Kind {
+  enum Kind {
     CONST,
     GUARD,
+    WEIGHT,
     PLUS,
     TIMES,
     DIV
@@ -35,22 +38,30 @@ public class SymbolicTrafficFraction {
   private final Kind _kind;
   private final double _const;
   private final RouteGuard _guard;
+  /** SMT {@code Config_*_weight} name; only for {@link Kind#WEIGHT}. */
+  private final String _weightVar;
+  /** Concrete cfg weight used by {@link #evaluate}; only for {@link Kind#WEIGHT}. */
+  private final int _weightPinned;
   private final SymbolicTrafficFraction _left;
   private final SymbolicTrafficFraction _right;
 
   public SymbolicTrafficFraction(double value) {
-    this(Kind.CONST, value, null, null, null);
+    this(Kind.CONST, value, null, null, 0, null, null);
   }
 
   private SymbolicTrafficFraction(
       Kind kind,
       double constant,
       RouteGuard guard,
+      String weightVar,
+      int weightPinned,
       SymbolicTrafficFraction left,
       SymbolicTrafficFraction right) {
     _kind = kind;
     _const = constant;
     _guard = guard;
+    _weightVar = weightVar;
+    _weightPinned = weightPinned;
     _left = left;
     _right = right;
   }
@@ -71,7 +82,58 @@ public class SymbolicTrafficFraction {
     if (Boolean.TRUE.equals(folded)) {
       return one();
     }
-    return new SymbolicTrafficFraction(Kind.GUARD, 0.0, guard, null, null);
+    return new SymbolicTrafficFraction(Kind.GUARD, 0.0, guard, null, 0, null, null);
+  }
+
+  /**
+   * SR candidate weight as a SpecLens {@code Config_*} atom. Evaluation / kReduce use {@code
+   * pinnedValue}; SMT encoding keeps {@code configVarName}.
+   */
+  public static SymbolicTrafficFraction weight(String configVarName, int pinnedValue) {
+    if (configVarName == null || configVarName.isEmpty()) {
+      throw new IllegalArgumentException("weight config variable cannot be empty");
+    }
+    if (pinnedValue <= 0) {
+      throw new IllegalArgumentException("pinned weight must be positive");
+    }
+    return new SymbolicTrafficFraction(
+        Kind.WEIGHT, 0.0, null, configVarName, pinnedValue, null, null);
+  }
+
+  public boolean isWeight() {
+    return _kind == Kind.WEIGHT;
+  }
+
+  @Nullable
+  public String getWeightVar() {
+    return _weightVar;
+  }
+
+  public int getWeightPinned() {
+    return _weightPinned;
+  }
+
+  Kind kind() {
+    return _kind;
+  }
+
+  double constValue() {
+    return _const;
+  }
+
+  @Nullable
+  RouteGuard guard() {
+    return _guard;
+  }
+
+  @Nullable
+  SymbolicTrafficFraction left() {
+    return _left;
+  }
+
+  @Nullable
+  SymbolicTrafficFraction right() {
+    return _right;
   }
 
   public SymbolicTrafficFraction plus(SymbolicTrafficFraction other) {
@@ -84,7 +146,7 @@ public class SymbolicTrafficFraction {
     if (_kind == Kind.CONST && other._kind == Kind.CONST) {
       return new SymbolicTrafficFraction(_const + other._const);
     }
-    return new SymbolicTrafficFraction(Kind.PLUS, 0.0, null, this, other);
+    return new SymbolicTrafficFraction(Kind.PLUS, 0.0, null, null, 0, this, other);
   }
 
   public SymbolicTrafficFraction times(SymbolicTrafficFraction other) {
@@ -100,7 +162,7 @@ public class SymbolicTrafficFraction {
     if (_kind == Kind.CONST && other._kind == Kind.CONST) {
       return new SymbolicTrafficFraction(_const * other._const);
     }
-    return new SymbolicTrafficFraction(Kind.TIMES, 0.0, null, this, other);
+    return new SymbolicTrafficFraction(Kind.TIMES, 0.0, null, null, 0, this, other);
   }
 
   public SymbolicTrafficFraction times(double scalar) {
@@ -121,7 +183,7 @@ public class SymbolicTrafficFraction {
     if (_kind == Kind.CONST && other._kind == Kind.CONST) {
       return new SymbolicTrafficFraction(_const / other._const);
     }
-    return new SymbolicTrafficFraction(Kind.DIV, 0.0, null, this, other);
+    return new SymbolicTrafficFraction(Kind.DIV, 0.0, null, null, 0, this, other);
   }
 
   public boolean isZero() {
@@ -164,7 +226,7 @@ public class SymbolicTrafficFraction {
    * hop-accumulation DAGs stay as node-id text so they are not unfolded.
    */
   public String toDisplayString(int maxNodes) {
-    if (_kind == Kind.CONST || _kind == Kind.GUARD) {
+    if (_kind == Kind.CONST || _kind == Kind.GUARD || _kind == Kind.WEIGHT) {
       return toString();
     }
     List<Map<String, Object>> nodes = new ArrayList<>();
@@ -190,7 +252,7 @@ public class SymbolicTrafficFraction {
     if (k < 0) {
       throw new IllegalArgumentException("k-failure bound cannot be negative");
     }
-    if (_kind == Kind.CONST) {
+    if (_kind == Kind.CONST || _kind == Kind.WEIGHT) {
       return this;
     }
     List<String> vars = uniqueSorted(variables);
@@ -237,6 +299,9 @@ public class SymbolicTrafficFraction {
       case GUARD:
         value = evaluateAst(_guard.getAst(), assignment) ? 1.0 : 0.0;
         break;
+      case WEIGHT:
+        value = _weightPinned;
+        break;
       case PLUS:
         value = _left.evaluate(assignment, memo) + _right.evaluate(assignment, memo);
         break;
@@ -266,11 +331,40 @@ public class SymbolicTrafficFraction {
       }
       return;
     }
+    if (_kind == Kind.WEIGHT) {
+      return;
+    }
     if (_left != null) {
       _left.collectVariables(variables, seen);
     }
     if (_right != null) {
       _right.collectVariables(variables, seen);
+    }
+  }
+
+  /** Collect {@code Config_*_weight} atoms reachable from this formula. */
+  public void collectWeights(Map<String, Integer> weights) {
+    collectWeights(weights, new IdentityHashMap<SymbolicTrafficFraction, Boolean>());
+  }
+
+  private void collectWeights(
+      Map<String, Integer> weights, IdentityHashMap<SymbolicTrafficFraction, Boolean> seen) {
+    if (seen.containsKey(this)) {
+      return;
+    }
+    seen.put(this, Boolean.TRUE);
+    if (_kind == Kind.WEIGHT) {
+      Integer previous = weights.put(_weightVar, _weightPinned);
+      if (previous != null && previous != _weightPinned) {
+        throw new IllegalStateException("conflicting pin for " + _weightVar);
+      }
+      return;
+    }
+    if (_left != null) {
+      _left.collectWeights(weights, seen);
+    }
+    if (_right != null) {
+      _right.collectWeights(weights, seen);
     }
   }
 
@@ -478,6 +572,9 @@ public class SymbolicTrafficFraction {
     if (_kind == Kind.CONST) {
       return Double.compare(_const, other._const) == 0;
     }
+    if (_kind == Kind.WEIGHT) {
+      return _weightPinned == other._weightPinned && _weightVar.equals(other._weightVar);
+    }
     return false;
   }
 
@@ -485,6 +582,9 @@ public class SymbolicTrafficFraction {
   public int hashCode() {
     if (_kind == Kind.CONST) {
       return Double.hashCode(_const);
+    }
+    if (_kind == Kind.WEIGHT) {
+      return 31 * _weightVar.hashCode() + _weightPinned;
     }
     return _kind.hashCode();
   }
@@ -504,6 +604,9 @@ public class SymbolicTrafficFraction {
       }
       if ("guard".equals(only.get("op"))) {
         return only.get("formula");
+      }
+      if ("weight".equals(only.get("op"))) {
+        return only.get("var");
       }
     }
     if (nodes.size() <= JSON_DAG_NODE_LIMIT && !hasSharedSubexpression()) {
@@ -527,6 +630,8 @@ public class SymbolicTrafficFraction {
         return Double.toString(_const);
       case GUARD:
         return formatAst(_guard.getAst());
+      case WEIGHT:
+        return _weightVar;
       case PLUS:
       case TIMES:
       case DIV:
@@ -551,6 +656,8 @@ public class SymbolicTrafficFraction {
         out.append(node.get("value"));
       } else if ("guard".equals(op)) {
         out.append(node.get("formula"));
+      } else if ("weight".equals(op)) {
+        out.append(node.get("var"));
       } else {
         out.append("(n")
             .append(node.get("left"))
@@ -583,6 +690,11 @@ public class SymbolicTrafficFraction {
       case GUARD:
         node.put("op", "guard");
         node.put("formula", formatAst(_guard.getAst()));
+        break;
+      case WEIGHT:
+        node.put("op", "weight");
+        node.put("var", _weightVar);
+        node.put("pinned", _weightPinned);
         break;
       case PLUS:
         node.put("op", "+");
@@ -781,6 +893,8 @@ public class SymbolicTrafficFraction {
         return formatConst(_const);
       case GUARD:
         return formatAst(_guard.getAst());
+      case WEIGHT:
+        return _weightVar;
       case PLUS:
         return "(" + _left.toInfix() + " + " + _right.toInfix() + ")";
       case TIMES:
@@ -797,59 +911,5 @@ public class SymbolicTrafficFraction {
       return Long.toString(Math.round(value));
     }
     return Double.toString(value);
-  }
-
-  /** AST-only guard so {@link #kReduce} does not need a Z3 context. */
-  private static final class AstRouteGuard implements RouteGuard {
-    private final BooleanGuardAst _ast;
-
-    private AstRouteGuard(BooleanGuardAst ast) {
-      _ast = ast;
-    }
-
-    @Override
-    public BooleanGuardAst getAst() {
-      return _ast;
-    }
-
-    @Override
-    public RouteGuard and(RouteGuard other) {
-      return new AstRouteGuard(BooleanGuardAst.and(_ast, other.getAst()));
-    }
-
-    @Override
-    public RouteGuard or(RouteGuard other) {
-      return new AstRouteGuard(BooleanGuardAst.or(_ast, other.getAst()));
-    }
-
-    @Override
-    public RouteGuard not() {
-      return new AstRouteGuard(BooleanGuardAst.not(_ast));
-    }
-
-    @Override
-    public RouteGuard simplify() {
-      return this;
-    }
-
-    @Override
-    public boolean isSatisfiable() {
-      return !isFalse();
-    }
-
-    @Override
-    public boolean isEquivalentTo(RouteGuard other) {
-      return _ast.equals(other.getAst());
-    }
-
-    @Override
-    public boolean isTrue() {
-      return Boolean.TRUE.equals(foldConstantAst(simplifyAst(_ast)));
-    }
-
-    @Override
-    public boolean isFalse() {
-      return Boolean.FALSE.equals(foldConstantAst(simplifyAst(_ast)));
-    }
   }
 }

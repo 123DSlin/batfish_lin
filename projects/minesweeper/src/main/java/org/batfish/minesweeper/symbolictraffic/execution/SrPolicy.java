@@ -118,6 +118,10 @@ public class SrPolicy {
       }
       return "Adj(" + _router + "->" + _peer + ")";
     }
+
+    public Segment withAvailability(@Nullable RouteGuard availability) {
+      return new Segment(_kind, _router, _peer, availability);
+    }
   }
 
   /** One weighted SR path {@code p} with guard {@code g_p} and stack {@code [R1, ..., Rj]}. */
@@ -129,13 +133,25 @@ public class SrPolicy {
 
     private final int _weight;
 
+    /** SpecLens {@code Config_*_weight}; null keeps concrete {@link #_weight} in Algorithm 1. */
+    @Nullable private final String _weightConfigVar;
+
     private final List<Segment> _segments;
 
     public Path(RouteGuard guard, int weight, List<String> nodes) {
-      this(null, guard, weight, nodeSegments(nodes));
+      this(null, guard, weight, null, nodeSegments(nodes));
     }
 
     public Path(@Nullable String id, RouteGuard guard, int weight, List<Segment> segments) {
+      this(id, guard, weight, null, segments);
+    }
+
+    public Path(
+        @Nullable String id,
+        RouteGuard guard,
+        int weight,
+        @Nullable String weightConfigVar,
+        List<Segment> segments) {
       if (guard == null) {
         throw new IllegalArgumentException("SR path guard cannot be null");
       }
@@ -153,6 +169,7 @@ public class SrPolicy {
       _id = id;
       _guard = guard;
       _weight = weight;
+      _weightConfigVar = weightConfigVar;
       _segments = Collections.unmodifiableList(new ArrayList<>(segments));
     }
 
@@ -169,6 +186,11 @@ public class SrPolicy {
       return _weight;
     }
 
+    @Nullable
+    public String getWeightConfigVar() {
+      return _weightConfigVar;
+    }
+
     public List<Segment> getSegments() {
       return _segments;
     }
@@ -179,6 +201,11 @@ public class SrPolicy {
 
     public TrafficLabelStack toStack() {
       return new TrafficLabelStack(_segments);
+    }
+
+    /** Copy with a different selection guard (AllUp collapse for traffic SMT). */
+    public Path withGuard(RouteGuard guard) {
+      return new Path(_id, guard, _weight, _weightConfigVar, _segments);
     }
 
     private static List<Segment> nodeSegments(List<String> nodes) {
@@ -256,6 +283,11 @@ public class SrPolicy {
 
   public List<Path> getPaths() {
     return _paths;
+  }
+
+  /** Copy with rewritten candidate paths (e.g. AllUp guards for traffic SMT). */
+  public SrPolicy withPaths(List<Path> paths) {
+    return new SrPolicy(_router, _endpoint, _color, _name, _matchNextHop, paths);
   }
 
   /**

@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
+import org.batfish.common.util.SymbolicUtil;
 import org.batfish.datamodel.AbstractRoute;
 import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.Configuration;
@@ -121,9 +122,17 @@ public final class GuardedTrafficForwarding {
         continue;
       }
       int weight = Math.toIntExact(candidate.getCandidate().getWeight());
+      String pathId = candidate.getKey().getCandidateName();
+      String weightConfigVar =
+          weightConfigVar(
+              candidate.getKey().getPolicyKey().getNode(),
+              candidate.getPolicyName(),
+              pathId);
       pathsByPolicy
           .computeIfAbsent(key, unused -> new ArrayList<>())
-          .add(new SrPolicy.Path(candidate.getKey().getCandidateName(), candidate.getSelectionGuard(), weight, segments));
+          .add(
+              new SrPolicy.Path(
+                  pathId, candidate.getSelectionGuard(), weight, weightConfigVar, segments));
     }
     for (Map.Entry<String, List<SrPolicy.Path>> entry : pathsByPolicy.entrySet()) {
       if (entry.getValue().isEmpty()) {
@@ -235,6 +244,21 @@ public final class GuardedTrafficForwarding {
         + candidate.getPolicyName()
         + "\u0000"
         + candidate.getKey().getPolicyKey().getColor();
+  }
+
+  /**
+   * SpecLens-compatible name: {@code Config_<host>_SrPolicy_<policy>_Path_<path>_weight}.
+   */
+  static String weightConfigVar(String host, @Nullable String policyName, @Nullable String pathId) {
+    String policy = policyName == null || policyName.isEmpty() ? "unnamed" : policyName;
+    String path = pathId == null || pathId.isEmpty() ? "path" : pathId;
+    return "Config_"
+        + SymbolicUtil.format(host)
+        + "_SrPolicy_"
+        + SymbolicUtil.format(policy)
+        + "_Path_"
+        + SymbolicUtil.format(path)
+        + "_weight";
   }
 
   private static Map<String, Map<String, SrSegmentList>> segmentLists(

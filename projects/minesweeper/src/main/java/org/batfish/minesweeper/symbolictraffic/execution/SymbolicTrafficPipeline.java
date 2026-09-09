@@ -41,13 +41,18 @@ public final class SymbolicTrafficPipeline {
     if (graph == null) {
       throw new IllegalArgumentException("traffic graph cannot be null");
     }
+    SymbolicTrafficForwarding forwarding =
+        GuardedTrafficForwarding.from(graph, controlPlane, configurations);
     SymbolicTrafficExecution.TrafficSimulation simulation =
-        new SymbolicTrafficExecution(
-                graph, GuardedTrafficForwarding.from(graph, controlPlane, configurations))
-            .simulateAll();
+        new SymbolicTrafficExecution(graph, forwarding).simulateAll();
     Map<TrafficGraphEdge, Double> concrete =
         ConcreteTrafficExecution.simulate(graph, dataPlane, configurations);
-    return new Result(graph, simulation.getLoads(), concrete, simulation.getMatrices());
+    return new Result(
+        graph,
+        simulation.getLoads(),
+        concrete,
+        simulation.getMatrices(),
+        forwarding.getSrPolicies());
   }
 
   public static final class Result {
@@ -55,12 +60,13 @@ public final class SymbolicTrafficPipeline {
     private final SymbolicTrafficLoad _yuLoads;
     private final Map<TrafficGraphEdge, Double> _concreteLoads;
     private final Map<TrafficFlow, SymbolicTrafficMatrix> _matrices;
+    private final Map<String, List<SrPolicy>> _srPolicies;
 
     Result(
         TrafficGraph graph,
         SymbolicTrafficLoad yuLoads,
         Map<TrafficGraphEdge, Double> concreteLoads) {
-      this(graph, yuLoads, concreteLoads, Collections.emptyMap());
+      this(graph, yuLoads, concreteLoads, Collections.emptyMap(), Collections.emptyMap());
     }
 
     Result(
@@ -68,10 +74,20 @@ public final class SymbolicTrafficPipeline {
         SymbolicTrafficLoad yuLoads,
         Map<TrafficGraphEdge, Double> concreteLoads,
         Map<TrafficFlow, SymbolicTrafficMatrix> matrices) {
+      this(graph, yuLoads, concreteLoads, matrices, Collections.emptyMap());
+    }
+
+    Result(
+        TrafficGraph graph,
+        SymbolicTrafficLoad yuLoads,
+        Map<TrafficGraphEdge, Double> concreteLoads,
+        Map<TrafficFlow, SymbolicTrafficMatrix> matrices,
+        Map<String, List<SrPolicy>> srPolicies) {
       _graph = graph;
       _yuLoads = yuLoads;
       _concreteLoads = concreteLoads;
       _matrices = new LinkedHashMap<>(matrices);
+      _srPolicies = srPolicies == null ? Collections.emptyMap() : new LinkedHashMap<>(srPolicies);
     }
 
     public SymbolicTrafficLoad getYuLoads() {
@@ -84,6 +100,14 @@ public final class SymbolicTrafficPipeline {
 
     public Map<TrafficFlow, SymbolicTrafficMatrix> getMatrices() {
       return Collections.unmodifiableMap(_matrices);
+    }
+
+    /**
+     * Separate AllUp traffic SMT with SpecLens {@code Config_*_weight}. Does not change YU
+     * Algorithm 1 outputs.
+     */
+    public String toTrafficSmt() {
+      return TrafficSmtEncoder.encodeAllUp(_graph, _yuLoads, _srPolicies);
     }
 
     public String toYuJson() {

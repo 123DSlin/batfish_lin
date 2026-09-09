@@ -97,6 +97,11 @@ public class ForwardingRule {
     return _terminal;
   }
 
+  public ForwardingRule withAvailability(RouteGuard availability) {
+    return new ForwardingRule(
+        _prefix, availability, _preference, _directNextHop, _indirectNextHop, _terminal);
+  }
+
   public boolean matches(Ip dstIp) {
     return _prefix.containsIp(dstIp);
   }

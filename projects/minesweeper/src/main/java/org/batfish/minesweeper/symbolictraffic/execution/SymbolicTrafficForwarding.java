@@ -55,6 +55,10 @@ class SymbolicTrafficForwarding {
     return _graph;
   }
 
+  Map<String, List<SrPolicy>> getSrPolicies() {
+    return _srPolicies;
+  }
+
   SymbolicTrafficMatrix forward(
       String router,
       TrafficFlow flow,

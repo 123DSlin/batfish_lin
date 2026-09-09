@@ -29,6 +29,7 @@ import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipeline;
 import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipelineResult;
 import org.batfish.minesweeper.symbolicroute.Z3RouteGuardFactory;
 import org.batfish.minesweeper.symbolictraffic.execution.SymbolicTrafficPipeline;
+import org.batfish.minesweeper.symbolictraffic.execution.TrafficSmtEncoder;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraph;
 import static org.batfish.minesweeper.smt.Encoder.createOutputDirectory;
 import static org.batfish.common.topology.TopologyUtil.synthesizeL3Topology;
@@ -104,7 +105,7 @@ public class SmtReachabilityTest {
 
         // read the configurations from the filesystem
         Runfiles runfiles = Runfiles.create();
-         String configPath = runfiles.rlocation("batfish/networks/tolerance_sr_te_demo_1_d_x");
+         String configPath = runfiles.rlocation("batfish/networks/tolerance_sr_te_demo");
         // String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network");
         // String configPath = runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network_hard");
@@ -215,6 +216,9 @@ public class SmtReachabilityTest {
         Files.write(
                 Paths.get(_outputDir, "0_traffic_loads.json"),
                 result.toConcreteJson().getBytes(StandardCharsets.UTF_8));
+        Files.write(
+                Paths.get(_outputDir, TrafficSmtEncoder.SMT_FILE_NAME),
+                result.toTrafficSmt().getBytes(StandardCharsets.UTF_8));
     }
 
     private Set<Prefix> readTrafficDestinations(Path trafficInput) throws IOException {

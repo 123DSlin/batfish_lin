@@ -2274,3 +2274,26 @@ SR：MAIN 的 `selectionGuard` 对应单前缀上的 `s_r`。差距全部在 **t
   SR policy txt，以及共享 DAG 不展开 infix。
 - 未修改 `Graph`/`Encoder`/`PropertyChecker`、BUILD。
 - 回退：`git revert` 本提交。
+
+## Stage 10.16 Traffic SMT encoding（`smt_traffic_encoding.smt2`）（2026-09-09 14:00 CST）
+
+- 新增与 reachability `smt_encoding.smt2` 平行的 traffic SMT，供 auto-netsubspec SpecLens
+  （跳过 1–3）unpin SR weight。
+- `SymbolicTrafficFraction.WEIGHT` + `SrPolicy.Path.weightConfigVar`：`pathShare` 保留
+  `Config_<host>_SrPolicy_<policy>_Path_<path>_weight` 原子；求值/kReduce 仍用 cfg 钉死值。
+- `TrafficSmtEncoder`：AllUp 下 Algorithm 1（`assumeAllUp` 折叠 guard）写出 declare/pin、
+  `load_*`、`load < cap`。`SymbolicTrafficPipeline` 双跑 YU（含 kReduce）与 SMT loads；
+  `SmtReachabilityTest` 写出 `smt_traffic_encoding.smt2`。
+- 未修改 `Graph`/`Encoder`/`PropertyChecker` 控制面编码。
+- 回退：`git revert` 本提交。
+
+## Stage 10.17 Traffic SMT 独立函数（不改 YU）（2026-09-09 14:20 CST）
+
+- 问题：二次 `assumeAllUp` 仿真把 RIB guard 全钉真 → ECMP/环路假负载（如 49.03），且 kReduce
+  把 weight 压成常数，SMT 里看不到 `Config_*_weight`。
+- 修复：YU Algorithm 1 / `pathShare` 恢复混凝土 weight，不改 execution.txt。新增
+  `TrafficSmtEncoder.encodeAllUp(graph, yuLoads, srPolicies)`：按 `smt_encoding.smt2` 风格
+  `declare-fun` / `(= pin)` / `>=` `<=`；AllUp 下 `load = (τ_YU−SR_pinned) + SR(Config)`；
+  Adj-SID 路径边放 `w_p/Σw`。Pipeline 只多传 policies，不再二次仿真。
+- 说明：execution.txt 里 k=1 公式（含 `not a_d` 等）是故障多项式，AllUp 列 40/20 不是环路。
+- 回退：`git revert` 本提交。
