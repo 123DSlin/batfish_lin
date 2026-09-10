@@ -93,7 +93,7 @@ public class TrafficSmtEncoderTest {
     assertThat(smt, containsString("(declare-fun " + wa));
     assertThat(smt, containsString("(assert (= " + wa + " 50))"));
     assertThat(smt, containsString("(assert (>= " + wa + " 1))"));
-    assertThat(smt, containsString("(assert (<= " + wa + " 100))"));
+    assertThat(smt, containsString("(assert (<= " + wa + " 4294967295))"));
     assertThat(smt, containsString("(to_real " + wa + ")"));
     assertThat(smt, containsString("load_a_d_a_d"));
     assertThat(smt, containsString("(assert (= load_d_x_x_d 20.0))"));

@@ -18,6 +18,15 @@ import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
  * <p>Scenario is AllUp (no failures). SR candidate shares are {@code w_p / Σ w}; IP contribution on
  * each link is {@code τ_YU(AllUp) − SR_pinned(AllUp)} so the concrete AllUp load is preserved when
  * weights stay at their cfg pins.
+ *
+ * <p>Weight domain (RFC 9256 / Batfish {@code SrCandidatePath}):
+ *
+ * <ul>
+ *   <li>Default is 1 when CLI omits weight (RFC 9256 §2.2; extractor uses {@code weight == null ?
+ *       1}).
+ *   <li>Weight 0 is invalid encoding (not “steer zero traffic”); rejected at convert time.
+ *   <li>Negative weights are not representable; SMT domain is {@code 1 .. 2^32-1}.
+ * </ul>
  */
 public final class TrafficSmtEncoder {
 
@@ -70,8 +79,9 @@ public final class TrafficSmtEncoder {
       String var = entry.getKey();
       int pin = entry.getValue();
       out.append("(assert (= ").append(var).append(' ').append(pin).append("))\n");
+      // Domain: positive uint32. RFC 9256 default=1 (omit→1); weight 0 invalid; no negatives.
       out.append("(assert (>= ").append(var).append(" 1))\n");
-      out.append("(assert (<= ").append(var).append(" 100))\n");
+      out.append("(assert (<= ").append(var).append(" 4294967295))\n");
     }
     if (!weightPins.isEmpty()) {
       out.append('\n');
@@ -175,14 +185,8 @@ public final class TrafficSmtEncoder {
         SrPolicy.Path path = paths.get(i);
         String var = configVars.get(i);
         double pinnedShare = path.getWeight() / (double) totalWeight;
-        String share =
-            "(ite (= "
-                + denom
-                + " 0.0) 0.0 (/ (to_real "
-                + var
-                + ") "
-                + denom
-                + "))";
+        // Domain w_i >= 1 ⇒ Σw >= 1; no need for (= Σ 0) ite (that produced dead w=-pin branches).
+        String share = "(/ (to_real " + var + ") " + denom + ")";
         String term = "(* " + formatReal(demand) + ' ' + share + ')';
         for (TrafficGraphEdge edge : allUpPathEdges(graph, path)) {
           srPinned.put(edge, srPinned.getOrDefault(edge, 0.0) + demand * pinnedShare);

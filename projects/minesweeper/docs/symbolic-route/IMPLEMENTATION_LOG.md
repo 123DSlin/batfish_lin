@@ -2297,3 +2297,29 @@ SR：MAIN 的 `selectionGuard` 对应单前缀上的 `s_r`。差距全部在 **t
   Adj-SID 路径边放 `w_p/Σw`。Pipeline 只多传 policies，不再二次仿真。
 - 说明：execution.txt 里 k=1 公式（含 `not a_d` 等）是故障多项式，AllUp 列 40/20 不是环路。
 - 回退：`git revert` 本提交。
+
+## Stage 10.18 SR weight 域改为正 uint32（2026-09-10 15:50 CST）
+
+- RFC 9256 不定 CLI weight 上下界（仅 weight>0；0 ⇒ invalid）。Batfish `SrCandidatePath`
+  为 `1 .. 2^32-1`。此前 traffic SMT / SpecLens 误用 `[1,100]`，会把本可压垮 a_d 的
+  via-A 误判为 `empty`。
+- 修正：`TrafficSmtEncoder`、`util_smt.get_bounds_*`、`9_traffic_subspec` 域改为
+  `1 .. 4294967295`；兼容改写旧 `<= 100`；同步 `smt_output_0065..0068` 已有编码。
+- 回退：改回上界 `100`。
+
+## Stage 10.19 SR share 去掉 Σ=0 ite；澄清 weight 语义（2026-09-10 16:05 CST）
+
+- Z3 simplify 曾出现 `(= w (- 50.0))`：来自旧 `ite (= Σw 0) 0 (/ w Σ)`，在另一 weight
+  pin=50 时被改写成 `w=-50` 死分支（域 `w≥1` 下不可达）。
+- 域已保证每条 path `w≥1` ⇒ `Σw≥1`，share 改为直接 `w/Σw`。
+- 文档/注释对齐：默认 1（RFC 9256 §2.2，extractor `weight==null?1`）；0 为无效编码；
+  禁止负数（SMT `>= 1`）。
+- 回退：恢复 Σ=0 ite。
+
+## Stage 10.20 Field weight 投影为 Int 区间（2026-09-10 16:35 CST）
+
+- `9_traffic_subspec.project_field_weight_interval`：对单 free weight 的 ψ 做 SMT 二分，
+  得到整数区间 `[lo,hi]⊆[1,2^32-1]`，主输出 `(>= w lo)` / `(<= w hi)` / `(= w k)`。
+- `field_level_subspecs.txt` 主展示区间；`raw:` 行与 `field_level_subspecs_raw.txt` /
+  JSON `subspec_raw` 保留 Z3 share 形。line-level 仍为联合 share 形（不伪造成盒子）。
+- 回退：去掉投影，仅写 raw。
