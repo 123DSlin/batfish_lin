@@ -29,7 +29,11 @@ if [[ -z "${OUTPUT_DIR}" || ! -d "${OUTPUT_DIR}" ]]; then
   exit 1
 fi
 
-for output_file in symbolic_route.txt symbolic_route_k_pruned.txt smt_encoding.smt2; do
+for output_file in \
+  symbolic_route.txt \
+  symbolic_route.json \
+  symbolic_route_k_pruned.txt \
+  smt_encoding.smt2; do
   if [[ ! -s "${OUTPUT_DIR}/${output_file}" ]]; then
     echo "Required output is missing or empty: ${OUTPUT_DIR}/${output_file}" >&2
     exit 1

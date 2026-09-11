@@ -206,6 +206,9 @@ public class SmtReachabilityTest {
           Paths.get(_outputDir, "symbolic_route.txt"),
           result.toReadableText().getBytes(StandardCharsets.UTF_8));
       Files.write(
+          Paths.get(_outputDir, "symbolic_route.json"),
+          result.toControlPlaneJson().getBytes(StandardCharsets.UTF_8));
+      Files.write(
           Paths.get(_outputDir, "symbolic_route_k_pruned.txt"),
           result.toKFailurePrunedReadableText(K).getBytes(StandardCharsets.UTF_8));
     }
