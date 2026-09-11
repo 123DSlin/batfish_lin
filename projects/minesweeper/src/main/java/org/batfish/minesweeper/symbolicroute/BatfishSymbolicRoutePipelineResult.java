@@ -89,8 +89,7 @@ public final class BatfishSymbolicRoutePipelineResult {
     _linkFailureKeysByGuardVariable =
         ImmutableMap.copyOf(
             requireNonNull(
-                linkFailureKeysByGuardVariable,
-                "linkFailureKeysByGuardVariable must be provided"));
+                linkFailureKeysByGuardVariable, "linkFailureKeysByGuardVariable must be provided"));
     ImmutableMap.Builder<String, ImmutableList<String>> vrfs = ImmutableMap.builder();
     requireNonNull(configurations, "configurations must be provided")
         .forEach(
@@ -440,6 +439,33 @@ public final class BatfishSymbolicRoutePipelineResult {
     return toReadableText(false, null);
   }
 
+  /**
+   * Produces the simplified route report after pruning branches impossible under at-most-k link
+   * failures. This operation constrains guards symbolically and does not enumerate assignments.
+   */
+  @Nonnull
+  public String toKFailurePrunedReadableText(int maximumFailures) {
+    if (maximumFailures < 0) {
+      throw new IllegalArgumentException("maximumFailures must be nonnegative");
+    }
+    StringBuilder output = new StringBuilder("SYMBOLIC ROUTING INFORMATION BASE\n");
+    output
+        .append("Branch pruning semantics: at most ")
+        .append(maximumFailures)
+        .append(" simultaneous link failures.\n");
+    output.append("\nMAIN RIB (k-pruned guarded forwarding selections)\n");
+    appendReadableTable(output, SymbolicRibRecord.Plane.MAIN, true, true, null, maximumFailures);
+    output.append("\nBGP LOC-RIB (k-pruned protocol detail)\n");
+    appendReadableTable(output, SymbolicRibRecord.Plane.BGP, true, false, null, maximumFailures);
+    output.append("\nIS-IS LEVEL-1 RIB (k-pruned protocol detail)\n");
+    appendReadableTable(
+        output, SymbolicRibRecord.Plane.ISIS_L1, true, false, null, maximumFailures);
+    output.append("\nIS-IS LEVEL-2 RIB (k-pruned protocol detail)\n");
+    appendReadableTable(
+        output, SymbolicRibRecord.Plane.ISIS_L2, true, false, null, maximumFailures);
+    return output.toString();
+  }
+
   private String toReadableText(boolean simplifyGuards, Set<Prefix> destinations) {
     StringBuilder output = new StringBuilder("SYMBOLIC ROUTING INFORMATION BASE\n");
     output.append("Guards describe route availability and final selection conditions.\n");
@@ -470,8 +496,7 @@ public final class BatfishSymbolicRoutePipelineResult {
       appendSimplifiedSrPolicyTable(output, destinations);
       return;
     }
-    String commonFormat =
-        "%-18s %-8s %-9s %-8s %-16s %-20s %-18s %-8s %-8s %-18s %-20s %-18s";
+    String commonFormat = "%-18s %-8s %-9s %-8s %-16s %-20s %-18s %-8s %-8s %-18s %-20s %-18s";
     output.append(
         String.format(
             commonFormat,
@@ -516,8 +541,7 @@ public final class BatfishSymbolicRoutePipelineResult {
   }
 
   private void appendSimplifiedSrPolicyTable(StringBuilder output, Set<Prefix> destinations) {
-    String format =
-        "%-8s %-9s %-8s %-16s %-20s %-22s %-8s %-8s %-18s %-20s %-18s %s%n";
+    String format = "%-8s %-9s %-8s %-16s %-20s %-22s %-8s %-8s %-18s %-20s %-18s %s%n";
     output.append(
         String.format(
             format,
@@ -566,6 +590,16 @@ public final class BatfishSymbolicRoutePipelineResult {
       boolean simplifyGuards,
       boolean omitNeverSelected,
       Set<Prefix> destinations) {
+    appendReadableTable(output, plane, simplifyGuards, omitNeverSelected, destinations, null);
+  }
+
+  private void appendReadableTable(
+      StringBuilder output,
+      SymbolicRibRecord.Plane plane,
+      boolean simplifyGuards,
+      boolean omitNeverSelected,
+      Set<Prefix> destinations,
+      Integer maximumFailures) {
     String pathHeader =
         plane == SymbolicRibRecord.Plane.MAIN ? "ForwardingPath" : "AdvertisementPath";
     String commonFormat = "%-8s %-9s %-18s %-10s %-8s %-5s %-10s %-16s %-18s";
@@ -602,6 +636,10 @@ public final class BatfishSymbolicRoutePipelineResult {
       if (omitNeverSelected && !route.getSelectionSatisfiable()) {
         continue;
       }
+      if (maximumFailures != null
+          && !isSelectionSatisfiableWithinFailureBudget(route, maximumFailures)) {
+        continue;
+      }
       String commonValues =
           String.format(
               commonFormat,
@@ -630,6 +668,16 @@ public final class BatfishSymbolicRoutePipelineResult {
     }
   }
 
+  private boolean isSelectionSatisfiableWithinFailureBudget(
+      SymbolicRibRecord record, int maximumFailures) {
+    RouteGuard selectionGuard = record.getSelectionGuardObject();
+    if (!(selectionGuard instanceof Z3RouteGuard)) {
+      throw new IllegalStateException("k-failure pruning requires Z3-backed route guards");
+    }
+    return ((Z3RouteGuard) selectionGuard)
+        .isSatisfiableWithAtMostFailures(_linkFailureKeysByGuardVariable.keySet(), maximumFailures);
+  }
+
   private static boolean matchesDestination(SymbolicRibRecord route, Set<Prefix> destinations) {
     if (destinations == null) {
       return true;
@@ -656,15 +704,11 @@ public final class BatfishSymbolicRoutePipelineResult {
   private static String readableNextHopNode(
       SymbolicRibRecord route, SymbolicRibRecord.Plane plane) {
     List<String> path =
-        plane == SymbolicRibRecord.Plane.MAIN
-            ? route.getForwardingPath()
-            : route.getRouterPath();
+        plane == SymbolicRibRecord.Plane.MAIN ? route.getForwardingPath() : route.getRouterPath();
     if (path.size() < 2) {
       return "null";
     }
-    return plane == SymbolicRibRecord.Plane.MAIN
-        ? path.get(1)
-        : path.get(path.size() - 2);
+    return plane == SymbolicRibRecord.Plane.MAIN ? path.get(1) : path.get(path.size() - 2);
   }
 
   private static String oneLine(String value) {

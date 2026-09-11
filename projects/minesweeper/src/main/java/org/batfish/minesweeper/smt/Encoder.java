@@ -1,5 +1,7 @@
 package org.batfish.minesweeper.smt;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.ArithExpr;
 import com.microsoft.z3.BitVecExpr;
 import com.microsoft.z3.BitVecNum;
@@ -10,11 +12,9 @@ import com.microsoft.z3.Model;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import com.microsoft.z3.Tactic;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-
 import java.io.*;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,23 +27,20 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.batfish.common.BatfishException;
+import org.batfish.common.util.SymbolicUtil;
 import org.batfish.datamodel.*;
-import org.batfish.minesweeper.CommunityVar;
-import org.batfish.minesweeper.Graph;
-import org.batfish.minesweeper.GraphEdge;
-import org.batfish.minesweeper.OspfType;
-import org.batfish.minesweeper.Protocol;
-import org.batfish.minesweeper.question.HeaderQuestion;
-import org.batfish.minesweeper.utils.MsPair;
-import org.batfish.minesweeper.utils.Tuple;
-
-import java.util.ArrayList;
-import java.util.stream.Collectors;
-import java.util.regex.Pattern;
-
+import org.batfish.datamodel.bgp.community.Community;
 import org.batfish.datamodel.routing_policy.RoutingPolicy;
+import org.batfish.datamodel.routing_policy.communities.CommunitySetDifference;
+// import org.batfish.datamodel.routing_policy.communities.LiteralCommunitySet;
+import org.batfish.datamodel.routing_policy.communities.CommunitySetReference;
+import org.batfish.datamodel.routing_policy.communities.CommunitySetUnion;
+import org.batfish.datamodel.routing_policy.communities.InputCommunities;
+import org.batfish.datamodel.routing_policy.communities.SetCommunities;
 import org.batfish.datamodel.routing_policy.expr.BooleanExpr;
 import org.batfish.datamodel.routing_policy.expr.BooleanExprs;
 import org.batfish.datamodel.routing_policy.expr.CallExpr;
@@ -53,6 +50,8 @@ import org.batfish.datamodel.routing_policy.expr.ConjunctionChain;
 import org.batfish.datamodel.routing_policy.expr.Disjunction;
 import org.batfish.datamodel.routing_policy.expr.ExplicitPrefixSet;
 import org.batfish.datamodel.routing_policy.expr.FirstMatchChain;
+import org.batfish.datamodel.routing_policy.expr.LiteralCommunity;
+import org.batfish.datamodel.routing_policy.expr.LiteralCommunitySet;
 import org.batfish.datamodel.routing_policy.expr.MatchAsPath;
 import org.batfish.datamodel.routing_policy.expr.MatchCommunitySet;
 import org.batfish.datamodel.routing_policy.expr.MatchIpv4;
@@ -65,8 +64,6 @@ import org.batfish.datamodel.routing_policy.expr.NamedPrefixSet;
 import org.batfish.datamodel.routing_policy.expr.Not;
 import org.batfish.datamodel.routing_policy.expr.PrefixSetExpr;
 import org.batfish.datamodel.routing_policy.expr.WithEnvironmentExpr;
-import org.batfish.datamodel.routing_policy.expr.LiteralCommunity;
-import org.batfish.datamodel.routing_policy.expr.LiteralCommunitySet;
 import org.batfish.datamodel.routing_policy.statement.AddCommunity;
 import org.batfish.datamodel.routing_policy.statement.DeleteCommunity;
 import org.batfish.datamodel.routing_policy.statement.If;
@@ -81,21 +78,16 @@ import org.batfish.datamodel.routing_policy.statement.SetOspfMetricType;
 import org.batfish.datamodel.routing_policy.statement.Statement;
 import org.batfish.datamodel.routing_policy.statement.Statements.StaticStatement;
 // import org.batfish.datamodel.routing_policy.communities.CommunitySetExpr;
-import org.batfish.datamodel.routing_policy.communities.SetCommunities;
-import org.batfish.datamodel.routing_policy.communities.InputCommunities;
-import org.batfish.datamodel.routing_policy.communities.CommunitySetReference;
-import org.batfish.datamodel.routing_policy.communities.CommunitySetUnion;
-import org.batfish.datamodel.routing_policy.communities.CommunitySetDifference;
-// import org.batfish.datamodel.routing_policy.communities.LiteralCommunitySet;
+import org.batfish.minesweeper.CommunityVar;
+import org.batfish.minesweeper.Graph;
+import org.batfish.minesweeper.GraphEdge;
+import org.batfish.minesweeper.OspfType;
+import org.batfish.minesweeper.Protocol;
+import org.batfish.minesweeper.question.HeaderQuestion;
+import org.batfish.minesweeper.utils.MsPair;
+import org.batfish.minesweeper.utils.Tuple;
 
-import org.batfish.datamodel.bgp.community.Community;
-
-import org.batfish.common.util.SymbolicUtil;
-
-
-/**
- * Data class to store RouteFilterList rule information for Trie matching.
- */
+/** Data class to store RouteFilterList rule information for Trie matching. */
 class RouteFilterRuleInfo {
   private final int _lineIndex;
   private final LineAction _action;
@@ -105,7 +97,11 @@ class RouteFilterRuleInfo {
   private final String _configVarLinePrefix;
 
   public RouteFilterRuleInfo(
-      int lineIndex, LineAction action, int prefixLength, int minLen, int maxLen,
+      int lineIndex,
+      LineAction action,
+      int prefixLength,
+      int minLen,
+      int maxLen,
       String configVarLinePrefix) {
     _lineIndex = lineIndex;
     _action = action;
@@ -115,12 +111,29 @@ class RouteFilterRuleInfo {
     _configVarLinePrefix = configVarLinePrefix;
   }
 
-  public int getLineIndex() { return _lineIndex; }
-  public LineAction getAction() { return _action; }
-  public int getPrefixLength() { return _prefixLength; }
-  public int getMinLen() { return _minLen; }
-  public int getMaxLen() { return _maxLen; }
-  public String getConfigVarLinePrefix() { return _configVarLinePrefix; }
+  public int getLineIndex() {
+    return _lineIndex;
+  }
+
+  public LineAction getAction() {
+    return _action;
+  }
+
+  public int getPrefixLength() {
+    return _prefixLength;
+  }
+
+  public int getMinLen() {
+    return _minLen;
+  }
+
+  public int getMaxLen() {
+    return _maxLen;
+  }
+
+  public String getConfigVarLinePrefix() {
+    return _configVarLinePrefix;
+  }
 
   @Override
   public String toString() {
@@ -137,9 +150,9 @@ class RouteFilterRuleInfo {
 
 /**
  * A custom 01-Trie (Binary Prefix Trie) for matching IP prefixes against RouteFilterList rules.
- * Each node stores a list of RouteFilterRuleInfo that are defined at that prefix.
- * Matching collects all rules along the path and returns the one with smallest lineIndex
- * that satisfies the ge/le length constraints.
+ * Each node stores a list of RouteFilterRuleInfo that are defined at that prefix. Matching collects
+ * all rules along the path and returns the one with smallest lineIndex that satisfies the ge/le
+ * length constraints.
  */
 class PrefixRuleTrie {
   private final TrieNode _root;
@@ -149,8 +162,8 @@ class PrefixRuleTrie {
   }
 
   /**
-   * Internal trie node. Uses ArrayList for rules since we iterate through all rules
-   * and order matters for collecting along the path.
+   * Internal trie node. Uses ArrayList for rules since we iterate through all rules and order
+   * matters for collecting along the path.
    */
   private static class TrieNode {
     TrieNode[] children = new TrieNode[2]; // 0 = left, 1 = right
@@ -159,6 +172,7 @@ class PrefixRuleTrie {
 
   /**
    * Insert a rule into the trie at the given prefix.
+   *
    * @param prefix The IP prefix (e.g., 10.0.0.0/8)
    * @param rule The rule info to store at this prefix
    */
@@ -181,9 +195,9 @@ class PrefixRuleTrie {
   }
 
   /**
-   * Match a query prefix against all rules in the trie.
-   * Traverses from root to the query prefix, checking each node's rules
-   * and keeping track of the best match (smallest lineIndex that satisfies ge/le).
+   * Match a query prefix against all rules in the trie. Traverses from root to the query prefix,
+   * checking each node's rules and keeping track of the best match (smallest lineIndex that
+   * satisfies ge/le).
    *
    * @param queryPrefix The prefix to match (e.g., 192.168.1.0/24)
    * @return The matching rule with smallest lineIndex, or null if no match
@@ -211,9 +225,7 @@ class PrefixRuleTrie {
     return bestMatch;
   }
 
-  /**
-   * Helper method to update best match from a list of rules.
-   */
+  /** Helper method to update best match from a list of rules. */
   private RouteFilterRuleInfo updateBestMatch(
       RouteFilterRuleInfo currentBest, ArrayList<RouteFilterRuleInfo> rules, int queryLen) {
     for (RouteFilterRuleInfo rule : rules) {
@@ -229,6 +241,7 @@ class PrefixRuleTrie {
 
   /**
    * Match a query prefix and return the count of matching rules (for debugging).
+   *
    * @param queryPrefix The prefix to match
    * @return Number of rules that match (prefix is ancestor and ge/le satisfied)
    */
@@ -254,9 +267,7 @@ class PrefixRuleTrie {
     return count;
   }
 
-  /**
-   * Helper method to count matching rules.
-   */
+  /** Helper method to count matching rules. */
   private int countMatchingRules(ArrayList<RouteFilterRuleInfo> rules, int queryLen) {
     int count = 0;
     for (RouteFilterRuleInfo rule : rules) {
@@ -283,6 +294,7 @@ class PrefixRuleTrie {
  * @author Ryan Beckett
  */
 public class Encoder {
+  public static final String OUTPUT_DIRECTORY_PROPERTY = "batfish.smt.outputDirectory";
   // enable debugging
   static final Boolean ENABLE_DEBUGGING = false;
   static final String MAIN_SLICE_NAME = "SLICE-MAIN_";
@@ -539,12 +551,13 @@ public class Encoder {
    */
   private void initSlices(HeaderSpace h, Graph g) {
     if (g.getIbgpNeighbors().isEmpty() || !_modelIgp) {
-      _slices.put(MAIN_SLICE_NAME,
-          new EncoderSlice(this, h, g, "", _unusedCfwdWriter, _historyEnumWriter));
+      _slices.put(
+          MAIN_SLICE_NAME, new EncoderSlice(this, h, g, "", _unusedCfwdWriter, _historyEnumWriter));
       // Write a flag indicating that we are NOT modeling IGP
       _modelIgpWriter.println("0");
     } else {
-      _slices.put(MAIN_SLICE_NAME,
+      _slices.put(
+          MAIN_SLICE_NAME,
           new EncoderSlice(this, h, g, MAIN_SLICE_NAME, _unusedCfwdWriter, _historyEnumWriter));
       // Write a flag indicating that we are modeling IGP
       _modelIgpWriter.println("1");
@@ -944,7 +957,8 @@ public class Encoder {
           //   }
           // }
 
-          // NOTE: modified community encoding for counterexample (BoolExpr -> BitVecExpr communities)
+          // NOTE: modified community encoding for counterexample (BoolExpr -> BitVecExpr
+          // communities)
           //       but only display exact community values in counterexample, regex community values
           //       are not displayed directly, via community dependencies indirectly
           BitVecExpr comms = r.getCommunitiesBitVec();
@@ -954,7 +968,8 @@ public class Encoder {
               throw new BatfishException("Expected BitVecNum for communities, got: " + commsExpr);
             }
             ImmutableSet<CommunityVar> commsVars =
-                SymbolicRouteBV.communitiesVars((BitVecNum) commsExpr, _graph.getAllCommunitiesIndex());
+                SymbolicRouteBV.communitiesVars(
+                    (BitVecNum) commsExpr, _graph.getAllCommunitiesIndex());
             for (CommunityVar cvar : commsVars) {
               if (displayCommunity(cvar)) {
                 String s = cvar.getRegex();
@@ -1210,7 +1225,6 @@ public class Encoder {
           "Cannot encode a network that has a static route with a dynamic next hop");
     }
 
-
     SortedSet<String> overallBestAttrs = new TreeSet<>();
 
     addFailedLinkConstraints(_question.getFailures());
@@ -1244,7 +1258,10 @@ public class Encoder {
 
   private void initOutput() {
     // _outputDirectoryName = createOutputDirectory();
-    _outputDirectoryName = searchOutputDirectory();
+    _outputDirectoryName = System.getProperty(OUTPUT_DIRECTORY_PROPERTY);
+    if (_outputDirectoryName == null) {
+      _outputDirectoryName = searchOutputDirectory();
+    }
 
     String outputSmtFileName = _outputDirectoryName + "/smt_encoding.smt2";
     String outputModelIgpName = _outputDirectoryName + "/0_model_igp.txt";
@@ -1258,7 +1275,8 @@ public class Encoder {
     String outputHistoryEnumFileName = _outputDirectoryName + "/0_overall_history_enum.txt";
     String outputPropertiesVarFileName = _outputDirectoryName + "/0_properties_variables.txt";
     String outputKeyPrefixlistFileName = _outputDirectoryName + "/0_key_prefixlists.txt";
-    String outputUnmatchedCommunitiesFileName = _outputDirectoryName + "/0_unmatched_communities.txt";
+    String outputUnmatchedCommunitiesFileName =
+        _outputDirectoryName + "/0_unmatched_communities.txt";
 
     File outputSmtFile = new File(outputSmtFileName);
     File outputModelIgpFile = new File(outputModelIgpName);
@@ -1282,12 +1300,14 @@ public class Encoder {
       _ebgpneighborWriter = new PrintWriter(new FileWriter(outputEbgpNeighborFile, true), true);
       _commsIndexWriter = new PrintWriter(new FileWriter(outputCommsIndexFile, true), true);
       _dstipsWriter = new PrintWriter(new FileWriter(outputDstipsFile, true), true);
-      _usedOverallBestWriter = new PrintWriter(new FileWriter(outputUsedOverallBestFile, true), true);
+      _usedOverallBestWriter =
+          new PrintWriter(new FileWriter(outputUsedOverallBestFile, true), true);
       _unusedCfwdWriter = new PrintWriter(new FileWriter(outputUnusedCfwdFile, true), true);
       _historyEnumWriter = new PrintWriter(new FileWriter(outputHistoryEnumFile, true), true);
       _propertiesVarWriter = new PrintWriter(new FileWriter(outputPropertiesVarFile, true), true);
       _keyPrefixlistWriter = new PrintWriter(new FileWriter(outputKeyPrefixlistFile, true), true);
-      _unmatchedCommunitiesWriter = new PrintWriter(new FileWriter(outputUnmatchedCommunitiesFile, true), true);
+      _unmatchedCommunitiesWriter =
+          new PrintWriter(new FileWriter(outputUnmatchedCommunitiesFile, true), true);
 
     } catch (IOException e) {
       System.err.println("Error: Unable to create file: " + e.getMessage());
@@ -1319,10 +1339,7 @@ public class Encoder {
       outputDirectoryName = outputDirectoryNameNew;
     }
 
-    /**
-     * Search for the latest existing output directory.
-     * Returns null if none exist.
-     */
+    /** Search for the latest existing output directory. Returns null if none exist. */
     return null;
   }
 
@@ -1475,8 +1492,18 @@ public class Encoder {
       }
 
       String ebgpNeighborPair =
-          ge.getRouter() + "," + ge.getStart().getName() + " (" + bgpConfig.getLocalAs() + ") -> " +
-          ge.getPeer() + "," + ge.getEnd().getName() + " (" + bgpConfig.getRemoteAsns() + ")";
+          ge.getRouter()
+              + ","
+              + ge.getStart().getName()
+              + " ("
+              + bgpConfig.getLocalAs()
+              + ") -> "
+              + ge.getPeer()
+              + ","
+              + ge.getEnd().getName()
+              + " ("
+              + bgpConfig.getRemoteAsns()
+              + ")";
       _ebgpneighborWriter.println(ebgpNeighborPair);
     }
     _ebgpneighborWriter.flush();
@@ -1526,10 +1553,13 @@ public class Encoder {
     Integer commIndex = enc.getGraph().getAllCommunitiesIndex().get(cvar);
     Integer commsWdith = enc.getGraph().getAllCommunitiesIndex().size();
     if (null != commIndex) {
-      communityValue = enc.getCtx().mkBV(BigInteger.ONE.shiftLeft(commIndex).toString(), commsWdith);
+      communityValue =
+          enc.getCtx().mkBV(BigInteger.ONE.shiftLeft(commIndex).toString(), commsWdith);
     } else {
-      throw new BatfishException("Encoder.initConfigurationConstantsComm: " +
-          "community not found in commsIndex: " + community.getCommunityString());
+      throw new BatfishException(
+          "Encoder.initConfigurationConstantsComm: "
+              + "community not found in commsIndex: "
+              + community.getCommunityString());
     }
     community.initSmtVariable(
         enc.getCtx(), enc.getSolver(), configVarPrefix, true, communityValue, commsWdith);
@@ -1540,7 +1570,8 @@ public class Encoder {
       String hostName = configEntry.getKey();
       Configuration config = configEntry.getValue();
 
-      for (Map.Entry<String, RouteFilterList> routeFilterListEntry : config.getRouteFilterLists().entrySet()) {
+      for (Map.Entry<String, RouteFilterList> routeFilterListEntry :
+          config.getRouteFilterLists().entrySet()) {
         String routeFilterListName = routeFilterListEntry.getKey();
         RouteFilterList routeFilterList = routeFilterListEntry.getValue();
 
@@ -1550,29 +1581,43 @@ public class Encoder {
         // }
 
         String configVarPrefix =
-                "Config_" + hostName + "_RouteFilterList_" + SymbolicUtil.format(routeFilterListName) + "_";
+            "Config_"
+                + hostName
+                + "_RouteFilterList_"
+                + SymbolicUtil.format(routeFilterListName)
+                + "_";
 
         routeFilterList.initSmtVariable(_ctx, _solver, configVarPrefix);
       }
 
       if (!_graph.getAllCommunities().isEmpty()) {
-        // if graph has no community, skip initialization of community symbolic configuration constants
-        for (Map.Entry<String, CommunityList> communityListEntry : config.getCommunityLists().entrySet()) {
+        // if graph has no community, skip initialization of community symbolic configuration
+        // constants
+        for (Map.Entry<String, CommunityList> communityListEntry :
+            config.getCommunityLists().entrySet()) {
           String communityListName = communityListEntry.getKey();
           CommunityList communityList = communityListEntry.getValue();
 
           String configVarPrefix =
-              "Config_" + hostName + "_CommunityList_" + SymbolicUtil.format(communityListName) + "_";
+              "Config_"
+                  + hostName
+                  + "_CommunityList_"
+                  + SymbolicUtil.format(communityListName)
+                  + "_";
           // NOTE: Improve SMT variable names compatibility with line numbers
           // configVarPrefix += "_Line0__";
 
           communityList.initSmtVariable(
-              _ctx, _solver, configVarPrefix,
-              _graph.getAllExactCommunitiesIndex(), _graph.getAllCommunitiesIndex().size());
+              _ctx,
+              _solver,
+              configVarPrefix,
+              _graph.getAllExactCommunitiesIndex(),
+              _graph.getAllCommunitiesIndex().size());
         }
       }
 
-      for (Map.Entry<String, RoutingPolicy> routingPolicyEntry : config.getRoutingPolicies().entrySet()) {
+      for (Map.Entry<String, RoutingPolicy> routingPolicyEntry :
+          config.getRoutingPolicies().entrySet()) {
         String policyName = routingPolicyEntry.getKey();
         RoutingPolicy routingPolicy = routingPolicyEntry.getValue();
 
@@ -1591,7 +1636,8 @@ public class Encoder {
 
       // prefixes trie-tree optimization
       // TODO: implement prefixes trie-tree main function
-      for (Map.Entry<String, RouteFilterList> routeFilterListEntry : config.getRouteFilterLists().entrySet()) {
+      for (Map.Entry<String, RouteFilterList> routeFilterListEntry :
+          config.getRouteFilterLists().entrySet()) {
         String routeFilterListName = routeFilterListEntry.getKey();
         RouteFilterList routeFilterList = routeFilterListEntry.getValue();
 
@@ -1607,11 +1653,17 @@ public class Encoder {
 
           long prefixIp = line.getIpWildcard().getIp().asLong();
           String prefixIpStr = SymbolicUtil.longToIpString(prefixIp);
-          String currConfigVarPrefix = "Config_" + hostName + "_RouteFilterList_" +
-              SymbolicUtil.format(routeFilterListName) + "__Line" + lineIndex;
+          String currConfigVarPrefix =
+              "Config_"
+                  + hostName
+                  + "_RouteFilterList_"
+                  + SymbolicUtil.format(routeFilterListName)
+                  + "__Line"
+                  + lineIndex;
 
           // Add rule info to trie (with configVarPrefix)
-          RouteFilterRuleInfo ruleInfo = new RouteFilterRuleInfo(
+          RouteFilterRuleInfo ruleInfo =
+              new RouteFilterRuleInfo(
                   lineIndex, line.getAction(), pLen, minLen, maxLen, currConfigVarPrefix);
           trie.insert(linePrefix, ruleInfo);
 
@@ -1650,8 +1702,7 @@ public class Encoder {
     printUnmatchedCommunities();
   }
 
-  private void initConfigurationConstants(
-      List<Statement> statements, String configVarPrefix) {
+  private void initConfigurationConstants(List<Statement> statements, String configVarPrefix) {
     for (Statement stmt : statements) {
       if (stmt instanceof StaticStatement) {
         // TODO: check here and implement it when needed
@@ -1703,7 +1754,8 @@ public class Encoder {
 
       } else if (stmt instanceof SetDefaultPolicy) {
         // TODO: implement me
-        {}  // do nothing
+        {
+        } // do nothing
 
       } else if (stmt instanceof SetMetric) {
         SetMetric sm = (SetMetric) stmt;
@@ -1715,7 +1767,8 @@ public class Encoder {
 
       } else if (stmt instanceof SetOspfMetricType) {
         // TODO: implement me
-        {}  // do nothing
+        {
+        } // do nothing
 
       } else if (stmt instanceof SetLocalPreference) {
         SetLocalPreference slp = (SetLocalPreference) stmt;
@@ -1723,8 +1776,8 @@ public class Encoder {
         incrementRoutingPolicyEntryLineNumber();
         String configVarPrefixUpdated =
             SymbolicUtil.configLineSuffix(configVarPrefix, _seqNumber, _lineNumber);
-        slp.initSmtVariable(_ctx, _solver,
-            configVarPrefixUpdated + "set_localpreference_" + localPreferenceValue);
+        slp.initSmtVariable(
+            _ctx, _solver, configVarPrefixUpdated + "set_localpreference_" + localPreferenceValue);
 
       } else if (stmt instanceof AddCommunity) {
         AddCommunity ac = (AddCommunity) stmt;
@@ -1737,8 +1790,12 @@ public class Encoder {
         String configVarPrefixUpdated =
             SymbolicUtil.configLineSuffix(configVarPrefix, _seqNumber, _lineNumber);
         ac.initSmtVariable(
-            _ctx, _solver, configVarPrefixUpdated + "add_community_", true,
-            _graph.getAllExactCommunitiesIndex(), _graph.getAllCommunitiesIndex().size());
+            _ctx,
+            _solver,
+            configVarPrefixUpdated + "add_community_",
+            true,
+            _graph.getAllExactCommunitiesIndex(),
+            _graph.getAllCommunitiesIndex().size());
 
         // support static analysis for more exact community subspecs
         if (communitySetExpr instanceof LiteralCommunitySet) {
@@ -1747,18 +1804,20 @@ public class Encoder {
           for (Community community : communities) {
             String communityString = SymbolicUtil.format(community.getCommunityString());
             String matchString = community.matchString();
-            String configVarName = configVarPrefix + "add_community_" + communityString + "_community";
+            String configVarName =
+                configVarPrefix + "add_community_" + communityString + "_community";
             _formattedToMatchString.put(communityString, matchString);
             _communityToConfigVars
-                    .computeIfAbsent(communityString, k -> new HashMap<>())
-                    .computeIfAbsent("ADD", k -> new HashSet<>())
-                    .add(configVarName);
+                .computeIfAbsent(communityString, k -> new HashMap<>())
+                .computeIfAbsent("ADD", k -> new HashSet<>())
+                .add(configVarName);
           }
         } else if (communitySetExpr instanceof LiteralCommunity) {
           LiteralCommunity lc = (LiteralCommunity) communitySetExpr;
           String communityString = SymbolicUtil.format(lc.getCommunity().getCommunityString());
           String matchString = lc.getCommunity().matchString();
-          String configVarName = configVarPrefix + "add_community_" + communityString + "_community";
+          String configVarName =
+              configVarPrefix + "add_community_" + communityString + "_community";
           _formattedToMatchString.put(communityString, matchString);
           _communityToConfigVars
               .computeIfAbsent(communityString, k -> new HashMap<>())
@@ -1781,8 +1840,12 @@ public class Encoder {
         String configVarPrefixUpdated =
             SymbolicUtil.configLineSuffix(configVarPrefix, _seqNumber, _lineNumber);
         sc.initSmtVariable(
-            _ctx, _solver, configVarPrefixUpdated + "set_community_", true,
-            _graph.getAllExactCommunitiesIndex(), _graph.getAllCommunitiesIndex().size());
+            _ctx,
+            _solver,
+            configVarPrefixUpdated + "set_community_",
+            true,
+            _graph.getAllExactCommunitiesIndex(),
+            _graph.getAllCommunitiesIndex().size());
         // support static analysis for more exact community subspecs
         if (communitySetExpr instanceof LiteralCommunitySet) {
           LiteralCommunitySet lcs = (LiteralCommunitySet) communitySetExpr;
@@ -1790,19 +1853,21 @@ public class Encoder {
           for (Community community : communities) {
             String communityString = SymbolicUtil.format(community.getCommunityString());
             String matchString = community.matchString();
-            String configVarName = configVarPrefixUpdated + "set_community_" + communityString + "_community";
+            String configVarName =
+                configVarPrefixUpdated + "set_community_" + communityString + "_community";
             _formattedToMatchString.put(communityString, matchString);
             _communityToConfigVars
-                    .computeIfAbsent(communityString, k -> new HashMap<>())
-                    .computeIfAbsent("SET", k -> new HashSet<>())
-                    .add(configVarName);
+                .computeIfAbsent(communityString, k -> new HashMap<>())
+                .computeIfAbsent("SET", k -> new HashSet<>())
+                .add(configVarName);
           }
         } else if (communitySetExpr instanceof LiteralCommunity) {
           LiteralCommunity lc = (LiteralCommunity) communitySetExpr;
           String communityString = SymbolicUtil.format(lc.getCommunity().getCommunityString());
           incrementRoutingPolicyEntryLineNumber();
           String matchString = lc.getCommunity().matchString();
-          String configVarName = configVarPrefixUpdated + "set_community_" + communityString + "_community";
+          String configVarName =
+              configVarPrefixUpdated + "set_community_" + communityString + "_community";
           _formattedToMatchString.put(communityString, matchString);
           _communityToConfigVars
               .computeIfAbsent(communityString, k -> new HashMap<>())
@@ -1824,8 +1889,12 @@ public class Encoder {
         String configVarPrefixUpdated =
             SymbolicUtil.configLineSuffix(configVarPrefix, _seqNumber, _lineNumber);
         dc.initSmtVariable(
-            _ctx, _solver, configVarPrefixUpdated + "delete_community_", false,
-            _graph.getAllExactCommunitiesIndex(), _graph.getAllCommunitiesIndex().size());
+            _ctx,
+            _solver,
+            configVarPrefixUpdated + "delete_community_",
+            false,
+            _graph.getAllExactCommunitiesIndex(),
+            _graph.getAllCommunitiesIndex().size());
 
       } else if (stmt instanceof PrependAsPath) {
         PrependAsPath pap = (PrependAsPath) stmt;
@@ -1836,11 +1905,13 @@ public class Encoder {
 
       } else if (stmt instanceof SetOrigin) {
         // TODO: implement me
-        {}  // do nothing
+        {
+        } // do nothing
 
       } else if (stmt instanceof SetNextHop) {
         // TODO: implement me
-        {}  // do nothing
+        {
+        } // do nothing
 
       } else if (stmt instanceof SetCommunities) {
         SetCommunities scs = (SetCommunities) stmt;
@@ -1851,20 +1922,25 @@ public class Encoder {
             SymbolicUtil.configLineSuffix(configVarPrefix, _seqNumber, _lineNumber);
         if (communitySetExpr instanceof InputCommunities) {
           // TODO: implement me
-          {}  // do nothing
+          {
+          } // do nothing
         } else if (communitySetExpr instanceof CommunitySetReference) {
           // TODO: implement me
-          {}  // do nothing
+          {
+          } // do nothing
         } else if (communitySetExpr instanceof CommunitySetUnion) {
           // TODO: implement me
-          {}  // do nothing
+          {
+          } // do nothing
         } else if (communitySetExpr instanceof CommunitySetDifference) {
           // TODO: implement me
-          {}  // do nothing
-        } else if (communitySetExpr instanceof
-            org.batfish.datamodel.routing_policy.communities.LiteralCommunitySet) {
+          {
+          } // do nothing
+        } else if (communitySetExpr
+            instanceof org.batfish.datamodel.routing_policy.communities.LiteralCommunitySet) {
           // TODO: implement me
-          {}  // do nothing
+          {
+          } // do nothing
         } else {
           String msg = String.format("Unimplemented feature %s", communitySetExpr.getClass());
           throw new BatfishException(msg);
@@ -1879,16 +1955,17 @@ public class Encoder {
     cleanRoutingPolicyEntryLineNumber();
   }
 
-  private void initConfigurationConstants(
-      BooleanExpr expr, String configVarPrefix) {
+  private void initConfigurationConstants(BooleanExpr expr, String configVarPrefix) {
     if (expr instanceof MatchIpv4) {
       // TODO: implement me
-      {}  // do nothing
+      {
+      } // do nothing
     }
 
     if (expr instanceof MatchIpv6) {
       // TODO: implement me
-      {}  // do nothing
+      {
+      } // do nothing
     }
 
     if (expr instanceof Conjunction) {
@@ -1956,16 +2033,19 @@ public class Encoder {
       // write smt symbolic variables name to configs_to_variables file
       PrefixSetExpr prefixSetExpr = mps.getPrefixSet();
       if (prefixSetExpr instanceof ExplicitPrefixSet) {
-        {}  // do nothing, call ip prefix-list / access-list in configuration
+        {
+        } // do nothing, call ip prefix-list / access-list in configuration
       } else if (prefixSetExpr instanceof NamedPrefixSet) {
-        {}  // do nothing, call ip prefix-list / access-list in configuration
+        {
+        } // do nothing, call ip prefix-list / access-list in configuration
       } else {
         throw new BatfishException("Unimplemented feature " + expr.getClass());
       }
 
     } else if (expr instanceof MatchPrefix6Set) {
       // TODO: implement me
-      {}  // do nothing
+      {
+      } // do nothing
 
     } else if (expr instanceof CallExpr) {
       // TODO: check here and implement it when needed
@@ -1982,12 +2062,14 @@ public class Encoder {
 
       // support static analysis for more exact community subspecs
       String hostName = extractHostNameFromConfigVarPrefix(configVarPrefix);
-      Configuration currentConfig = hostName != null ? _graph.getConfigurations().get(hostName) : null;
+      Configuration currentConfig =
+          hostName != null ? _graph.getConfigurations().get(hostName) : null;
 
       CommunitySetExpr communitySetExpr = mcs.getExpr();
       if (communitySetExpr instanceof NamedCommunitySet) {
         // support static analysis for more exact community subspecs
-        collectCommunitiesFromNamedCommunitySet(((NamedCommunitySet) communitySetExpr).getName(), currentConfig);
+        collectCommunitiesFromNamedCommunitySet(
+            ((NamedCommunitySet) communitySetExpr).getName(), currentConfig);
       } else if (communitySetExpr instanceof RegexCommunitySet) {
         // support static analysis for more exact community subspecs
         collectCommunitiesFromRegexCommunitySet((RegexCommunitySet) communitySetExpr);
@@ -2013,8 +2095,11 @@ public class Encoder {
       incrementRoutingPolicyEntryLineNumber();
       configVarPrefix = SymbolicUtil.configLineSuffix(configVarPrefix, _seqNumber, _lineNumber);
       mcs.initSmtVariable(
-          _ctx, _solver, configVarPrefix + "match_community_list_",
-          _graph.getAllExactCommunitiesIndex(), _graph.getAllCommunitiesIndex().size());
+          _ctx,
+          _solver,
+          configVarPrefix + "match_community_list_",
+          _graph.getAllExactCommunitiesIndex(),
+          _graph.getAllCommunitiesIndex().size());
 
     } else if (expr instanceof BooleanExprs.StaticBooleanExpr) {
       BooleanExprs.StaticBooleanExpr b = (BooleanExprs.StaticBooleanExpr) expr;
@@ -2030,14 +2115,16 @@ public class Encoder {
         default:
           // FIXME: check here and implement it when needed
           // String msg = String.format(
-          //     "Unimplemented feature %s : %s", BooleanExprs.class.getCanonicalName(), b.getType());
+          //     "Unimplemented feature %s : %s", BooleanExprs.class.getCanonicalName(),
+          // b.getType());
           // throw new BatfishException(msg);
           break;
       }
 
     } else if (expr instanceof MatchAsPath) {
       // TODO: implement me
-      {}  // do nothing
+      {
+      } // do nothing
     }
 
     // FIXME: check here and implement it when needed
@@ -2048,11 +2135,12 @@ public class Encoder {
   private void collectCommunitiesFromNamedCommunitySet(String name, Configuration currentConfig) {
     collectCommunitiesFromNamedCommunitySet(name, currentConfig, new HashSet<>());
   }
-  
-  private void collectCommunitiesFromNamedCommunitySet(String name, Configuration currentConfig, Set<String> visited) {
+
+  private void collectCommunitiesFromNamedCommunitySet(
+      String name, Configuration currentConfig, Set<String> visited) {
     if (visited.contains(name)) return;
     visited.add(name);
-  
+
     if (currentConfig != null) {
       CommunityList cl = currentConfig.getCommunityLists().get(name);
       if (cl != null) {
@@ -2060,32 +2148,42 @@ public class Encoder {
         return;
       }
     }
-  
+
     if (currentConfig != null) {
-      _warnings.add("CommunityList '" + name + "' not found in configuration '" +
-              currentConfig.getHostname() + "'");
+      _warnings.add(
+          "CommunityList '"
+              + name
+              + "' not found in configuration '"
+              + currentConfig.getHostname()
+              + "'");
     } else {
       _warnings.add("CommunityList '" + name + "' not found (currentConfig is null)");
     }
   }
 
-  /** Collect communities from a literal community set into _matchedCommunities (static analysis). */
+  /**
+   * Collect communities from a literal community set into _matchedCommunities (static analysis).
+   */
   private void collectCommunitiesFromLiteralCommunitySet(LiteralCommunitySet lcs) {
     for (Community community : lcs.getCommunities()) {
       _matchedCommunities.add(SymbolicUtil.format(community.getCommunityString()));
     }
   }
 
-  /** Collect the single community from a literal community into _matchedCommunities (static analysis). */
+  /**
+   * Collect the single community from a literal community into _matchedCommunities (static
+   * analysis).
+   */
   private void collectCommunitiesFromLiteralCommunity(LiteralCommunity lc) {
     _matchedCommunities.add(SymbolicUtil.format(lc.getCommunity().getCommunityString()));
   }
-  
+
   private void collectCommunitiesFromCommunityList(CommunityList cl, Configuration currentConfig) {
     collectCommunitiesFromCommunityList(cl, currentConfig, new HashSet<>());
   }
 
-  private void collectCommunitiesFromCommunityList(CommunityList cl, Configuration currentConfig, Set<String> visited) {
+  private void collectCommunitiesFromCommunityList(
+      CommunityList cl, Configuration currentConfig, Set<String> visited) {
     for (CommunityListLine line : cl.getLines()) {
       CommunitySetExpr expr = line.getMatchCondition();
       if (expr instanceof LiteralCommunitySet) {
@@ -2093,7 +2191,8 @@ public class Encoder {
       } else if (expr instanceof LiteralCommunity) {
         collectCommunitiesFromLiteralCommunity((LiteralCommunity) expr);
       } else if (expr instanceof NamedCommunitySet) {
-        collectCommunitiesFromNamedCommunitySet(((NamedCommunitySet) expr).getName(), currentConfig, visited);
+        collectCommunitiesFromNamedCommunitySet(
+            ((NamedCommunitySet) expr).getName(), currentConfig, visited);
       } else if (expr instanceof CommunityList) {
         collectCommunitiesFromCommunityList((CommunityList) expr, currentConfig, visited);
       } else if (expr instanceof RegexCommunitySet) {
@@ -2121,9 +2220,10 @@ public class Encoder {
       return null;
     }
     int start = "Config_".length();
-    // Prefix is built as Config_<hostname>_RouteFilterList_... or _CommunityList_... or _RoutingPolicy_...
+    // Prefix is built as Config_<hostname>_RouteFilterList_... or _CommunityList_... or
+    // _RoutingPolicy_...
     int end = -1;
-    for (String token : new String[]{"_RouteFilterList_", "_CommunityList_", "_RoutingPolicy_"}) {
+    for (String token : new String[] {"_RouteFilterList_", "_CommunityList_", "_RoutingPolicy_"}) {
       int idx = configVarPrefix.indexOf(token, start);
       if (idx > 0) {
         end = idx;

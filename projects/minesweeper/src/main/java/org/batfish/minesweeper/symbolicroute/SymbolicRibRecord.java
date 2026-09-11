@@ -37,6 +37,7 @@ public final class SymbolicRibRecord {
   @Nonnull private final String _route;
   @Nonnull private final String _availabilityGuard;
   @Nonnull private final String _selectionGuard;
+  @Nonnull private final RouteGuard _selectionGuardObject;
   private final boolean _selectionSatisfiable;
   @Nonnull private final ImmutableList<String> _contributionIds;
   @Nonnull private final ImmutableList<String> _routerPath;
@@ -56,6 +57,7 @@ public final class SymbolicRibRecord {
       String route,
       String availabilityGuard,
       String selectionGuard,
+      RouteGuard selectionGuardObject,
       boolean selectionSatisfiable,
       Iterable<String> contributionIds,
       Iterable<String> routerPath,
@@ -73,6 +75,8 @@ public final class SymbolicRibRecord {
     _route = requireNonNull(route, "route must be provided");
     _availabilityGuard = requireNonNull(availabilityGuard, "availabilityGuard must be provided");
     _selectionGuard = requireNonNull(selectionGuard, "selectionGuard must be provided");
+    _selectionGuardObject =
+        requireNonNull(selectionGuardObject, "selectionGuardObject must be provided");
     _selectionSatisfiable = selectionSatisfiable;
     _contributionIds = ImmutableList.copyOf(contributionIds);
     _routerPath = ImmutableList.copyOf(routerPath);
@@ -145,6 +149,7 @@ public final class SymbolicRibRecord {
         symbolic.getRoute().toString(),
         guardText(symbolic.getAvailabilityGuard(), simplifyGuards),
         guardText(entry.getSelectionGuard(), simplifyGuards),
+        entry.getSelectionGuard(),
         entry.getSelectionGuard().isSatisfiable(),
         contributions,
         advertisementPath,
@@ -251,6 +256,11 @@ public final class SymbolicRibRecord {
   @Nonnull
   public String getSelectionGuard() {
     return _selectionGuard;
+  }
+
+  @Nonnull
+  RouteGuard getSelectionGuardObject() {
+    return _selectionGuardObject;
   }
 
   public boolean getSelectionSatisfiable() {

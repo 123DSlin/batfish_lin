@@ -2,6 +2,7 @@ package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
 
+import com.microsoft.z3.ArithExpr;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Goal;
@@ -9,6 +10,7 @@ import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import com.microsoft.z3.Tactic;
 import java.util.Objects;
+import java.util.Set;
 import javax.annotation.Nonnull;
 
 /** A {@link RouteGuard} backed by a Z3 Boolean expression. */
@@ -89,6 +91,28 @@ public final class Z3RouteGuard implements RouteGuard {
   public boolean isSatisfiable() {
     Solver solver = _context.mkSolver();
     solver.add(_expression);
+    return solver.check() == Status.SATISFIABLE;
+  }
+
+  /**
+   * Returns whether this guard is satisfiable when at most {@code maximumFailures} link-up
+   * variables are false.
+   */
+  public boolean isSatisfiableWithAtMostFailures(Set<String> linkUpVariables, int maximumFailures) {
+    requireNonNull(linkUpVariables, "linkUpVariables must be provided");
+    if (maximumFailures < 0) {
+      throw new IllegalArgumentException("maximumFailures must be nonnegative");
+    }
+    ArithExpr failures = _context.mkInt(0);
+    for (String variable : linkUpVariables) {
+      BoolExpr linkUp = _context.mkBoolConst(requireNonNull(variable, "link variable is null"));
+      failures =
+          _context.mkAdd(
+              failures, (ArithExpr) _context.mkITE(linkUp, _context.mkInt(0), _context.mkInt(1)));
+    }
+    Solver solver = _context.mkSolver();
+    solver.add(_expression);
+    solver.add(_context.mkLe(failures, _context.mkInt(maximumFailures)));
     return solver.check() == Status.SATISFIABLE;
   }
 

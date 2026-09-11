@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.Context;
 import java.util.Comparator;
 import java.util.List;
@@ -60,6 +61,22 @@ public final class GuardedRibTest {
     assertThat(a.or(a.not()).isTrue(), equalTo(true));
     assertThat(a.and(b).isEquivalentTo(b.and(a)), equalTo(true));
     assertThat(a.and(b).isSatisfiable(), equalTo(true));
+  }
+
+  @Test
+  public void testAtMostKFailureSatisfiabilityDoesNotEnumerateAssignments() {
+    Z3RouteGuard firstUp = GUARDS.variable("first_up");
+    Z3RouteGuard secondUp = GUARDS.variable("second_up");
+    Z3RouteGuard needsTwoFailures = (Z3RouteGuard) firstUp.not().and(secondUp.not());
+
+    assertThat(
+        needsTwoFailures.isSatisfiableWithAtMostFailures(
+            ImmutableSet.of("first_up", "second_up"), 1),
+        equalTo(false));
+    assertThat(
+        needsTwoFailures.isSatisfiableWithAtMostFailures(
+            ImmutableSet.of("first_up", "second_up"), 2),
+        equalTo(true));
   }
 
   @Test
