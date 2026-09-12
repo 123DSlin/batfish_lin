@@ -398,11 +398,6 @@ class EncoderSlice {
 
     for (ArrayList<LogicalEdge> es : les) {
       for (LogicalEdge le : es) {
-        // Skip loopback interfaces
-        if (le.getEdge().getStart().getName().startsWith("Loopback")) {
-          continue;
-        }
-
         // Only consider import edges
         if (_logicalGraph.isEdgeUsed(conf, proto, le) && le.getEdgeType() == EdgeType.IMPORT) {
           eList.add(le);
@@ -1783,6 +1778,11 @@ class EncoderSlice {
       for (Protocol proto : getProtocols().get(router)) {
 
         for (LogicalEdge e : collectAllImportLogicalEdges(router, conf, proto)) {
+          // A loopback can originate a local CONNECTED route, but it is not an
+          // inter-device forwarding edge.
+          if (e.getEdge().getStart().getName().startsWith("Loopback")) {
+            continue;
+          }
 
           someEdge = true;
           constrained.add(e.getEdge());
@@ -2477,11 +2477,6 @@ class EncoderSlice {
 
             // Skip unused edges
             if (!getGraph().isEdgeUsed(conf, proto, ge)) {
-              continue;
-            }
-
-            // Skip loopback interfaces
-            if (e.getEdge().getStart().getName().startsWith("Loopback")) {
               continue;
             }
 
