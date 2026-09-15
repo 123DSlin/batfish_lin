@@ -1,6 +1,7 @@
 package org.batfish.minesweeper.symbolictraffic.execution;
 
 import static org.hamcrest.Matchers.closeTo;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThan;
@@ -107,7 +108,8 @@ public class SymbolicTrafficFractionTest {
   public void testGuardToStringUsesAstNotZ3() {
     assertThat(SymbolicTrafficFraction.fromGuard(GUARDS.variable("x")).toString(), equalTo("x"));
     assertThat(
-        SymbolicTrafficFraction.fromGuard(GUARDS.variable("a").and(GUARDS.variable("b"))).toString(),
+        SymbolicTrafficFraction.fromGuard(GUARDS.variable("a").and(GUARDS.variable("b")))
+            .toString(),
         equalTo("(a and b)"));
   }
 
@@ -161,10 +163,13 @@ public class SymbolicTrafficFractionTest {
     SymbolicTrafficFraction x1 = SymbolicTrafficFraction.fromGuard(GUARDS.variable("x1"));
     SymbolicTrafficFraction nots =
         SymbolicTrafficFraction.fromGuard(
-            GUARDS.variable("x1").not().and(GUARDS.variable("x2").not()).and(GUARDS.variable("x3").not()));
+            GUARDS
+                .variable("x1")
+                .not()
+                .and(GUARDS.variable("x2").not())
+                .and(GUARDS.variable("x3").not()));
     SymbolicTrafficFraction figure5 = x1.plus(new SymbolicTrafficFraction(0.5).times(nots));
-    SymbolicTrafficFraction reduced =
-        figure5.kReduce(1, java.util.Arrays.asList("x1", "x2", "x3"));
+    SymbolicTrafficFraction reduced = figure5.kReduce(1, java.util.Arrays.asList("x1", "x2", "x3"));
     Map<String, Boolean> allUp = new HashMap<>();
     allUp.put("x1", true);
     allUp.put("x2", true);
@@ -179,5 +184,19 @@ public class SymbolicTrafficFractionTest {
     assertThat(figure5.evaluate(allUp), closeTo(reduced.evaluate(allUp), 1e-9));
     assertThat(figure5.evaluate(x1Down), closeTo(reduced.evaluate(x1Down), 1e-9));
     assertThat(figure5.evaluate(x2Down), closeTo(reduced.evaluate(x2Down), 1e-9));
+  }
+
+  @Test
+  public void testKReducePreservesSymbolicWeightExpressions() {
+    SymbolicTrafficFraction x = SymbolicTrafficFraction.fromGuard(GUARDS.variable("x"));
+    SymbolicTrafficFraction w1 = SymbolicTrafficFraction.weight("Config_p1_weight", 1);
+    SymbolicTrafficFraction w2 = SymbolicTrafficFraction.weight("Config_p2_weight", 3);
+    SymbolicTrafficFraction value = x.times(w1.div(w1.plus(w2)));
+    SymbolicTrafficFraction reduced = value.kReduce(1, java.util.Collections.singletonList("x"));
+    Map<String, Integer> weights = new java.util.TreeMap<>();
+    reduced.collectWeights(weights);
+    assertThat(weights.size(), equalTo(2));
+    assertThat(reduced.evaluateAllUp(), closeTo(0.25, 1e-9));
+    assertThat(reduced.toSmtReal(), containsString("Config_p1_weight"));
   }
 }

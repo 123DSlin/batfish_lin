@@ -102,12 +102,9 @@ public final class SymbolicTrafficPipeline {
       return Collections.unmodifiableMap(_matrices);
     }
 
-    /**
-     * Separate AllUp traffic SMT with SpecLens {@code Config_*_weight}. Does not change YU
-     * Algorithm 1 outputs.
-     */
+    /** Symbolic traffic SMT serialized directly from Algorithm 1's {@code tau_l}. */
     public String toTrafficSmt() {
-      return TrafficSmtEncoder.encodeAllUp(_graph, _yuLoads, _srPolicies);
+      return TrafficSmtEncoder.encodeSymbolic(_graph, _yuLoads);
     }
 
     public String toYuJson() {

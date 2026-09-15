@@ -33,14 +33,21 @@ public final class RouteIterationEncoding {
 
   public static SymbolicTrafficFraction pathShare(SrPolicy.Path path, List<SrPolicy.Path> paths) {
     SymbolicTrafficFraction numerator =
-        SymbolicTrafficFraction.fromGuard(path.getGuard()).times(path.getWeight());
+        SymbolicTrafficFraction.fromGuard(path.getGuard()).times(pathWeight(path));
     SymbolicTrafficFraction denominator = SymbolicTrafficFraction.zero();
     for (SrPolicy.Path other : paths) {
       denominator =
           denominator.plus(
-              SymbolicTrafficFraction.fromGuard(other.getGuard()).times(other.getWeight()));
+              SymbolicTrafficFraction.fromGuard(other.getGuard()).times(pathWeight(other)));
     }
     return numerator.div(denominator);
+  }
+
+  private static SymbolicTrafficFraction pathWeight(SrPolicy.Path path) {
+    String configVar = path.getWeightConfigVar();
+    return configVar == null || configVar.isEmpty()
+        ? new SymbolicTrafficFraction(path.getWeight())
+        : SymbolicTrafficFraction.weight(configVar, path.getWeight());
   }
 
   public static Map<TrafficGraphEdge, SymbolicTrafficFraction> vsr(

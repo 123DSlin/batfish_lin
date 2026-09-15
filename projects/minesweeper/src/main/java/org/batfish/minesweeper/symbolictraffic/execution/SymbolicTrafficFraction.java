@@ -42,6 +42,7 @@ public class SymbolicTrafficFraction {
   private final String _weightVar;
   /** Concrete cfg weight used by {@link #evaluate}; only for {@link Kind#WEIGHT}. */
   private final int _weightPinned;
+
   private final SymbolicTrafficFraction _left;
   private final SymbolicTrafficFraction _right;
 
@@ -86,8 +87,8 @@ public class SymbolicTrafficFraction {
   }
 
   /**
-   * SR candidate weight as a SpecLens {@code Config_*} atom. Evaluation / kReduce use {@code
-   * pinnedValue}; SMT encoding keeps {@code configVarName}.
+   * SR candidate weight as a SpecLens {@code Config_*} atom. Concrete evaluation uses {@code
+   * pinnedValue}; kReduce and SMT encoding preserve {@code configVarName}.
    */
   public static SymbolicTrafficFraction weight(String configVarName, int pinnedValue) {
     if (configVarName == null || configVarName.isEmpty()) {
@@ -210,6 +211,75 @@ public class SymbolicTrafficFraction {
     return evaluate(assignment, new IdentityHashMap<SymbolicTrafficFraction, Double>());
   }
 
+  /** Guard variables referenced by this arithmetic/Boolean expression. */
+  public Set<String> getGuardVariables() {
+    Map<String, Boolean> variables = new LinkedHashMap<>();
+    collectVariables(variables, new IdentityHashMap<SymbolicTrafficFraction, Boolean>());
+    return new TreeSet<>(variables.keySet());
+  }
+
+  /** Serialize this expression as an SMT-LIB Real expression. */
+  public String toSmtReal() {
+    if (_kind == Kind.CONST || _kind == Kind.GUARD || _kind == Kind.WEIGHT) {
+      return smtNode(new IdentityHashMap<SymbolicTrafficFraction, Integer>());
+    }
+    List<SymbolicTrafficFraction> nodes = new ArrayList<>();
+    IdentityHashMap<SymbolicTrafficFraction, Integer> ids = new IdentityHashMap<>();
+    int root = collectExpressionDag(ids, nodes);
+    StringBuilder out = new StringBuilder();
+    for (int i = 0; i < nodes.size(); i++) {
+      out.append("(let ((tf").append(i).append(' ').append(nodes.get(i).smtNode(ids)).append(")) ");
+    }
+    out.append("tf").append(root);
+    for (int i = 0; i < nodes.size(); i++) {
+      out.append(')');
+    }
+    return out.toString();
+  }
+
+  private int collectExpressionDag(
+      IdentityHashMap<SymbolicTrafficFraction, Integer> ids, List<SymbolicTrafficFraction> nodes) {
+    Integer existing = ids.get(this);
+    if (existing != null) {
+      return existing;
+    }
+    if (_left != null) {
+      _left.collectExpressionDag(ids, nodes);
+    }
+    if (_right != null) {
+      _right.collectExpressionDag(ids, nodes);
+    }
+    int id = nodes.size();
+    ids.put(this, id);
+    nodes.add(this);
+    return id;
+  }
+
+  private String smtNode(IdentityHashMap<SymbolicTrafficFraction, Integer> ids) {
+    switch (_kind) {
+      case CONST:
+        return formatSmtReal(_const);
+      case GUARD:
+        return "(ite " + formatAstSmt(_guard.getAst()) + " 1.0 0.0)";
+      case WEIGHT:
+        return "(to_real " + _weightVar + ")";
+      case PLUS:
+        return "(+ tf" + ids.get(_left) + " tf" + ids.get(_right) + ")";
+      case TIMES:
+        return "(* tf" + ids.get(_left) + " tf" + ids.get(_right) + ")";
+      case DIV:
+        return "(ite (= tf"
+            + ids.get(_right)
+            + " 0.0) 0.0 (/ tf"
+            + ids.get(_left)
+            + " tf"
+            + ids.get(_right)
+            + "))";
+      default:
+        throw new IllegalStateException("unsupported traffic-fraction kind");
+    }
+  }
+
   /** Evaluate with every referenced guard variable set to true (the no-failure assignment). */
   public double evaluateAllUp() {
     Map<String, Boolean> assignment = new LinkedHashMap<>();
@@ -222,8 +292,8 @@ public class SymbolicTrafficFraction {
 
   /**
    * Human-readable formula. Constants and single guards stay infix. After {@link #kReduce}, the
-   * polynomial is a small tree and is printed like YU Figure 5 ({@code 1*x1 + 0.5*(not x2)}). Shared
-   * hop-accumulation DAGs stay as node-id text so they are not unfolded.
+   * polynomial is a small tree and is printed like YU Figure 5 ({@code 1*x1 + 0.5*(not x2)}).
+   * Shared hop-accumulation DAGs stay as node-id text so they are not unfolded.
    */
   public String toDisplayString(int maxNodes) {
     if (_kind == Kind.CONST || _kind == Kind.GUARD || _kind == Kind.WEIGHT) {
@@ -255,6 +325,9 @@ public class SymbolicTrafficFraction {
     if (_kind == Kind.CONST || _kind == Kind.WEIGHT) {
       return this;
     }
+    if (containsWeight(new IdentityHashMap<SymbolicTrafficFraction, Boolean>())) {
+      return kReduceSymbolic(k, variables);
+    }
     List<String> vars = uniqueSorted(variables);
     if (vars.size() > KREDUCE_MAX_VARS) {
       return this;
@@ -283,6 +356,99 @@ public class SymbolicTrafficFraction {
       }
     }
     return polynomial(alpha, vars);
+  }
+
+  private SymbolicTrafficFraction kReduceSymbolic(int k, Collection<String> variables) {
+    List<String> vars = uniqueSorted(variables);
+    if (vars.size() > KREDUCE_MAX_VARS) {
+      return this;
+    }
+    int maxSize = Math.min(k, vars.size());
+    List<Long> masks = new ArrayList<>();
+    for (int size = 0; size <= maxSize; size++) {
+      collectMasks(vars.size(), size, masks);
+    }
+    Map<Long, SymbolicTrafficFraction> alpha = new LinkedHashMap<>();
+    for (long mask : masks) {
+      SymbolicTrafficFraction coefficient = substituteMask(mask, vars);
+      for (Map.Entry<Long, SymbolicTrafficFraction> previous : alpha.entrySet()) {
+        if ((previous.getKey() & mask) == previous.getKey()) {
+          coefficient = coefficient.plus(previous.getValue().times(-1.0));
+        }
+      }
+      alpha.put(mask, coefficient);
+    }
+    SymbolicTrafficFraction result = zero();
+    for (Map.Entry<Long, SymbolicTrafficFraction> entry : alpha.entrySet()) {
+      SymbolicTrafficFraction term = entry.getValue();
+      for (int i = 0; i < vars.size(); i++) {
+        if ((entry.getKey() & (1L << i)) != 0L) {
+          term = term.times(fromAst(BooleanGuardAst.not(BooleanGuardAst.variable(vars.get(i)))));
+        }
+      }
+      result = result.plus(term);
+    }
+    return result;
+  }
+
+  private SymbolicTrafficFraction substituteMask(long mask, List<String> vars) {
+    Map<String, Boolean> assignment = new LinkedHashMap<>();
+    for (int i = 0; i < vars.size(); i++) {
+      assignment.put(vars.get(i), (mask & (1L << i)) == 0L);
+    }
+    for (String variable : getGuardVariables()) {
+      assignment.putIfAbsent(variable, Boolean.TRUE);
+    }
+    return substituteGuards(
+        assignment, new IdentityHashMap<SymbolicTrafficFraction, SymbolicTrafficFraction>());
+  }
+
+  private SymbolicTrafficFraction substituteGuards(
+      Map<String, Boolean> assignment,
+      IdentityHashMap<SymbolicTrafficFraction, SymbolicTrafficFraction> memo) {
+    SymbolicTrafficFraction cached = memo.get(this);
+    if (cached != null) {
+      return cached;
+    }
+    SymbolicTrafficFraction value;
+    switch (_kind) {
+      case CONST:
+      case WEIGHT:
+        value = this;
+        break;
+      case GUARD:
+        value = evaluateAst(_guard.getAst(), assignment) ? one() : zero();
+        break;
+      case PLUS:
+        value =
+            _left
+                .substituteGuards(assignment, memo)
+                .plus(_right.substituteGuards(assignment, memo));
+        break;
+      case TIMES:
+        value =
+            _left
+                .substituteGuards(assignment, memo)
+                .times(_right.substituteGuards(assignment, memo));
+        break;
+      case DIV:
+        value =
+            _left.substituteGuards(assignment, memo).div(_right.substituteGuards(assignment, memo));
+        break;
+      default:
+        throw new IllegalStateException("unsupported traffic-fraction kind");
+    }
+    memo.put(this, value);
+    return value;
+  }
+
+  private boolean containsWeight(IdentityHashMap<SymbolicTrafficFraction, Boolean> seen) {
+    if (seen.put(this, Boolean.TRUE) != null) {
+      return false;
+    }
+    return _kind == Kind.WEIGHT
+        || (_left != null && _left.containsWeight(seen))
+        || (_right != null && _right.containsWeight(seen));
   }
 
   private double evaluate(
@@ -825,7 +991,8 @@ public class SymbolicTrafficFraction {
     if (alpha.size() == 1) {
       Map.Entry<Long, Double> only = alpha.entrySet().iterator().next();
       if (Long.bitCount(only.getKey()) == 1 && Math.abs(only.getValue() - 1.0) <= KREDUCE_EPS) {
-        return fromAst(BooleanGuardAst.not(BooleanGuardAst.variable(vars.get(bitIndex(only.getKey())))));
+        return fromAst(
+            BooleanGuardAst.not(BooleanGuardAst.variable(vars.get(bitIndex(only.getKey())))));
       }
     }
     if (alpha.size() == 2 && empty != null && Math.abs(empty - 1.0) <= KREDUCE_EPS) {
@@ -843,8 +1010,7 @@ public class SymbolicTrafficFraction {
       long mask = entry.getKey();
       for (int i = 0; i < vars.size(); i++) {
         if ((mask & (1L << i)) != 0L) {
-          term =
-              term.times(fromAst(BooleanGuardAst.not(BooleanGuardAst.variable(vars.get(i)))));
+          term = term.times(fromAst(BooleanGuardAst.not(BooleanGuardAst.variable(vars.get(i)))));
         }
       }
       result = result.plus(term);
@@ -911,5 +1077,41 @@ public class SymbolicTrafficFraction {
       return Long.toString(Math.round(value));
     }
     return Double.toString(value);
+  }
+
+  private static String formatSmtReal(double value) {
+    if (Double.isNaN(value) || Double.isInfinite(value)) {
+      throw new IllegalArgumentException("non-finite SMT real");
+    }
+    if (value < 0.0) {
+      return "(- " + formatSmtReal(-value) + ")";
+    }
+    if (value == Math.rint(value)) {
+      return Long.toString(Math.round(value)) + ".0";
+    }
+    return Double.toString(value);
+  }
+
+  private static String formatAstSmt(BooleanGuardAst ast) {
+    switch (ast.getOperator()) {
+      case TRUE:
+        return "true";
+      case FALSE:
+        return "false";
+      case VARIABLE:
+        return ast.getVariableId();
+      case NOT:
+        return "(not " + formatAstSmt(ast.getChildren().get(0)) + ")";
+      case AND:
+      case OR:
+        StringBuilder out = new StringBuilder("(");
+        out.append(ast.getOperator() == BooleanGuardAst.Operator.AND ? "and" : "or");
+        for (BooleanGuardAst child : ast.getChildren()) {
+          out.append(' ').append(formatAstSmt(child));
+        }
+        return out.append(')').toString();
+      default:
+        throw new IllegalArgumentException("unsupported guard operator");
+    }
   }
 }
