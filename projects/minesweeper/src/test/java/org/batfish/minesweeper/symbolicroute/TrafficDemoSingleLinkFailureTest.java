@@ -38,47 +38,53 @@ import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Concrete-oracle validation for every zero/single-link failure in {@code traffic_demo}. */
+/** Concrete MAIN-RIB oracle for every zero/single-link failure in the parsed SR-TE demo. */
 @RunWith(JUnit4.class)
 public final class TrafficDemoSingleLinkFailureTest {
   private static final String NETWORKS = "networks/";
   private static final ImmutableList<String> CONFIG_FILES =
-      ImmutableList.of("r1.cfg", "r2.cfg", "r3.cfg", "r4.cfg");
+      ImmutableList.of("A.cfg", "B.cfg", "D.cfg", "S.cfg", "X.cfg");
   private static final ImmutableList<LinkFailureKey> LINKS =
       ImmutableList.of(
-          LinkFailureKey.of("r1", "r2"),
-          LinkFailureKey.of("r1", "r3"),
-          LinkFailureKey.of("r1", "r4"),
-          LinkFailureKey.of("r2", "r3"),
-          LinkFailureKey.of("r3", "r4"));
+          LinkFailureKey.of("a", "d"),
+          LinkFailureKey.of("a", "s"),
+          LinkFailureKey.of("a", "x"),
+          LinkFailureKey.of("b", "d"),
+          LinkFailureKey.of("b", "s"),
+          LinkFailureKey.of("d", "x"));
   private static final ImmutableList<FailureScenario> SCENARIOS =
       ImmutableList.of(
-          new FailureScenario("all_links_up", "traffic_demo", null, ImmutableMap.of()),
+          new FailureScenario("all_links_up", "tolerance_sr_te_demo", null, ImmutableMap.of()),
           new FailureScenario(
-              "r1_r2_down",
-              "traffic_demo_1_r1_r2",
-              LinkFailureKey.of("r1", "r2"),
-              ImmutableMap.of("r1", "GigabitEthernet0/0", "r2", "GigabitEthernet0/0")),
+              "a_d_down",
+              "tolerance_sr_te_demo_1_a_d",
+              LinkFailureKey.of("a", "d"),
+              ImmutableMap.of("a", "GigabitEthernet0/1", "d", "GigabitEthernet0/1")),
           new FailureScenario(
-              "r1_r3_down",
-              "traffic_demo_1_r1_r3",
-              LinkFailureKey.of("r1", "r3"),
-              ImmutableMap.of("r1", "GigabitEthernet1/0", "r3", "GigabitEthernet0/0")),
+              "a_s_down",
+              "tolerance_sr_te_demo_1_a_s",
+              LinkFailureKey.of("a", "s"),
+              ImmutableMap.of("a", "GigabitEthernet0/2", "s", "GigabitEthernet0/0")),
           new FailureScenario(
-              "r1_r4_down",
-              "traffic_demo_1_r1_r4",
-              LinkFailureKey.of("r1", "r4"),
-              ImmutableMap.of("r1", "GigabitEthernet2/0", "r4", "GigabitEthernet0/0")),
+              "a_x_down",
+              "tolerance_sr_te_demo_1_a_x",
+              LinkFailureKey.of("a", "x"),
+              ImmutableMap.of("a", "GigabitEthernet0/0", "x", "GigabitEthernet0/1")),
           new FailureScenario(
-              "r2_r3_down",
-              "traffic_demo_1_r2_r3",
-              LinkFailureKey.of("r2", "r3"),
-              ImmutableMap.of("r2", "GigabitEthernet1/0", "r3", "GigabitEthernet1/0")),
+              "b_d_down",
+              "tolerance_sr_te_demo_1_b_d",
+              LinkFailureKey.of("b", "d"),
+              ImmutableMap.of("b", "GigabitEthernet0/1", "d", "GigabitEthernet0/2")),
           new FailureScenario(
-              "r3_r4_down",
-              "traffic_demo_1_r3_r4",
-              LinkFailureKey.of("r3", "r4"),
-              ImmutableMap.of("r3", "GigabitEthernet2/0", "r4", "GigabitEthernet1/0")));
+              "b_s_down",
+              "tolerance_sr_te_demo_1_b_s",
+              LinkFailureKey.of("b", "s"),
+              ImmutableMap.of("b", "GigabitEthernet0/0", "s", "GigabitEthernet0/1")),
+          new FailureScenario(
+              "d_x_down",
+              "tolerance_sr_te_demo_1_d_x",
+              LinkFailureKey.of("d", "x"),
+              ImmutableMap.of("d", "GigabitEthernet0/0", "x", "GigabitEthernet0/0")));
 
   @Rule public TemporaryFolder _folder = new TemporaryFolder();
 
@@ -86,12 +92,14 @@ public final class TrafficDemoSingleLinkFailureTest {
   public void testEveryZeroAndSingleLinkFailureAgainstConcreteDataplane() throws IOException {
     try (Context context = new Context()) {
       Z3RouteGuardFactory guards = new Z3RouteGuardFactory(context);
-      Snapshot base = loadSnapshot("traffic_demo");
+      Snapshot base = loadSnapshot("tolerance_sr_te_demo");
       BatfishSymbolicRoutePipelineResult symbolic = runSymbolicPipeline(base, guards);
 
       for (FailureScenario scenario : SCENARIOS) {
         Snapshot concrete =
-            scenario._directory.equals("traffic_demo") ? base : loadSnapshot(scenario._directory);
+            scenario._directory.equals("tolerance_sr_te_demo")
+                ? base
+                : loadSnapshot(scenario._directory);
         assertFailedInterfacesInactive(scenario, concrete._configurations);
         RouteGuard assignment = exactAssignment(guards, scenario._failedLink);
         Map<String, Set<AbstractRoute>> selected = selectedMainRoutes(symbolic, assignment);
@@ -200,7 +208,8 @@ public final class TrafficDemoSingleLinkFailureTest {
     if (outputRoot == null) {
       return;
     }
-    Path outputDirectory = Paths.get(outputRoot, "traffic_demo_failure_validation", scenario._name);
+    Path outputDirectory =
+        Paths.get(outputRoot, "tolerance_sr_te_failure_validation", scenario._name);
     Files.createDirectories(outputDirectory);
     AnswerElement routes =
         new RoutesAnswerer(new RoutesQuestion(), concrete._batfish)
