@@ -4,7 +4,9 @@ import static java.util.Objects.requireNonNull;
 import static org.batfish.datamodel.RoutingProtocol.ISIS_L2;
 import static org.batfish.dataplane.protocols.IsisProtocolHelper.convertRouteLevel1ToLevel2;
 
+import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,7 +80,12 @@ public final class BatfishIsisLevelTransitionReconciler {
 
   @Nonnull private final Map<String, Configuration> _configurations;
   @Nonnull private final SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> _l1Network;
-  @Nonnull private final SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> _l2Network;
+  @Nonnull private final SymbolicIsisSpfSolver.StableState _l1StableState;
+  @Nonnull private final SymbolicIsisSpfSolver.StableState _l2StableState;
+
+  @Nonnull
+  private final ImmutableList<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> _nativeL2Origins;
+
   @Nonnull private final Map<TransitionKey, String> _messageIds;
   @Nonnull private final Map<TransitionKey, ActiveTransition> _active;
   @Nonnull private SymbolicRouteConvergenceResult _lastConvergence;
@@ -86,10 +93,14 @@ public final class BatfishIsisLevelTransitionReconciler {
   public BatfishIsisLevelTransitionReconciler(
       Map<String, Configuration> configurations,
       SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> l1Network,
-      SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> l2Network) {
+      SymbolicIsisSpfSolver.StableState l1StableState,
+      SymbolicIsisSpfSolver.StableState l2StableState,
+      Collection<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> nativeL2Origins) {
     _configurations = requireNonNull(configurations, "configurations must be provided");
     _l1Network = requireNonNull(l1Network, "l1Network must be provided");
-    _l2Network = requireNonNull(l2Network, "l2Network must be provided");
+    _l1StableState = requireNonNull(l1StableState, "l1StableState must be provided");
+    _l2StableState = requireNonNull(l2StableState, "l2StableState must be provided");
+    _nativeL2Origins = ImmutableList.copyOf(nativeL2Origins);
     _messageIds = new LinkedHashMap<>();
     _active = new LinkedHashMap<>();
     _lastConvergence = new SymbolicRouteConvergenceResult(0, 0, 0);
@@ -99,19 +110,30 @@ public final class BatfishIsisLevelTransitionReconciler {
   @Nonnull
   public SymbolicRouteConvergenceResult reconcile() {
     Map<TransitionKey, DesiredTransition> desired = computeDesiredTransitions();
-    List<SymbolicRouteContributionId> withdrawals = new ArrayList<>();
-    for (Map.Entry<TransitionKey, ActiveTransition> active : _active.entrySet()) {
-      DesiredTransition next = desired.get(active.getKey());
-      if (next == null || !active.getValue()._route.equals(next._route)) {
-        withdrawals.add(active.getValue()._contributionId);
+    boolean changed = desired.size() != _active.size();
+    if (!changed) {
+      for (Map.Entry<TransitionKey, DesiredTransition> entry : desired.entrySet()) {
+        ActiveTransition previous = _active.get(entry.getKey());
+        if (previous == null
+            || !previous._route.equals(entry.getValue()._route)
+            || !previous._guard.isEquivalentTo(entry.getValue()._guard)) {
+          changed = true;
+          break;
+        }
       }
     }
-    SymbolicRouteConvergenceResult withdrawalResult =
-        withdrawals.isEmpty()
-            ? new SymbolicRouteConvergenceResult(0, 0, 0)
-            : _l2Network.getEngine().withdraw(withdrawals);
-
-    List<SymbolicRouteMessage<AnnotatedRoute<IsisRoute>>> advertisements = new ArrayList<>();
+    if (!changed) {
+      return _lastConvergence;
+    }
+    int removedTransitions = 0;
+    for (Map.Entry<TransitionKey, ActiveTransition> entry : _active.entrySet()) {
+      DesiredTransition next = desired.get(entry.getKey());
+      if (next == null || !entry.getValue()._route.equals(next._route)) {
+        removedTransitions++;
+      }
+    }
+    List<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> origins = new ArrayList<>(_nativeL2Origins);
+    Map<String, SymbolicIsisSpfSolver.MetricExpression> inheritedMetrics = new LinkedHashMap<>();
     Map<TransitionKey, ActiveTransition> nextActive = new LinkedHashMap<>();
     for (Map.Entry<TransitionKey, DesiredTransition> desiredEntry : desired.entrySet()) {
       TransitionKey sourceKey = desiredEntry.getKey();
@@ -123,33 +145,30 @@ public final class BatfishIsisLevelTransitionReconciler {
       SymbolicRouteContributionId contributionId =
           new SymbolicRouteContributionId(
               messageId, sourceKey._routeKey.getRouter(), sourceKey._routeKey.getRouter());
-      if (previous == null
-          || !previous._route.equals(next._route)
-          || !previous._guard.isEquivalentTo(next._guard)) {
-        advertisements.add(
-            new SymbolicRouteMessage<>(
-                messageId,
-                sourceKey._routeKey.getRouter(),
-                sourceKey._routeKey.getRouter(),
-                SymbolicRouteMessage.Stage.INGRESS,
-                next._route,
-                next._guard,
-                next._provenance));
-      }
+      origins.add(
+          new SymbolicRouteSeed<>(
+              messageId, sourceKey._routeKey.getRouter(), next._route, next._guard));
+      inheritedMetrics.put(
+          messageId,
+          _l1StableState
+              .getMetricExpression(sourceKey._sourceContributionId)
+              .orElseThrow(
+                  () ->
+                      new IllegalStateException(
+                          "missing L1 SPF metric for " + sourceKey._sourceContributionId)));
       nextActive.put(sourceKey, new ActiveTransition(contributionId, next._route, next._guard));
     }
     _active.clear();
     _active.putAll(nextActive);
-    SymbolicRouteConvergenceResult advertisementResult =
-        advertisements.isEmpty()
-            ? new SymbolicRouteConvergenceResult(0, 0, 0)
-            : _l2Network.getEngine().converge(advertisements);
+    SymbolicRouteConvergenceResult spfConvergence =
+        _l2StableState.reconcileOrigins(origins, inheritedMetrics);
     _lastConvergence =
         new SymbolicRouteConvergenceResult(
-            withdrawalResult.getProcessedMessages() + advertisementResult.getProcessedMessages(),
-            withdrawalResult.getProcessedWithdrawals()
-                + advertisementResult.getProcessedWithdrawals(),
-            withdrawalResult.getRibUpdates() + advertisementResult.getRibUpdates());
+            _lastConvergence.getProcessedMessages() + spfConvergence.getProcessedMessages(),
+            _lastConvergence.getProcessedWithdrawals()
+                + spfConvergence.getProcessedWithdrawals()
+                + removedTransitions,
+            _lastConvergence.getRibUpdates() + spfConvergence.getRibUpdates());
     return _lastConvergence;
   }
 

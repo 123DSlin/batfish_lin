@@ -29,6 +29,11 @@ public final class AstRouteGuard implements RouteGuard {
   }
 
   @Override
+  public RouteGuard withAst(BooleanGuardAst ast) {
+    return new AstRouteGuard(ast);
+  }
+
+  @Override
   public RouteGuard and(RouteGuard other) {
     return new AstRouteGuard(BooleanGuardAst.and(_ast, other.getAst()));
   }

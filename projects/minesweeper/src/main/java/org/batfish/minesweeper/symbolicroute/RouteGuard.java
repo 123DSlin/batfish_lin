@@ -11,6 +11,11 @@ public interface RouteGuard {
   /** Solver-independent syntax tree suitable for persistence and reconstruction. */
   BooleanGuardAst getAst();
 
+  /** Reconstruct a guard in this guard's representation/context from a persisted AST. */
+  default RouteGuard withAst(BooleanGuardAst ast) {
+    throw new UnsupportedOperationException("guard does not support AST reconstruction");
+  }
+
   RouteGuard and(RouteGuard other);
 
   /** Conjoin a persisted predicate using this guard's own solver/context. */

@@ -223,7 +223,15 @@ public final class BooleanGuardAst {
     }
     if (_operator == Operator.INT_LE) {
       _canonicalForm =
-          "INT_LE(" + _integerComparison.getLeft() + "," + _integerComparison.getRight() + ")";
+          "INT_LE("
+              + _integerComparison.getLeftConstant()
+              + "+"
+              + _integerComparison.getLeft()
+              + ","
+              + _integerComparison.getRightConstant()
+              + "+"
+              + _integerComparison.getRight()
+              + ")";
       return _canonicalForm;
     }
     StringBuilder result = new StringBuilder(_operator.name()).append('(');

@@ -1144,15 +1144,16 @@ public class SymbolicTrafficFraction {
 
   private static String formatComparison(SymbolicIntegerComparison comparison) {
     return "(<= "
-        + formatIntegerSum(comparison.getLeft())
+        + formatIntegerSum(comparison.getLeft(), comparison.getLeftConstant())
         + " "
-        + formatIntegerSum(comparison.getRight())
+        + formatIntegerSum(comparison.getRight(), comparison.getRightConstant())
         + ")";
   }
 
-  private static String formatIntegerSum(Map<String, Integer> terms) {
-    if (terms.isEmpty()) return "0";
+  private static String formatIntegerSum(Map<String, Integer> terms, long constant) {
+    if (terms.isEmpty()) return Long.toString(constant);
     List<String> values = new ArrayList<>();
+    if (constant != 0L) values.add(Long.toString(constant));
     terms.forEach(
         (name, coefficient) ->
             values.add(coefficient == 1 ? name : "(* " + coefficient + " " + name + ")"));

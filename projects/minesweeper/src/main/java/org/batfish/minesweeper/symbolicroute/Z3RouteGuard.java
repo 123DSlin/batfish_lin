@@ -52,6 +52,11 @@ public final class Z3RouteGuard implements RouteGuard {
   }
 
   @Override
+  public RouteGuard withAst(BooleanGuardAst ast) {
+    return new Z3RouteGuardFactory(_context).fromAst(ast);
+  }
+
+  @Override
   public RouteGuard andAst(BooleanGuardAst other) {
     Z3RouteGuard compiled = new Z3RouteGuardFactory(_context).fromAst(other);
     return and(compiled);

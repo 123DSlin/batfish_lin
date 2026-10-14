@@ -119,7 +119,9 @@ public class TrafficSmtEncoderTest {
             new SymbolicIntegerComparison(
                 ImmutableMap.of(cost, 1),
                 ImmutableMap.of("Config_r_Interface_Ethernet1_Isis_L2_cost", 1),
-                ImmutableMap.of(cost, 10L, "Config_r_Interface_Ethernet1_Isis_L2_cost", 20L)));
+                ImmutableMap.of(cost, 10L, "Config_r_Interface_Ethernet1_Isis_L2_cost", 20L),
+                5L,
+                7L));
     TrafficGraphEdge edge =
         new TrafficGraphEdge("r_d", "r", "d", "Ethernet0", "Ethernet0", 100.0, false);
     TrafficGraph graph =
@@ -131,6 +133,8 @@ public class TrafficSmtEncoderTest {
     assertThat(smt, containsString("(declare-fun " + cost));
     assertThat(smt, containsString("(assert (= " + cost + " 10))"));
     assertThat(smt, containsString("(assert (<= " + cost + " 16777215))"));
-    assertThat(smt, containsString("(<= " + cost + " Config_r_Interface_Ethernet1_Isis_L2_cost)"));
+    assertThat(
+        smt,
+        containsString("(<= (+ 5 " + cost + ") (+ 7 Config_r_Interface_Ethernet1_Isis_L2_cost))"));
   }
 }

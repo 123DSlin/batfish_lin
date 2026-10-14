@@ -58,15 +58,18 @@ public final class BatfishSymbolicRoutePipeline {
     SymbolicRouteConvergenceResult nativeL2Convergence = l2Spf.getConvergence();
     BatfishIsisLevelTransitionReconciler levelTransitionReconciler =
         new BatfishIsisLevelTransitionReconciler(
-            input.getConfigurations(), isisNetwork, isisL2Network);
+            input.getConfigurations(),
+            isisNetwork,
+            l1Spf.getStableState(),
+            l2Spf.getStableState(),
+            input.getIsisL2Seeds());
     isisNetwork.getEngine().addStableStateListener(levelTransitionReconciler::reconcile);
+    SymbolicRouteConvergenceResult transitionConvergence = levelTransitionReconciler.reconcile();
     BatfishMainRibReconciler mainRibReconciler = new BatfishMainRibReconciler(mainNetwork);
     mainRibReconciler.registerSource(
         "isis-l1", isisNetwork, route -> !rejectAttachedAtL1L2Router(input, route));
     mainRibReconciler.registerSource("isis-l2", isisL2Network, route -> true);
     SymbolicRouteConvergenceResult isisConvergence = l1Spf.getConvergence();
-    SymbolicRouteConvergenceResult transitionConvergence =
-        levelTransitionReconciler.getLastConvergence();
     SymbolicRouteConvergenceResult isisL2Convergence =
         new SymbolicRouteConvergenceResult(
             nativeL2Convergence.getProcessedMessages()
