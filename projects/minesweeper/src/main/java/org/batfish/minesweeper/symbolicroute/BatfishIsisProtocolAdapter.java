@@ -1,9 +1,8 @@
 package org.batfish.minesweeper.symbolicroute;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static java.util.Objects.requireNonNull;
-import static org.batfish.datamodel.IsisRoute.DEFAULT_METRIC;
 import static org.batfish.datamodel.isis.IsisInterfaceMode.ACTIVE;
+import static org.batfish.dataplane.protocols.IsisProtocolHelper.importRoute;
 
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -81,23 +80,18 @@ public final class BatfishIsisProtocolAdapter
     if (neighborRoute.getLevel() != _level) {
       return Optional.empty();
     }
-    IsisInterfaceLevelSettings settings = levelSettings(edge.getReceiverInterface(), _level);
-    long incrementalMetric = firstNonNull(settings.getCost(), DEFAULT_METRIC);
     ConcreteInterfaceAddress senderAddress = edge.getSenderInterface().getConcreteAddress();
     if (senderAddress == null) {
       throw new IllegalArgumentException("numbered IS-IS point-to-point interface is required");
     }
     IsisRoute imported =
-        neighborRoute.toBuilder()
-            .setAdmin(
-                neighborRoute
-                    .getProtocol()
-                    .getDefaultAdministrativeCost(
-                        edge.getReceiverConfiguration().getConfigurationFormat()))
-            .setMetric(neighborRoute.getMetric() + incrementalMetric)
-            .setNextHopIp(senderAddress.getIp())
-            .setNonRouting(false)
-            .build();
+        importRoute(
+                neighborRoute,
+                edge.getReceiverConfiguration(),
+                edge.getReceiverInterface(),
+                senderAddress.getIp())
+            .orElseThrow(
+                () -> new IllegalArgumentException("receiving IS-IS level must be active"));
     return Optional.of(new AnnotatedRoute<>(imported, edge.getReceiverInterface().getVrfName()));
   }
 

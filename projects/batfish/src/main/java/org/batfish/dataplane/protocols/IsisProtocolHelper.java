@@ -1,15 +1,23 @@
 package org.batfish.dataplane.protocols;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static org.batfish.datamodel.Route.UNSET_ROUTE_NEXT_HOP_IP;
 
+import com.google.common.collect.ImmutableSet;
 import java.util.Optional;
+import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.batfish.datamodel.AbstractRoute;
 import org.batfish.datamodel.AnnotatedRoute;
 import org.batfish.datamodel.Configuration;
+import org.batfish.datamodel.Interface;
+import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.IsisRoute;
+import org.batfish.datamodel.Prefix;
 import org.batfish.datamodel.RoutingProtocol;
+import org.batfish.datamodel.isis.IsisInterfaceLevelSettings;
+import org.batfish.datamodel.isis.IsisInterfaceMode;
 import org.batfish.datamodel.isis.IsisLevel;
 import org.batfish.datamodel.isis.IsisProcess;
 import org.batfish.datamodel.routing_policy.Environment.Direction;
@@ -18,6 +26,128 @@ import org.batfish.dataplane.rib.RibDelta;
 
 /** Helper class that implements various IS-IS protocol logic. */
 public class IsisProtocolHelper {
+
+  /**
+   * Generate the prefixes originated into IS-IS by {@code iface} at {@code level}.
+   *
+   * <p>This is the shared concrete/symbolic definition of interface-prefix origination. A passive
+   * interface originates its prefixes with metric {@code 0}; an active interface uses its
+   * configured level cost, or {@link IsisRoute#DEFAULT_METRIC} when no cost is configured. Returns
+   * an empty set when the interface is not enabled at the requested level.
+   */
+  @Nonnull
+  public static Set<IsisRoute> generateInterfaceRoutes(
+      @Nonnull Configuration configuration,
+      @Nonnull IsisProcess process,
+      @Nonnull Interface iface,
+      @Nonnull IsisLevel level) {
+    if (level == IsisLevel.LEVEL_1_2) {
+      throw new IllegalArgumentException("interface routes require one IS-IS level");
+    }
+    IsisInterfaceLevelSettings levelSettings = getInterfaceLevelSettings(iface, level);
+    if (levelSettings == null) {
+      return ImmutableSet.of();
+    }
+    RoutingProtocol protocol =
+        level == IsisLevel.LEVEL_1 ? RoutingProtocol.ISIS_L1 : RoutingProtocol.ISIS_L2;
+    long metric =
+        levelSettings.getMode() == IsisInterfaceMode.PASSIVE
+            ? 0L
+            : firstNonNull(levelSettings.getCost(), IsisRoute.DEFAULT_METRIC);
+    int admin = protocol.getDefaultAdministrativeCost(configuration.getConfigurationFormat());
+    ImmutableSet.Builder<IsisRoute> routes = ImmutableSet.builder();
+    iface
+        .getAllConcreteAddresses()
+        .forEach(
+            address ->
+                routes.add(
+                    IsisRoute.builder()
+                        .setAdmin(admin)
+                        .setArea(process.getNetAddress().getAreaIdString())
+                        .setLevel(level)
+                        .setMetric(metric)
+                        .setNetwork(address.getPrefix())
+                        .setNextHopIp(address.getIp())
+                        .setProtocol(protocol)
+                        .setSystemId(process.getNetAddress().getSystemIdString())
+                        .build()));
+    return routes.build();
+  }
+
+  /**
+   * Generate the Level-1 attached default originated by a non-overloaded L1/L2 router.
+   *
+   * <p>Returns empty for a router that does not run both levels or is overloaded.
+   */
+  @Nonnull
+  public static Optional<IsisRoute> generateAttachedDefaultRoute(
+      @Nonnull Configuration configuration, @Nonnull IsisProcess process) {
+    if (process.getLevel1() == null || process.getLevel2() == null || process.getOverload()) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        IsisRoute.builder()
+            .setAdmin(
+                RoutingProtocol.ISIS_L1.getDefaultAdministrativeCost(
+                    configuration.getConfigurationFormat()))
+            .setArea(process.getNetAddress().getAreaIdString())
+            .setAttach(true)
+            .setLevel(IsisLevel.LEVEL_1)
+            .setMetric(0L)
+            .setNetwork(Prefix.ZERO)
+            .setNextHopIp(UNSET_ROUTE_NEXT_HOP_IP)
+            .setProtocol(RoutingProtocol.ISIS_L1)
+            .setSystemId(process.getNetAddress().getSystemIdString())
+            .build());
+  }
+
+  /**
+   * Apply Batfish's single-hop IS-IS import transformation at {@code receiverInterface}.
+   *
+   * <p>The route keeps its level and protocol, gains the receiver's directed interface cost, uses
+   * {@code nextHopIp}, receives the platform-specific administrative cost, and becomes routing.
+   * Returns empty when the receiving interface is not active at the route's level.
+   */
+  @Nonnull
+  public static Optional<IsisRoute> importRoute(
+      @Nonnull IsisRoute neighborRoute,
+      @Nonnull Configuration receiverConfiguration,
+      @Nonnull Interface receiverInterface,
+      @Nonnull Ip nextHopIp) {
+    IsisInterfaceLevelSettings levelSettings =
+        getInterfaceLevelSettings(receiverInterface, neighborRoute.getLevel());
+    if (levelSettings == null || levelSettings.getMode() != IsisInterfaceMode.ACTIVE) {
+      return Optional.empty();
+    }
+    long incrementalMetric = firstNonNull(levelSettings.getCost(), IsisRoute.DEFAULT_METRIC);
+    int admin =
+        neighborRoute
+            .getProtocol()
+            .getDefaultAdministrativeCost(receiverConfiguration.getConfigurationFormat());
+    return Optional.of(
+        neighborRoute.toBuilder()
+            .setAdmin(admin)
+            .setLevel(neighborRoute.getLevel())
+            .setMetric(neighborRoute.getMetric() + incrementalMetric)
+            .setNextHopIp(nextHopIp)
+            .setNonRouting(false)
+            .build());
+  }
+
+  @Nullable
+  private static IsisInterfaceLevelSettings getInterfaceLevelSettings(
+      Interface iface, IsisLevel level) {
+    if (iface.getIsis() == null) {
+      return null;
+    }
+    if (level == IsisLevel.LEVEL_1) {
+      return iface.getIsis().getLevel1();
+    }
+    if (level == IsisLevel.LEVEL_2) {
+      return iface.getIsis().getLevel2();
+    }
+    return null;
+  }
 
   /**
    * Convert a level-1 IS-IS route to a level-2 IS-IS route. All route attributes except

@@ -1,14 +1,11 @@
 package org.batfish.minesweeper.symbolicroute;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static java.util.Objects.requireNonNull;
-import static org.batfish.datamodel.IsisRoute.DEFAULT_METRIC;
-import static org.batfish.datamodel.Route.UNSET_ROUTE_NEXT_HOP_IP;
-import static org.batfish.datamodel.RoutingProtocol.ISIS_L1;
-import static org.batfish.datamodel.RoutingProtocol.ISIS_L2;
 import static org.batfish.datamodel.isis.IsisInterfaceMode.PASSIVE;
 import static org.batfish.datamodel.isis.IsisLevel.LEVEL_1;
 import static org.batfish.datamodel.isis.IsisLevel.LEVEL_2;
+import static org.batfish.dataplane.protocols.IsisProtocolHelper.generateAttachedDefaultRoute;
+import static org.batfish.dataplane.protocols.IsisProtocolHelper.generateInterfaceRoutes;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
@@ -18,12 +15,9 @@ import java.util.Map;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.batfish.datamodel.AnnotatedRoute;
-import org.batfish.datamodel.ConcreteInterfaceAddress;
 import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.Interface;
 import org.batfish.datamodel.IsisRoute;
-import org.batfish.datamodel.Prefix;
-import org.batfish.datamodel.RoutingProtocol;
 import org.batfish.datamodel.Vrf;
 import org.batfish.datamodel.isis.IsisEdge;
 import org.batfish.datamodel.isis.IsisInterfaceLevelSettings;
@@ -153,29 +147,12 @@ public final class BatfishIsisTopologyAdapter {
                 if (settings == null) {
                   return;
                 }
-                long metric =
-                    settings.getMode() == PASSIVE
-                        ? 0L
-                        : firstNonNull(settings.getCost(), DEFAULT_METRIC);
                 LinkFailureKey linkFailureKey =
                     topologyGuards.getKey(configuration.getHostname(), iface.getName());
                 RouteGuard originGuard =
                     originGuard(settings, linkFailureKey, topologyGuards, guardFactory);
-                for (ConcreteInterfaceAddress address : iface.getAllConcreteAddresses()) {
-                  IsisRoute route =
-                      IsisRoute.builder()
-                          .setAdmin(
-                              protocol(level)
-                                  .getDefaultAdministrativeCost(
-                                      configuration.getConfigurationFormat()))
-                          .setArea(process.getNetAddress().getAreaIdString())
-                          .setLevel(level)
-                          .setMetric(metric)
-                          .setNetwork(address.getPrefix())
-                          .setNextHopIp(address.getIp())
-                          .setProtocol(protocol(level))
-                          .setSystemId(process.getNetAddress().getSystemIdString())
-                          .build();
+                for (IsisRoute route :
+                    generateInterfaceRoutes(configuration, process, iface, level)) {
                   seeds.add(
                       new SymbolicRouteSeed<>(
                           "isis-"
@@ -187,7 +164,9 @@ public final class BatfishIsisTopologyAdapter {
                               + ":"
                               + iface.getName()
                               + ":"
-                              + address,
+                              + route.getNextHopIp()
+                              + "/"
+                              + route.getNetwork().getPrefixLength(),
                           configuration.getHostname(),
                           new AnnotatedRoute<>(route, vrf.getName()),
                           originGuard,
@@ -224,17 +203,8 @@ public final class BatfishIsisTopologyAdapter {
       Z3RouteGuardFactory guardFactory,
       List<SymbolicRouteSeed<AnnotatedRoute<IsisRoute>>> seeds) {
     IsisRoute attachedDefault =
-        IsisRoute.builder()
-            .setAdmin(ISIS_L1.getDefaultAdministrativeCost(configuration.getConfigurationFormat()))
-            .setArea(process.getNetAddress().getAreaIdString())
-            .setAttach(true)
-            .setLevel(LEVEL_1)
-            .setMetric(0L)
-            .setNetwork(Prefix.ZERO)
-            .setNextHopIp(UNSET_ROUTE_NEXT_HOP_IP)
-            .setProtocol(ISIS_L1)
-            .setSystemId(process.getNetAddress().getSystemIdString())
-            .build();
+        generateAttachedDefaultRoute(configuration, process)
+            .orElseThrow(() -> new IllegalArgumentException("attached default requires L1/L2"));
     seeds.add(
         new SymbolicRouteSeed<>(
             "isis-l1-attached-default:" + configuration.getHostname() + ":" + vrf.getName(),
@@ -332,10 +302,6 @@ public final class BatfishIsisTopologyAdapter {
       return null;
     }
     return level == LEVEL_1 ? iface.getIsis().getLevel1() : iface.getIsis().getLevel2();
-  }
-
-  private static RoutingProtocol protocol(IsisLevel level) {
-    return level == LEVEL_1 ? ISIS_L1 : ISIS_L2;
   }
 
   private static String levelName(IsisLevel level) {
