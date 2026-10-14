@@ -2,6 +2,7 @@ package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
 
+import com.microsoft.z3.ArithExpr;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import javax.annotation.Nonnull;
@@ -43,6 +44,10 @@ public final class Z3RouteGuardFactory {
         return _context.mkFalse();
       case VARIABLE:
         return _context.mkBoolConst(ast.getVariableId());
+      case INT_LE:
+        SymbolicIntegerComparison comparison =
+            requireNonNull(ast.getIntegerComparison(), "INT_LE comparison");
+        return _context.mkLe(sum(comparison.getLeft()), sum(comparison.getRight()));
       case NOT:
         return _context.mkNot(compile(ast.getChildren().get(0)));
       case AND:
@@ -54,5 +59,20 @@ public final class Z3RouteGuardFactory {
       default:
         throw new IllegalArgumentException("unsupported Boolean guard operator");
     }
+  }
+
+  private ArithExpr sum(java.util.Map<String, Integer> terms) {
+    if (terms.isEmpty()) {
+      return _context.mkInt(0);
+    }
+    ArithExpr[] values =
+        terms.entrySet().stream()
+            .map(
+                term ->
+                    (ArithExpr)
+                        _context.mkMul(
+                            _context.mkInt(term.getValue()), _context.mkIntConst(term.getKey())))
+            .toArray(ArithExpr[]::new);
+    return values.length == 1 ? values[0] : _context.mkAdd(values);
   }
 }

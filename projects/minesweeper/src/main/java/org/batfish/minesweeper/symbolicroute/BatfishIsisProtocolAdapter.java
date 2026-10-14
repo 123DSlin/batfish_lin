@@ -24,16 +24,23 @@ public final class BatfishIsisProtocolAdapter
   @Nonnull private final Map<String, Map<SymbolicRouteKey, String>> _exportIdentities;
   @Nonnull private final Map<String, Map<SymbolicRouteKey, AnnotatedRoute<IsisRoute>>> _exports;
   @Nonnull private final IsisLevel _level;
+  private final boolean _preselectedSpf;
 
   public BatfishIsisProtocolAdapter(Iterable<BatfishIsisEdge> edges) {
-    this(edges, IsisLevel.LEVEL_1);
+    this(edges, IsisLevel.LEVEL_1, false);
   }
 
   public BatfishIsisProtocolAdapter(Iterable<BatfishIsisEdge> edges, IsisLevel level) {
+    this(edges, level, false);
+  }
+
+  BatfishIsisProtocolAdapter(
+      Iterable<BatfishIsisEdge> edges, IsisLevel level, boolean preselectedSpf) {
     _edges = new LinkedHashMap<>();
     _exportIdentities = new LinkedHashMap<>();
     _exports = new LinkedHashMap<>();
     _level = requireNonNull(level, "level must be provided");
+    _preselectedSpf = preselectedSpf;
     if (_level == IsisLevel.LEVEL_1_2) {
       throw new IllegalArgumentException("one guarded RIB adapter requires one IS-IS level");
     }
@@ -53,6 +60,11 @@ public final class BatfishIsisProtocolAdapter
 
   @Override
   public Comparator<AnnotatedRoute<IsisRoute>> preferenceComparator(String receiver) {
+    if (_preselectedSpf) {
+      // SPF has encoded metric preference into each path guard. Retain all alternatives so a
+      // Config_* cost change can activate another next hop.
+      return (left, right) -> 0;
+    }
     return (left, right) ->
         -Integer.signum(
             IsisRib.routePreferenceComparator.compare(left.getRoute(), right.getRoute()));

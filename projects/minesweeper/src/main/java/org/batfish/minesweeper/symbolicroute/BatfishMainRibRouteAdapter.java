@@ -21,7 +21,19 @@ public final class BatfishMainRibRouteAdapter
 
   @Override
   public Comparator<AnnotatedRoute<AbstractRoute>> preferenceComparator(String receiver) {
-    return (left, right) -> -Integer.signum(_preferenceOracle.comparePreference(left, right));
+    return (left, right) -> {
+      AbstractRoute leftRoute = left.getRoute();
+      AbstractRoute rightRoute = right.getRoute();
+      if (leftRoute instanceof org.batfish.datamodel.IsisRoute
+          && rightRoute instanceof org.batfish.datamodel.IsisRoute
+          && leftRoute.getNetwork().equals(rightRoute.getNetwork())
+          && leftRoute.getAdministrativeCost() == rightRoute.getAdministrativeCost()) {
+        // Symbolic SPF selection guards, rather than the snapshot-pinned metric, select among
+        // IS-IS next hops. Cross-protocol administrative preference still uses Batfish's Rib.
+        return 0;
+      }
+      return -Integer.signum(_preferenceOracle.comparePreference(left, right));
+    };
   }
 
   @Override

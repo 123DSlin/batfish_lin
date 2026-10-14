@@ -5,10 +5,13 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertThat;
 
+import com.google.common.collect.ImmutableMap;
 import java.util.Arrays;
 import java.util.Collections;
 import org.batfish.datamodel.Prefix;
 import org.batfish.minesweeper.symbolicroute.AstRouteGuard;
+import org.batfish.minesweeper.symbolicroute.BooleanGuardAst;
+import org.batfish.minesweeper.symbolicroute.SymbolicIntegerComparison;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficFlow;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraph;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
@@ -106,5 +109,28 @@ public class TrafficSmtEncoderTest {
     assertThat(weights.size(), equalTo(2));
     assertThat(weights.get("Config_s_SrPolicy_p_Path_upper_weight"), equalTo(50));
     assertThat(weights.get("Config_s_SrPolicy_p_Path_lower_weight"), equalTo(50));
+  }
+
+  @Test
+  public void testEncodeIsisCostPredicateAndPin() {
+    String cost = "Config_r_Interface_Ethernet0_Isis_L2_cost";
+    BooleanGuardAst shortest =
+        BooleanGuardAst.integerLessThanOrEqual(
+            new SymbolicIntegerComparison(
+                ImmutableMap.of(cost, 1),
+                ImmutableMap.of("Config_r_Interface_Ethernet1_Isis_L2_cost", 1),
+                ImmutableMap.of(cost, 10L, "Config_r_Interface_Ethernet1_Isis_L2_cost", 20L)));
+    TrafficGraphEdge edge =
+        new TrafficGraphEdge("r_d", "r", "d", "Ethernet0", "Ethernet0", 100.0, false);
+    TrafficGraph graph =
+        new TrafficGraph(
+            Arrays.asList("r", "d"), Collections.singletonList(edge), Collections.emptyList());
+    SymbolicTrafficLoad load = new SymbolicTrafficLoad();
+    load.add(edge, SymbolicTrafficFraction.fromGuard(new AstRouteGuard(shortest)).times(50.0));
+    String smt = TrafficSmtEncoder.encodeSymbolic(graph, load);
+    assertThat(smt, containsString("(declare-fun " + cost));
+    assertThat(smt, containsString("(assert (= " + cost + " 10))"));
+    assertThat(smt, containsString("(assert (<= " + cost + " 16777215))"));
+    assertThat(smt, containsString("(<= " + cost + " Config_r_Interface_Ethernet1_Isis_L2_cost)"));
   }
 }

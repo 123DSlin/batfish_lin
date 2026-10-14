@@ -39,20 +39,23 @@ public final class BatfishSymbolicRoutePipeline {
         new BatfishStaticRouteReconciler(mainNetwork, input.getRecursiveStaticRoutes());
     staticRouteReconciler.start();
 
-    SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisNetwork =
-        SymbolicRouteNetworkFactory.create(
+    SymbolicIsisSpfSolver.Result l1Spf =
+        SymbolicIsisSpfSolver.solve(
             routers,
+            input.getIsisEdges(),
             input.getIsisSessions(),
             input.getIsisSeeds(),
-            new BatfishIsisProtocolAdapter(input.getIsisEdges()));
-    SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL2Network =
-        SymbolicRouteNetworkFactory.create(
+            org.batfish.datamodel.isis.IsisLevel.LEVEL_1);
+    SymbolicIsisSpfSolver.Result l2Spf =
+        SymbolicIsisSpfSolver.solve(
             routers,
+            input.getIsisL2Edges(),
             input.getIsisL2Sessions(),
             input.getIsisL2Seeds(),
-            new BatfishIsisProtocolAdapter(
-                input.getIsisL2Edges(), org.batfish.datamodel.isis.IsisLevel.LEVEL_2));
-    SymbolicRouteConvergenceResult nativeL2Convergence = isisL2Network.converge();
+            org.batfish.datamodel.isis.IsisLevel.LEVEL_2);
+    SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisNetwork = l1Spf.getNetwork();
+    SymbolicRouteNetwork<AnnotatedRoute<IsisRoute>> isisL2Network = l2Spf.getNetwork();
+    SymbolicRouteConvergenceResult nativeL2Convergence = l2Spf.getConvergence();
     BatfishIsisLevelTransitionReconciler levelTransitionReconciler =
         new BatfishIsisLevelTransitionReconciler(
             input.getConfigurations(), isisNetwork, isisL2Network);
@@ -61,7 +64,7 @@ public final class BatfishSymbolicRoutePipeline {
     mainRibReconciler.registerSource(
         "isis-l1", isisNetwork, route -> !rejectAttachedAtL1L2Router(input, route));
     mainRibReconciler.registerSource("isis-l2", isisL2Network, route -> true);
-    SymbolicRouteConvergenceResult isisConvergence = isisNetwork.converge();
+    SymbolicRouteConvergenceResult isisConvergence = l1Spf.getConvergence();
     SymbolicRouteConvergenceResult transitionConvergence =
         levelTransitionReconciler.getLastConvergence();
     SymbolicRouteConvergenceResult isisL2Convergence =
@@ -123,41 +126,33 @@ public final class BatfishSymbolicRoutePipeline {
     Map<String, LinkFailureKey> variables = new TreeMap<>();
     input
         .getMainSeeds()
-        .forEach(
-            seed -> registerLinkGuard(variables, seed.getGuard(), seed.getLinkFailureKey()));
+        .forEach(seed -> registerLinkGuard(variables, seed.getGuard(), seed.getLinkFailureKey()));
     input
         .getIsisSeeds()
-        .forEach(
-            seed -> registerLinkGuard(variables, seed.getGuard(), seed.getLinkFailureKey()));
+        .forEach(seed -> registerLinkGuard(variables, seed.getGuard(), seed.getLinkFailureKey()));
     input
         .getIsisL2Seeds()
-        .forEach(
-            seed -> registerLinkGuard(variables, seed.getGuard(), seed.getLinkFailureKey()));
+        .forEach(seed -> registerLinkGuard(variables, seed.getGuard(), seed.getLinkFailureKey()));
     input
         .getBgpSessions()
         .forEach(
             session ->
-                registerLinkGuard(
-                    variables, session.getLinkGuard(), session.getLinkFailureKey()));
+                registerLinkGuard(variables, session.getLinkGuard(), session.getLinkFailureKey()));
     input
         .getIsisSessions()
         .forEach(
             session ->
-                registerLinkGuard(
-                    variables, session.getLinkGuard(), session.getLinkFailureKey()));
+                registerLinkGuard(variables, session.getLinkGuard(), session.getLinkFailureKey()));
     input
         .getIsisL2Sessions()
         .forEach(
             session ->
-                registerLinkGuard(
-                    variables, session.getLinkGuard(), session.getLinkFailureKey()));
+                registerLinkGuard(variables, session.getLinkGuard(), session.getLinkFailureKey()));
     return variables;
   }
 
   private static void registerLinkGuard(
-      Map<String, LinkFailureKey> variables,
-      RouteGuard guard,
-      LinkFailureKey linkFailureKey) {
+      Map<String, LinkFailureKey> variables, RouteGuard guard, LinkFailureKey linkFailureKey) {
     if (linkFailureKey == null) {
       return;
     }

@@ -15,9 +15,10 @@ public final class SymbolicRouteSeed<R extends AbstractRouteDecorator> {
   @Nonnull private final R _route;
   @Nonnull private final RouteGuard _guard;
   @Nullable private final LinkFailureKey _linkFailureKey;
+  @Nonnull private final SymbolicRouteProvenance _provenance;
 
   public SymbolicRouteSeed(String messageId, String originRouter, R route, RouteGuard guard) {
-    this(messageId, originRouter, route, guard, null);
+    this(messageId, originRouter, route, guard, null, null);
   }
 
   public SymbolicRouteSeed(
@@ -26,13 +27,31 @@ public final class SymbolicRouteSeed<R extends AbstractRouteDecorator> {
       R route,
       RouteGuard guard,
       @Nullable LinkFailureKey linkFailureKey) {
+    this(messageId, originRouter, route, guard, linkFailureKey, null);
+  }
+
+  public SymbolicRouteSeed(
+      String messageId,
+      String originRouter,
+      R route,
+      RouteGuard guard,
+      @Nullable LinkFailureKey linkFailureKey,
+      @Nullable SymbolicRouteProvenance provenance) {
     _messageId = requireNonNull(messageId, "messageId must be provided");
     _originRouter = requireNonNull(originRouter, "originRouter must be provided");
     _route = requireNonNull(route, "route must be provided");
     _guard = requireNonNull(guard, "guard must be provided");
     _linkFailureKey = linkFailureKey;
+    _provenance =
+        provenance == null
+            ? new SymbolicRouteProvenance(
+                _originRouter, _originRouter, null, null, ImmutableList.of(_originRouter), null)
+            : provenance;
     if (_linkFailureKey != null && !_linkFailureKey.containsRouter(_originRouter)) {
       throw new IllegalArgumentException("connected seed link must contain its origin router");
+    }
+    if (!_provenance.getCurrentRouter().equals(_originRouter)) {
+      throw new IllegalArgumentException("seed provenance must end at installation router");
     }
   }
 
@@ -45,8 +64,7 @@ public final class SymbolicRouteSeed<R extends AbstractRouteDecorator> {
         SymbolicRouteMessage.Stage.INGRESS,
         _route,
         _guard,
-        new SymbolicRouteProvenance(
-            _originRouter, _originRouter, null, null, ImmutableList.of(_originRouter), null));
+        _provenance);
   }
 
   @Nonnull
@@ -62,6 +80,11 @@ public final class SymbolicRouteSeed<R extends AbstractRouteDecorator> {
   @Nonnull
   public RouteGuard getGuard() {
     return _guard;
+  }
+
+  @Nonnull
+  public R getRoute() {
+    return _route;
   }
 
   @Nullable

@@ -90,7 +90,7 @@ public final class SymbolicRouteNetworkFactory {
       advertisements.add(checkedSeed.toMessage());
     }
     return new SymbolicRouteNetwork<>(
-        new SymbolicRouteConvergenceEngine<>(processors, exporters),
+        new SymbolicRouteConvergenceEngine<>(processors, exporters, dependencies),
         ribs,
         advertisements,
         dependencies);

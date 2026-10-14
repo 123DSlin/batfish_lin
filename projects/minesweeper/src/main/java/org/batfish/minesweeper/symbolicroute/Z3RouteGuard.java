@@ -52,6 +52,12 @@ public final class Z3RouteGuard implements RouteGuard {
   }
 
   @Override
+  public RouteGuard andAst(BooleanGuardAst other) {
+    Z3RouteGuard compiled = new Z3RouteGuardFactory(_context).fromAst(other);
+    return and(compiled);
+  }
+
+  @Override
   public RouteGuard or(RouteGuard other) {
     Z3RouteGuard checkedOther = checked(other);
     return new Z3RouteGuard(
@@ -91,6 +97,17 @@ public final class Z3RouteGuard implements RouteGuard {
   public boolean isSatisfiable() {
     Solver solver = _context.mkSolver();
     solver.add(_expression);
+    return solver.check() == Status.SATISFIABLE;
+  }
+
+  @Override
+  public boolean isSatisfiableAtConfigurationPins() {
+    Solver solver = _context.mkSolver();
+    solver.add(_expression);
+    _ast.getIntegerVariables()
+        .forEach(
+            (name, pin) ->
+                solver.add(_context.mkEq(_context.mkIntConst(name), _context.mkInt(pin))));
     return solver.check() == Status.SATISFIABLE;
   }
 

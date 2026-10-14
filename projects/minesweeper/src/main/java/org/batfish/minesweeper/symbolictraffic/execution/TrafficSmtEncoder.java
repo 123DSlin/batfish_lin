@@ -45,7 +45,7 @@ public final class TrafficSmtEncoder {
     StringBuilder out = new StringBuilder();
     out.append("; Symbolic Traffic SMT encoding (parallel to reachability smt_encoding.smt2)\n");
     out.append("; Direct serialization of YU Algorithm 1 tau_l expressions.\n");
-    out.append("; SpecLens: comment (= Config_*_weight <pin>) to unpin SR candidate weights.\n\n");
+    out.append("; SpecLens: comment an (= Config_* <pin>) assertion to synthesize that field.\n\n");
 
     for (String variable : guardVariables) {
       out.append("(declare-fun ").append(variable).append(" () Bool)\n");
@@ -78,9 +78,15 @@ public final class TrafficSmtEncoder {
       String var = entry.getKey();
       int pin = entry.getValue();
       out.append("(assert (= ").append(var).append(' ').append(pin).append("))\n");
-      // Domain: positive uint32. RFC 9256 default=1 (omit→1); weight 0 invalid; no negatives.
+      // SR weights use uint32; IS-IS wide metrics are positive 24-bit values (RFC 5305).
       out.append("(assert (>= ").append(var).append(" 1))\n");
-      out.append("(assert (<= ").append(var).append(" 4294967295))\n");
+      out.append("(assert (<= ")
+          .append(var)
+          .append(
+              var.endsWith("_Isis_L1_cost") || var.endsWith("_Isis_L2_cost")
+                  ? " 16777215"
+                  : " 4294967295")
+          .append("))\n");
     }
     if (!weightPins.isEmpty()) {
       out.append('\n');

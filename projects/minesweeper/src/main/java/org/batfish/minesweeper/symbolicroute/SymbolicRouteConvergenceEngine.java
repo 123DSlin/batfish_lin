@@ -78,6 +78,11 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
   @Nonnull private final Map<String, SymbolicRouteIngressProcessor<R>> _ingressProcessors;
   @Nonnull private final Map<String, List<SymbolicRouteExporter<R>>> _exporters;
   @Nonnull private final List<Runnable> _stableStateListeners;
+  @Nonnull private final SymbolicRoutePropagationDependencies _dependencies;
+
+  @Nonnull
+  private final Map<SymbolicRouteContributionId, List<SymbolicRouteMessage<R>>>
+      _dependentAdvertisements;
 
   @Nonnull
   private final Map<SymbolicRouteContributionId, ContributionLocation> _contributionLocations;
@@ -113,6 +118,13 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
   public SymbolicRouteConvergenceEngine(
       Iterable<SymbolicRouteIngressProcessor<R>> ingressProcessors,
       Iterable<SymbolicRouteExporter<R>> exporters) {
+    this(ingressProcessors, exporters, new SymbolicRoutePropagationDependencies());
+  }
+
+  public SymbolicRouteConvergenceEngine(
+      Iterable<SymbolicRouteIngressProcessor<R>> ingressProcessors,
+      Iterable<SymbolicRouteExporter<R>> exporters,
+      SymbolicRoutePropagationDependencies dependencies) {
     _ingressProcessors = new LinkedHashMap<>();
     for (SymbolicRouteIngressProcessor<R> processor : ingressProcessors) {
       SymbolicRouteIngressProcessor<R> old =
@@ -123,6 +135,8 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
     }
     _exporters = new LinkedHashMap<>();
     _stableStateListeners = new ArrayList<>();
+    _dependencies = requireNonNull(dependencies, "dependencies must be provided");
+    _dependentAdvertisements = new LinkedHashMap<>();
     _contributionLocations = new LinkedHashMap<>();
     _advertisements = new LinkedHashMap<>();
     for (SymbolicRouteExporter<R> exporter : exporters) {
@@ -194,6 +208,17 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
     _stableStateListeners.add(checked);
   }
 
+  /** Registers a precomputed stable-state route that is activated with, and depends on, parent. */
+  public void addDependentAdvertisement(
+      SymbolicRouteContributionId parent, SymbolicRouteMessage<R> child) {
+    SymbolicRouteMessage<R> checked = requireNonNull(child, "child must be provided");
+    SymbolicRouteContributionId childId =
+        new SymbolicRouteContributionId(
+            checked.getMessageId(), checked.getSender(), checked.getReceiver());
+    _dependencies.addDependency(requireNonNull(parent, "parent must be provided"), childId);
+    _dependentAdvertisements.computeIfAbsent(parent, unused -> new ArrayList<>()).add(checked);
+  }
+
   private SymbolicRouteConvergenceResult run(Queue<WorkItem<R>> queue) {
     int processedMessages = 0;
     int processedWithdrawals = 0;
@@ -238,6 +263,14 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
         contributionId,
         new ContributionLocation(
             message.getReceiver(), ingressResult.getKey(), message.getGuard()));
+    for (SymbolicRouteMessage<R> child :
+        _dependentAdvertisements.getOrDefault(contributionId, java.util.Collections.emptyList())) {
+      _dependencies.addDependency(
+          contributionId,
+          new SymbolicRouteContributionId(
+              child.getMessageId(), child.getSender(), child.getReceiver()));
+      queue.add(WorkItem.advertise(child));
+    }
     return propagateDelta(processor, ingressResult.getDelta(), queue);
   }
 
@@ -254,7 +287,15 @@ public final class SymbolicRouteConvergenceEngine<R extends AbstractRouteDecorat
       SymbolicRouteContributionId contributionId,
       ContributionLocation location,
       Queue<WorkItem<R>> queue) {
+    for (SymbolicRouteContributionId child : _dependencies.getChildren(contributionId)) {
+      ContributionLocation childLocation = _contributionLocations.get(child);
+      if (childLocation != null) {
+        queue.add(WorkItem.withdraw(child, childLocation._guard));
+      }
+      _dependencies.removeChild(child);
+    }
     _contributionLocations.remove(contributionId);
+    _dependencies.removeChild(contributionId);
     SymbolicRouteIngressProcessor<R> processor = _ingressProcessors.get(location._receiver);
     GuardedRibDelta<R> delta = processor.getRib().removeContribution(location._key, contributionId);
     return propagateDelta(processor, delta, queue);
