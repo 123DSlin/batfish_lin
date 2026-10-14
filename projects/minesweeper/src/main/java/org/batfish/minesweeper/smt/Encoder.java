@@ -1566,6 +1566,8 @@ public class Encoder {
   }
 
   private void initConfigurationConstants() {
+    IsisSpfSmtEncoder.initConfigurationConstants(
+        _ctx, _solver, _allVariables, _graph.getConfigurations());
     for (Map.Entry<String, Configuration> configEntry : _graph.getConfigurations().entrySet()) {
       String hostName = configEntry.getKey();
       Configuration config = configEntry.getValue();

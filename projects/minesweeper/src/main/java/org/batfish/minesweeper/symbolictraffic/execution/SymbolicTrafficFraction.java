@@ -13,7 +13,6 @@ import javax.annotation.Nullable;
 import org.batfish.minesweeper.symbolicroute.AstRouteGuard;
 import org.batfish.minesweeper.symbolicroute.BooleanGuardAst;
 import org.batfish.minesweeper.symbolicroute.RouteGuard;
-import org.batfish.minesweeper.symbolicroute.SymbolicIntegerComparison;
 
 /**
  * One cell of {@code M[l, S]}. Algorithm 1 adds cells; Algorithm 2 fills them with {@code ω · c_r}
@@ -527,20 +526,6 @@ public class SymbolicTrafficFraction {
       }
       return;
     }
-    if (_kind == Kind.GUARD) {
-      _guard
-          .getAst()
-          .getIntegerVariables()
-          .forEach(
-              (name, pin) -> {
-                int checked = Math.toIntExact(pin);
-                Integer previous = weights.put(name, checked);
-                if (previous != null && previous != checked) {
-                  throw new IllegalStateException("conflicting pin for " + name);
-                }
-              });
-      return;
-    }
     if (_left != null) {
       _left.collectWeights(weights, seen);
     }
@@ -558,7 +543,6 @@ public class SymbolicTrafficFraction {
       case TRUE:
       case FALSE:
       case VARIABLE:
-      case INT_LE:
         return ast;
       case NOT:
         BooleanGuardAst negated = simplifyAst(ast.getChildren().get(0));
@@ -668,10 +652,6 @@ public class SymbolicTrafficFraction {
         return false;
       case VARIABLE:
         return null;
-      case INT_LE:
-        // This atom is concrete-evaluable via its snapshot pins, but it must remain symbolic in
-        // the traffic formula so the final subspecification stage can release a Config_* pin.
-        return null;
       case NOT:
         Boolean negated = foldConstantAst(ast.getChildren().get(0));
         return negated == null ? null : !negated;
@@ -722,9 +702,6 @@ public class SymbolicTrafficFraction {
           throw new IllegalArgumentException("no assignment for " + ast.getVariableId());
         }
         return value;
-      case INT_LE:
-        SymbolicIntegerComparison comparison = ast.getIntegerComparison();
-        return comparison.pinnedLeft() <= comparison.pinnedRight();
       case NOT:
         return !evaluateAst(ast.getChildren().get(0), assignment);
       case AND:
@@ -917,8 +894,6 @@ public class SymbolicTrafficFraction {
         return "0";
       case VARIABLE:
         return ast.getVariableId();
-      case INT_LE:
-        return formatComparison(ast.getIntegerComparison());
       case NOT:
         return "(not " + formatAst(ast.getChildren().get(0)) + ")";
       case AND:
@@ -1125,8 +1100,6 @@ public class SymbolicTrafficFraction {
         return "false";
       case VARIABLE:
         return ast.getVariableId();
-      case INT_LE:
-        return formatComparison(ast.getIntegerComparison());
       case NOT:
         return "(not " + formatAstSmt(ast.getChildren().get(0)) + ")";
       case AND:
@@ -1140,23 +1113,5 @@ public class SymbolicTrafficFraction {
       default:
         throw new IllegalArgumentException("unsupported guard operator");
     }
-  }
-
-  private static String formatComparison(SymbolicIntegerComparison comparison) {
-    return "(<= "
-        + formatIntegerSum(comparison.getLeft(), comparison.getLeftConstant())
-        + " "
-        + formatIntegerSum(comparison.getRight(), comparison.getRightConstant())
-        + ")";
-  }
-
-  private static String formatIntegerSum(Map<String, Integer> terms, long constant) {
-    if (terms.isEmpty()) return Long.toString(constant);
-    List<String> values = new ArrayList<>();
-    if (constant != 0L) values.add(Long.toString(constant));
-    terms.forEach(
-        (name, coefficient) ->
-            values.add(coefficient == 1 ? name : "(* " + coefficient + " " + name + ")"));
-    return values.size() == 1 ? values.get(0) : "(+ " + String.join(" ", values) + ")";
   }
 }

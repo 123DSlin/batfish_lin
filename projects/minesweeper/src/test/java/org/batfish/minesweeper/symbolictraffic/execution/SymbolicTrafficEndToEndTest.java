@@ -9,7 +9,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.Context;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
@@ -66,15 +65,6 @@ public final class SymbolicTrafficEndToEndTest {
           runTrafficPipeline(graph, base, new Z3RouteGuardFactory(context));
 
       String smt = symbolic.toTrafficSmt();
-      String outputs = System.getenv("TEST_UNDECLARED_OUTPUTS_DIR");
-      if (outputs != null) {
-        Files.write(
-            Paths.get(outputs, TrafficSmtEncoder.SMT_FILE_NAME),
-            smt.getBytes(StandardCharsets.UTF_8));
-        Files.write(
-            Paths.get(outputs, "symbolic_traffic_execution.txt"),
-            symbolic.toExecutionText().getBytes(StandardCharsets.UTF_8));
-      }
       assertThat(smt, containsString("(declare-fun a_d () Bool)"));
       assertThat(
           smt, containsString("Config_s_SrPolicy_split_to_D_Path_explicit_upper_via_A_weight"));

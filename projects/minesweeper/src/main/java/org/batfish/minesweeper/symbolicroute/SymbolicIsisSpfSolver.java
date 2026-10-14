@@ -22,6 +22,7 @@ import org.batfish.datamodel.ConcreteInterfaceAddress;
 import org.batfish.datamodel.IsisRoute;
 import org.batfish.datamodel.isis.IsisInterfaceLevelSettings;
 import org.batfish.datamodel.isis.IsisLevel;
+import org.batfish.minesweeper.smt.IsisSpfSmtEncoder;
 
 /**
  * Stable-state symbolic IS-IS SPF solver.
@@ -543,31 +544,30 @@ public final class SymbolicIsisSpfSolver {
             if (candidate._costTerms.equals(competitor._costTerms)
                 && candidate._constantCost == competitor._constantCost) {
               continue;
-            } else {
-              Map<String, Long> pins = new LinkedHashMap<>(candidate._costPins);
-              competitor._costPins.forEach(
-                  (name, pin) -> {
-                    Long old = pins.putIfAbsent(name, pin);
-                    if (old != null && !old.equals(pin)) {
-                      throw new IllegalStateException("conflicting IS-IS metric pin for " + name);
-                    }
-                  });
-              RouteGuard candidateNoWorse =
-                  guard.withAst(
-                      BooleanGuardAst.integerLessThanOrEqual(
-                          new SymbolicIntegerComparison(
-                              candidate._costTerms,
-                              competitor._costTerms,
-                              pins,
-                              candidate._constantCost,
-                              competitor._constantCost)));
-              guard = guard.and(competitor._originGuard.not().or(candidateNoWorse));
+            }
+            // The symbolic RIB describes the snapshot's selected route under link failures.
+            // Configuration sensitivity is encoded separately by Minesweeper's IS-IS SPF SMT;
+            // Config_* comparisons must not leak into route-availability guards.
+            if (pinnedCost(candidate) > pinnedCost(competitor)) {
+              guard = guard.and(competitor._originGuard.not());
             }
           }
           outcomes.merge(candidate, guard, RouteGuard::or);
         }
       }
     }
+  }
+
+  private static long pinnedCost(OutcomeKey candidate) {
+    long result = candidate._constantCost;
+    for (Map.Entry<String, Integer> term : candidate._costTerms.entrySet()) {
+      Long pin = candidate._costPins.get(term.getKey());
+      if (pin == null) {
+        throw new IllegalStateException("missing IS-IS metric pin for " + term.getKey());
+      }
+      result = Math.addExact(result, Math.multiplyExact(pin, term.getValue()));
+    }
+    return result;
   }
 
   private static Map<String, Boolean> assignment(List<String> variables, long mask) {
@@ -807,24 +807,13 @@ public final class SymbolicIsisSpfSolver {
   }
 
   private static String metricConfigVariable(String router, String iface, IsisLevel level) {
-    return "Config_"
-        + sanitize(router)
-        + "_Interface_"
-        + sanitize(iface)
-        + "_Isis_"
-        + (level == IsisLevel.LEVEL_1 ? "L1" : "L2")
-        + "_cost";
-  }
-
-  private static String sanitize(String raw) {
-    return raw.replaceAll("[^A-Za-z0-9_]", "_");
+    return IsisSpfSmtEncoder.costVariable(router, iface, level);
   }
 
   private static BooleanGuardAst restrict(BooleanGuardAst ast, Map<String, Boolean> assignment) {
     switch (ast.getOperator()) {
       case TRUE:
       case FALSE:
-      case INT_LE:
         return ast;
       case VARIABLE:
         Boolean value = assignment.get(ast.getVariableId());

@@ -7,13 +7,11 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import javax.annotation.Nonnull;
@@ -26,7 +24,6 @@ public final class BooleanGuardAst {
     TRUE,
     FALSE,
     VARIABLE,
-    INT_LE,
     NOT,
     AND,
     OR
@@ -35,15 +32,13 @@ public final class BooleanGuardAst {
   @Nonnull private final Operator _operator;
   @Nullable private final String _variableId;
   @Nonnull private final ImmutableList<BooleanGuardAst> _children;
-  @Nullable private final SymbolicIntegerComparison _integerComparison;
   @JsonIgnore @Nullable private transient String _canonicalForm;
 
   @JsonCreator
   private static BooleanGuardAst create(
       @JsonProperty("operator") Operator operator,
       @Nullable @JsonProperty("variableId") String variableId,
-      @Nullable @JsonProperty("children") List<BooleanGuardAst> children,
-      @Nullable @JsonProperty("integerComparison") SymbolicIntegerComparison integerComparison) {
+      @Nullable @JsonProperty("children") List<BooleanGuardAst> children) {
     Operator checkedOperator = requireNonNull(operator, "operator must be provided");
     List<BooleanGuardAst> checkedChildren = firstNonNull(children, ImmutableList.of());
     switch (checkedOperator) {
@@ -53,9 +48,6 @@ public final class BooleanGuardAst {
         return falseValue();
       case VARIABLE:
         return variable(requireNonNull(variableId, "VARIABLE requires variableId"));
-      case INT_LE:
-        return integerLessThanOrEqual(
-            requireNonNull(integerComparison, "INT_LE requires integerComparison"));
       case NOT:
         if (checkedChildren.size() != 1) {
           throw new IllegalArgumentException("NOT requires exactly one child");
@@ -75,14 +67,6 @@ public final class BooleanGuardAst {
     _operator = requireNonNull(operator, "operator must be provided");
     _variableId = variableId;
     _children = ImmutableList.copyOf(requireNonNull(children, "children must be provided"));
-    _integerComparison = null;
-  }
-
-  private BooleanGuardAst(SymbolicIntegerComparison comparison) {
-    _operator = Operator.INT_LE;
-    _variableId = null;
-    _children = ImmutableList.of();
-    _integerComparison = requireNonNull(comparison);
   }
 
   public static BooleanGuardAst trueValue() {
@@ -99,10 +83,6 @@ public final class BooleanGuardAst {
       throw new IllegalArgumentException("variableId must not be empty");
     }
     return new BooleanGuardAst(Operator.VARIABLE, checked, ImmutableList.of());
-  }
-
-  public static BooleanGuardAst integerLessThanOrEqual(SymbolicIntegerComparison comparison) {
-    return new BooleanGuardAst(comparison);
   }
 
   public static BooleanGuardAst not(BooleanGuardAst child) {
@@ -166,12 +146,6 @@ public final class BooleanGuardAst {
     return _children;
   }
 
-  @JsonProperty("integerComparison")
-  @Nullable
-  public SymbolicIntegerComparison getIntegerComparison() {
-    return _integerComparison;
-  }
-
   /** Returns every referenced variable identity in deterministic order. */
   @JsonIgnore
   @Nonnull
@@ -179,29 +153,6 @@ public final class BooleanGuardAst {
     Set<String> variables = new java.util.TreeSet<>();
     collectVariables(variables);
     return ImmutableSet.copyOf(variables);
-  }
-
-  /** Integer Config_* atoms and their concrete snapshot pins. */
-  @JsonIgnore
-  public ImmutableMap<String, Long> getIntegerVariables() {
-    Map<String, Long> variables = new java.util.TreeMap<>();
-    collectIntegerVariables(variables);
-    return ImmutableMap.copyOf(variables);
-  }
-
-  private void collectIntegerVariables(Map<String, Long> variables) {
-    if (_integerComparison != null) {
-      _integerComparison
-          .getPins()
-          .forEach(
-              (name, pin) -> {
-                Long old = variables.putIfAbsent(name, pin);
-                if (old != null && !old.equals(pin)) {
-                  throw new IllegalStateException("conflicting pin for " + name);
-                }
-              });
-    }
-    _children.forEach(child -> child.collectIntegerVariables(variables));
   }
 
   private void collectVariables(Set<String> variables) {
@@ -221,19 +172,6 @@ public final class BooleanGuardAst {
       _canonicalForm = "V" + _variableId.length() + ":" + _variableId;
       return _canonicalForm;
     }
-    if (_operator == Operator.INT_LE) {
-      _canonicalForm =
-          "INT_LE("
-              + _integerComparison.getLeftConstant()
-              + "+"
-              + _integerComparison.getLeft()
-              + ","
-              + _integerComparison.getRightConstant()
-              + "+"
-              + _integerComparison.getRight()
-              + ")";
-      return _canonicalForm;
-    }
     StringBuilder result = new StringBuilder(_operator.name()).append('(');
     _children.forEach(child -> result.append(child.canonicalForm()));
     _canonicalForm = result.append(')').toString();
@@ -251,12 +189,11 @@ public final class BooleanGuardAst {
     BooleanGuardAst other = (BooleanGuardAst) obj;
     return _operator == other._operator
         && Objects.equals(_variableId, other._variableId)
-        && Objects.equals(_integerComparison, other._integerComparison)
         && _children.equals(other._children);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(_operator, _variableId, _children, _integerComparison);
+    return Objects.hash(_operator, _variableId, _children);
   }
 }

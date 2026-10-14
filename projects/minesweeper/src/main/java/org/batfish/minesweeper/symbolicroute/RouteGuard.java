@@ -18,11 +18,6 @@ public interface RouteGuard {
 
   RouteGuard and(RouteGuard other);
 
-  /** Conjoin a persisted predicate using this guard's own solver/context. */
-  default RouteGuard andAst(BooleanGuardAst other) {
-    throw new UnsupportedOperationException("guard does not support persisted predicates");
-  }
-
   RouteGuard or(RouteGuard other);
 
   RouteGuard not();
@@ -35,11 +30,6 @@ public interface RouteGuard {
   }
 
   boolean isSatisfiable();
-
-  /** Satisfiable after fixing every embedded integer Config_* atom to its snapshot seed. */
-  default boolean isSatisfiableAtConfigurationPins() {
-    return isSatisfiable();
-  }
 
   boolean isEquivalentTo(RouteGuard other);
 

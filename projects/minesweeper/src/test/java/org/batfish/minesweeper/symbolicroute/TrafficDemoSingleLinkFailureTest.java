@@ -178,7 +178,7 @@ public final class TrafficDemoSingleLinkFailureTest {
                                     if (contribution
                                         .getSelectionGuard()
                                         .and(assignment)
-                                        .isSatisfiableAtConfigurationPins()) {
+                                        .isSatisfiable()) {
                                       routes.add(
                                           contribution
                                               .getSymbolicRoute()

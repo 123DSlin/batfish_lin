@@ -2,7 +2,6 @@ package org.batfish.minesweeper.symbolicroute;
 
 import static java.util.Objects.requireNonNull;
 
-import com.microsoft.z3.ArithExpr;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import javax.annotation.Nonnull;
@@ -44,12 +43,6 @@ public final class Z3RouteGuardFactory {
         return _context.mkFalse();
       case VARIABLE:
         return _context.mkBoolConst(ast.getVariableId());
-      case INT_LE:
-        SymbolicIntegerComparison comparison =
-            requireNonNull(ast.getIntegerComparison(), "INT_LE comparison");
-        return _context.mkLe(
-            sum(comparison.getLeft(), comparison.getLeftConstant()),
-            sum(comparison.getRight(), comparison.getRightConstant()));
       case NOT:
         return _context.mkNot(compile(ast.getChildren().get(0)));
       case AND:
@@ -63,21 +56,4 @@ public final class Z3RouteGuardFactory {
     }
   }
 
-  private ArithExpr sum(java.util.Map<String, Integer> terms, long constant) {
-    if (terms.isEmpty()) {
-      return _context.mkInt(constant);
-    }
-    java.util.List<ArithExpr> values = new java.util.ArrayList<>();
-    if (constant != 0L) {
-      values.add(_context.mkInt(constant));
-    }
-    terms.entrySet().stream()
-        .map(
-            term ->
-                (ArithExpr)
-                    _context.mkMul(
-                        _context.mkInt(term.getValue()), _context.mkIntConst(term.getKey())))
-        .forEach(values::add);
-    return values.size() == 1 ? values.get(0) : _context.mkAdd(values.toArray(new ArithExpr[0]));
-  }
 }
