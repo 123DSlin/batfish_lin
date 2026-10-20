@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 import org.batfish.datamodel.Ip;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficFlow;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraph;
@@ -19,14 +20,18 @@ import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
  *
  * <p>Policy-path guard {@code g_p} is only the numerator of {@code c_p}. Node-SID forwarding still
  * multiplies {@code VIGP}. Adj-SID forwarding pops the Adj-SID, keeps the remaining typed stack,
- * and requires {@code source = router}. After the SR stack is consumed, IP lookup does not apply
- * another SR policy at the same router.
+ * and requires {@code source = router}. After the SR stack is consumed, IP lookup re-enters the
+ * normal policy-aware path; the just-consumed policy is suppressed only for that local re-entry.
  */
 class SymbolicTrafficForwarding {
 
   private final TrafficGraph _graph;
 
-  private final Map<String, List<ForwardingRule>> _ribs;
+  /** Guarded main RIB used for destination-prefix forwarding. */
+  private final Map<String, List<ForwardingRule>> _mainRibs;
+
+  /** Guarded underlay/IGP RIB used only by YU's {@code VIGP}. */
+  private final Map<String, List<ForwardingRule>> _igpRibs;
 
   private final Map<String, List<SrPolicy>> _srPolicies;
 
@@ -35,6 +40,7 @@ class SymbolicTrafficForwarding {
   SymbolicTrafficForwarding(TrafficGraph graph) {
     this(
         graph,
+        Collections.<String, List<ForwardingRule>>emptyMap(),
         Collections.<String, List<ForwardingRule>>emptyMap(),
         Collections.<String, List<SrPolicy>>emptyMap(),
         Collections.<String, Ip>emptyMap());
@@ -45,8 +51,24 @@ class SymbolicTrafficForwarding {
       Map<String, List<ForwardingRule>> ribs,
       Map<String, List<SrPolicy>> srPolicies,
       Map<String, Ip> routerAddresses) {
+    this(graph, ribs, ribs, srPolicies, routerAddresses);
+  }
+
+  /**
+   * Creates YU forwarding with distinct main and underlay guarded RIBs.
+   *
+   * <p>The main RIB selects a destination route; recursive BGP next-hop and Node-SID resolution
+   * must use the underlay RIB only.
+   */
+  SymbolicTrafficForwarding(
+      TrafficGraph graph,
+      Map<String, List<ForwardingRule>> mainRibs,
+      Map<String, List<ForwardingRule>> igpRibs,
+      Map<String, List<SrPolicy>> srPolicies,
+      Map<String, Ip> routerAddresses) {
     _graph = graph;
-    _ribs = copyLists(ribs);
+    _mainRibs = copyLists(mainRibs);
+    _igpRibs = copyLists(igpRibs);
     _srPolicies = copyLists(srPolicies);
     _routerAddresses = new HashMap<>(routerAddresses);
   }
@@ -65,23 +87,23 @@ class SymbolicTrafficForwarding {
       TrafficLabelStack stack,
       SymbolicTrafficFraction incomingFraction) {
     if (stack.isEmpty()) {
-      return forwardIp(router, flow, incomingFraction, true);
+      return forwardIp(router, flow, incomingFraction, null);
     }
     return forwardSr(router, flow, stack, incomingFraction);
   }
 
   SymbolicTrafficMatrix forwardIp(
       String router, TrafficFlow flow, SymbolicTrafficFraction incomingFraction) {
-    return forwardIp(router, flow, incomingFraction, true);
+    return forwardIp(router, flow, incomingFraction, null);
   }
 
   private SymbolicTrafficMatrix forwardIp(
       String router,
       TrafficFlow flow,
       SymbolicTrafficFraction incomingFraction,
-      boolean applySrPolicy) {
+      @Nullable SrPolicy suppressedPolicy) {
     SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
-    List<ForwardingRule> rib = rib(router);
+    List<ForwardingRule> rib = mainRib(router);
     Ip dstIp = flow.getDestination().getStartIp();
     for (ForwardingRule rule : rib) {
       if (!rule.matches(dstIp)) {
@@ -93,11 +115,7 @@ class SymbolicTrafficForwarding {
         continue;
       }
       if (rule.isIndirect()) {
-        if (applySrPolicy) {
-          matrix.add(resolveNhIp(router, flow, rule.getIndirectNextHop(), share));
-        } else {
-          matrix.add(resolveNhIpWithoutSr(router, rule.getIndirectNextHop(), share));
-        }
+        matrix.add(resolveNhIp(router, flow, rule.getIndirectNextHop(), share, suppressedPolicy));
       } else {
         putOnLink(matrix, rule.getDirectNextHop(), TrafficLabelStack.empty(), share);
       }
@@ -107,14 +125,23 @@ class SymbolicTrafficForwarding {
 
   SymbolicTrafficMatrix resolveNhIp(
       String router, TrafficFlow flow, Ip nextHopIp, SymbolicTrafficFraction incomingFraction) {
+    return resolveNhIp(router, flow, nextHopIp, incomingFraction, null);
+  }
+
+  private SymbolicTrafficMatrix resolveNhIp(
+      String router,
+      TrafficFlow flow,
+      Ip nextHopIp,
+      SymbolicTrafficFraction incomingFraction,
+      @Nullable SrPolicy suppressedPolicy) {
     SrPolicy policy = matchingSrPolicy(router, flow, nextHopIp);
-    if (policy != null) {
+    if (policy != null && policy != suppressedPolicy) {
       SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
-      List<ForwardingRule> igp = rib(router);
+      List<ForwardingRule> igp = igpRib(router);
       for (SrPolicy.Path path : policy.getPaths()) {
         SymbolicTrafficFraction share =
             incomingFraction.times(RouteIterationEncoding.pathShare(path, policy.getPaths()));
-        matrix.add(resolveSrPath(router, flow, path, igp, share));
+        matrix.add(resolveSrPath(router, flow, policy, path, igp, share));
       }
       return matrix;
     }
@@ -126,7 +153,7 @@ class SymbolicTrafficForwarding {
       String router, Ip nextHopIp, SymbolicTrafficFraction incomingFraction) {
     SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
     for (Map.Entry<TrafficGraphEdge, SymbolicTrafficFraction> entry :
-        RouteIterationEncoding.vigp(rib(router), nextHopIp).entrySet()) {
+        RouteIterationEncoding.vigp(igpRib(router), nextHopIp).entrySet()) {
       putOnLink(
           matrix,
           entry.getKey(),
@@ -139,15 +166,19 @@ class SymbolicTrafficForwarding {
   /**
    * {@code g_p} contributes only {@code c_p}. Node-SID first hops go through {@code VIGP}. Adj-SID
    * first hops pop and require {@code source = router}. A Node-SID equal to the current router pops
-   * instead of looking up IGP to self; an empty remainder does not re-apply SR.
+   * instead of looking up IGP to self. As in YU Algorithm 2, an empty remainder re-enters normal
+   * {@code forwardIp} processing and can match a policy at that router. The just-consumed policy is
+   * suppressed for that one re-entry, preventing a zero-length SR policy from recursively applying
+   * itself before Algorithm 1 can advance a hop.
    */
   private SymbolicTrafficMatrix resolveSrPath(
       String router,
       TrafficFlow flow,
+      SrPolicy activePolicy,
       SrPolicy.Path path,
       List<ForwardingRule> igp,
       SymbolicTrafficFraction share) {
-    return forwardSr(router, flow, path.toStack(), share, igp);
+    return forwardSr(router, flow, path.toStack(), share, igp, activePolicy);
   }
 
   SymbolicTrafficMatrix forwardSr(
@@ -155,7 +186,7 @@ class SymbolicTrafficForwarding {
       TrafficFlow flow,
       TrafficLabelStack stack,
       SymbolicTrafficFraction incomingFraction) {
-    return forwardSr(router, flow, stack, incomingFraction, rib(router));
+    return forwardSr(router, flow, stack, incomingFraction, igpRib(router), null);
   }
 
   private SymbolicTrafficMatrix forwardSr(
@@ -163,7 +194,8 @@ class SymbolicTrafficForwarding {
       TrafficFlow flow,
       TrafficLabelStack stack,
       SymbolicTrafficFraction incomingFraction,
-      List<ForwardingRule> igp) {
+      List<ForwardingRule> igp,
+      @Nullable SrPolicy activePolicy) {
     SrPolicy.Segment first = stack.getFirst();
     if (first.isAdjacency()) {
       return forwardAdjacency(router, first, stack.pop(), incomingFraction);
@@ -171,9 +203,9 @@ class SymbolicTrafficForwarding {
     if (router.equals(first.getRouter())) {
       TrafficLabelStack rest = stack.pop();
       if (rest.isEmpty()) {
-        return forwardIp(router, flow, incomingFraction, false);
+        return forwardIp(router, flow, incomingFraction, activePolicy);
       }
-      return forward(router, flow, rest, incomingFraction);
+      return forwardSr(router, flow, rest, incomingFraction, igp, activePolicy);
     }
     Ip firstIp = _routerAddresses.get(first.getRouter());
     SymbolicTrafficMatrix matrix = new SymbolicTrafficMatrix();
@@ -238,8 +270,16 @@ class SymbolicTrafficForwarding {
     return null;
   }
 
-  private List<ForwardingRule> rib(String router) {
-    List<ForwardingRule> rules = _ribs.get(router);
+  private List<ForwardingRule> mainRib(String router) {
+    List<ForwardingRule> rules = _mainRibs.get(router);
+    if (rules == null) {
+      return Collections.emptyList();
+    }
+    return rules;
+  }
+
+  private List<ForwardingRule> igpRib(String router) {
+    List<ForwardingRule> rules = _igpRibs.get(router);
     if (rules == null) {
       return Collections.emptyList();
     }

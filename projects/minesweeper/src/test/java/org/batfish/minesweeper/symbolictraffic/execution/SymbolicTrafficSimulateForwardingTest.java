@@ -114,8 +114,14 @@ public class SymbolicTrafficSimulateForwardingTest {
     ribs.put(
         "a",
         Arrays.asList(
-            ForwardingRule.direct(DEST, GUARDS.variable("g_high"), 10, ab),
-            ForwardingRule.direct(DEST, GUARDS.variable("g_low"), 20, ac)));
+            ForwardingRule.direct(
+                DEST, GUARDS.variable("g_high"), GUARDS.variable("g_high"), 10, ab),
+            ForwardingRule.direct(
+                DEST,
+                GUARDS.variable("g_low"),
+                GUARDS.variable("g_low").and(GUARDS.variable("g_high").not()),
+                20,
+                ac)));
     SymbolicTrafficForwarding forwarding =
         new SymbolicTrafficForwarding(g, ribs, Collections.emptyMap(), Collections.emptyMap());
     SymbolicTrafficMatrix hop1 = new SymbolicTrafficExecution(g, 1, forwarding).simulateHopI(f);
@@ -261,8 +267,8 @@ public class SymbolicTrafficSimulateForwardingTest {
     ribs.put(
         "b",
         Arrays.asList(
-            ForwardingRule.terminal(DEST, GUARDS.trueGuard(), 0),
-            ForwardingRule.direct(DEST, GUARDS.trueGuard(), 115, ba)));
+            ForwardingRule.terminal(DEST, GUARDS.trueGuard(), GUARDS.trueGuard(), 0),
+            ForwardingRule.direct(DEST, GUARDS.trueGuard(), GUARDS.falseGuard(), 115, ba)));
     SymbolicTrafficExecution execution =
         new SymbolicTrafficExecution(
             g,
@@ -278,7 +284,7 @@ public class SymbolicTrafficSimulateForwardingTest {
   }
 
   @Test
-  public void testK1ExecutionPrintsYuStyleCompactStf() {
+  public void testExecutionRetainsExactUnreducedStf() {
     TrafficFlow f = ipFlow("x");
     TrafficGraphEdge xd = edge("d_x", "x", "d");
     TrafficGraphEdge dx = edge("d_x", "d", "x");
@@ -310,11 +316,24 @@ public class SymbolicTrafficSimulateForwardingTest {
             new SymbolicTrafficForwarding(
                 g, ribs, Collections.emptyMap(), Collections.emptyMap()));
     SymbolicTrafficMatrix matrix = execution.simulate(f);
-    assertThat(matrix.get(xd, TrafficLabelStack.empty()).toDisplayString(64), equalTo("d_x"));
+    Map<String, Boolean> directUp = new HashMap<>();
+    directUp.put("d_x", true);
+    directUp.put("a_x", true);
     assertThat(
-        matrix.get(xa, TrafficLabelStack.empty()).toDisplayString(64), equalTo("(not d_x)"));
+        matrix.get(xd, TrafficLabelStack.empty()).evaluate(directUp), closeTo(1.0, 1e-9));
     assertThat(
-        matrix.get(ad, TrafficLabelStack.empty()).toDisplayString(64), equalTo("(not d_x)"));
+        matrix.get(xa, TrafficLabelStack.empty()).evaluate(directUp), closeTo(0.0, 1e-9));
+
+    Map<String, Boolean> directDown = new HashMap<>();
+    directDown.put("d_x", false);
+    directDown.put("a_x", true);
+    directDown.put("a_d", true);
+    assertThat(
+        matrix.get(xd, TrafficLabelStack.empty()).evaluate(directDown), closeTo(0.0, 1e-9));
+    assertThat(
+        matrix.get(xa, TrafficLabelStack.empty()).evaluate(directDown), closeTo(1.0, 1e-9));
+    assertThat(
+        matrix.get(ad, TrafficLabelStack.empty()).evaluate(directDown), closeTo(1.0, 1e-9));
     assertThat(matrix.get(ax, TrafficLabelStack.empty()).isZero(), equalTo(true));
     assertThat(matrix.get(da, TrafficLabelStack.empty()).isZero(), equalTo(true));
     assertThat(execution.getLastCompletedHops() < 10, equalTo(true));

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.Prefix;
+import org.batfish.minesweeper.symbolicroute.RouteGuard;
 import org.batfish.minesweeper.symbolicroute.Z3RouteGuardFactory;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
 import org.junit.Test;
@@ -74,8 +75,12 @@ public class RouteIterationEncodingTest {
   public void testVigpPreferredAndBackupAreMutuallyExclusive() {
     TrafficGraphEdge l1 = edge("d_e", "d", "e");
     TrafficGraphEdge l2 = edge("d_c", "d", "c");
-    ForwardingRule preferred = ForwardingRule.direct(NIP_PREFIX, GUARDS.variable("y"), 10, l1);
-    ForwardingRule backup = ForwardingRule.direct(NIP_PREFIX, GUARDS.trueGuard(), 20, l2);
+    RouteGuard preferredAvailable = GUARDS.variable("y");
+    ForwardingRule preferred =
+        ForwardingRule.direct(NIP_PREFIX, preferredAvailable, preferredAvailable, 10, l1);
+    ForwardingRule backup =
+        ForwardingRule.direct(
+            NIP_PREFIX, GUARDS.trueGuard(), preferredAvailable.not(), 20, l2);
     List<ForwardingRule> rib = Arrays.asList(preferred, backup);
 
     Map<String, Boolean> yUp = new HashMap<>();

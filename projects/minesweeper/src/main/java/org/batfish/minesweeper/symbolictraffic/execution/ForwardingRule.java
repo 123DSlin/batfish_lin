@@ -26,6 +26,15 @@ public class ForwardingRule {
 
   private final RouteGuard _availability;
 
+  /**
+   * Final guarded-RIB selection condition.
+   *
+   * <p>This is YU's {@code s_r}. It is deliberately separate from {@code availability}: the
+   * former has already incorporated the protocol-specific, concrete route comparator (e.g., the
+   * complete BGP best-path comparator), whereas the latter is only {@code g_r}.
+   */
+  private final RouteGuard _selection;
+
   private final int _preference;
 
   @Nullable private final TrafficGraphEdge _directNextHop;
@@ -36,12 +45,28 @@ public class ForwardingRule {
 
   public static ForwardingRule direct(
       Prefix prefix, RouteGuard availability, int preference, TrafficGraphEdge nextHop) {
-    return new ForwardingRule(prefix, availability, preference, nextHop, null, false);
+    return direct(prefix, availability, availability, preference, nextHop);
+  }
+
+  /** Creates a direct rule whose protocol-specific selection guard has already been computed. */
+  public static ForwardingRule direct(
+      Prefix prefix,
+      RouteGuard availability,
+      RouteGuard selection,
+      int preference,
+      TrafficGraphEdge nextHop) {
+    return new ForwardingRule(prefix, availability, selection, preference, nextHop, null, false);
   }
 
   public static ForwardingRule indirect(
       Prefix prefix, RouteGuard availability, int preference, Ip nextHopIp) {
-    return new ForwardingRule(prefix, availability, preference, null, nextHopIp, false);
+    return indirect(prefix, availability, availability, preference, nextHopIp);
+  }
+
+  /** Creates an indirect rule whose protocol-specific selection guard has already been computed. */
+  public static ForwardingRule indirect(
+      Prefix prefix, RouteGuard availability, RouteGuard selection, int preference, Ip nextHopIp) {
+    return new ForwardingRule(prefix, availability, selection, preference, null, nextHopIp, false);
   }
 
   /**
@@ -49,18 +74,26 @@ public class ForwardingRule {
    * not emit a real-link cell.
    */
   public static ForwardingRule terminal(Prefix prefix, RouteGuard availability, int preference) {
-    return new ForwardingRule(prefix, availability, preference, null, null, true);
+    return terminal(prefix, availability, availability, preference);
+  }
+
+  /** Creates a terminal rule whose protocol-specific selection guard has already been computed. */
+  public static ForwardingRule terminal(
+      Prefix prefix, RouteGuard availability, RouteGuard selection, int preference) {
+    return new ForwardingRule(prefix, availability, selection, preference, null, null, true);
   }
 
   private ForwardingRule(
       Prefix prefix,
       RouteGuard availability,
+      RouteGuard selection,
       int preference,
       @Nullable TrafficGraphEdge directNextHop,
       @Nullable Ip indirectNextHop,
       boolean terminal) {
     _prefix = prefix;
     _availability = availability;
+    _selection = selection;
     _preference = preference;
     _directNextHop = directNextHop;
     _indirectNextHop = indirectNextHop;
@@ -73,6 +106,11 @@ public class ForwardingRule {
 
   public RouteGuard getAvailability() {
     return _availability;
+  }
+
+  /** Returns the YU selection guard. */
+  public RouteGuard getSelection() {
+    return _selection;
   }
 
   public int getPreference() {
@@ -99,7 +137,13 @@ public class ForwardingRule {
 
   public ForwardingRule withAvailability(RouteGuard availability) {
     return new ForwardingRule(
-        _prefix, availability, _preference, _directNextHop, _indirectNextHop, _terminal);
+        _prefix,
+        availability,
+        availability,
+        _preference,
+        _directNextHop,
+        _indirectNextHop,
+        _terminal);
   }
 
   public boolean matches(Ip dstIp) {

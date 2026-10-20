@@ -14,6 +14,7 @@ import org.batfish.datamodel.Configuration;
 import org.batfish.datamodel.Interface;
 import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.Prefix;
+import org.batfish.datamodel.RoutingProtocol;
 import org.batfish.datamodel.route.nh.NextHop;
 import org.batfish.datamodel.route.nh.NextHopDiscard;
 import org.batfish.datamodel.route.nh.NextHopInterface;
@@ -37,7 +38,7 @@ import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraph;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
 
 /**
- * Builds Algorithm 2 forwarding tables from a converged guarded MAIN RIB and SR policy database.
+ * Builds Algorithm 2 forwarding tables from converged guarded main/underlay RIBs and SR policies.
  *
  * <p>Consumes {@link BatfishSymbolicRoutePipelineResult}; does not parse configs or {@code
  * traffic.json}.
@@ -56,7 +57,7 @@ public final class GuardedTrafficForwarding {
     if (controlPlane == null) {
       throw new IllegalArgumentException("control-plane result cannot be null");
     }
-    Map<String, List<ForwardingRule>> ribs = new LinkedHashMap<>();
+    Map<String, List<ForwardingRule>> mainRibs = new LinkedHashMap<>();
     for (Map.Entry<String, GuardedRib<AnnotatedRoute<AbstractRoute>>> entry :
         controlPlane.getMainRibNetwork().getRibs().entrySet()) {
       String router = entry.getKey();
@@ -67,33 +68,90 @@ public final class GuardedTrafficForwarding {
           rules.add(rule);
         }
       }
-      ribs.put(router, rules);
+      mainRibs.put(router, rules);
     }
+    Map<String, List<ForwardingRule>> underlayRibs = new LinkedHashMap<>();
+    appendUnderlayRules(graph, underlayRibs, controlPlane.getMainRibNetwork().getRibs());
     return new SymbolicTrafficForwarding(
-        graph, ribs, srPolicies(graph, controlPlane, configurations), routerAddresses(configurations));
+        graph,
+        mainRibs,
+        underlayRibs,
+        srPolicies(graph, controlPlane, configurations),
+        routerAddresses(configurations));
+  }
+
+  /**
+   * Retains only already-selected connected/IS-IS routes from the final Main RIB for YU's VIGP.
+   * This deliberately excludes BGP while preserving the control-plane's cross-level IGP selection
+   * guards.
+   */
+  private static void appendUnderlayRules(
+      TrafficGraph graph,
+      Map<String, List<ForwardingRule>> target,
+      Map<String, GuardedRib<AnnotatedRoute<AbstractRoute>>> source) {
+    for (Map.Entry<String, GuardedRib<AnnotatedRoute<AbstractRoute>>> entry : source.entrySet()) {
+      List<ForwardingRule> rules = target.computeIfAbsent(entry.getKey(), unused -> new ArrayList<>());
+      for (GuardedRibEntry<AnnotatedRoute<AbstractRoute>> candidate : entry.getValue().getEntries()) {
+        AbstractRoute route = candidate.getSymbolicRoute().getRoute().getAbstractRoute();
+        if (!isUnderlayProtocol(route.getProtocol())) {
+          continue;
+        }
+        ForwardingRule rule =
+            toRule(
+                graph,
+                entry.getKey(),
+                route,
+                candidate.getAvailabilityGuard(),
+                candidate.getSelectionGuard());
+        if (rule != null) {
+          rules.add(rule);
+        }
+      }
+    }
+  }
+
+  private static boolean isUnderlayProtocol(RoutingProtocol protocol) {
+    return protocol == RoutingProtocol.CONNECTED
+        || protocol == RoutingProtocol.ISIS_L1
+        || protocol == RoutingProtocol.ISIS_L2;
   }
 
   @Nullable
   private static ForwardingRule toRule(
       TrafficGraph graph, String router, GuardedRibEntry<AnnotatedRoute<AbstractRoute>> candidate) {
     AbstractRoute route = candidate.getSymbolicRoute().getRoute().getAbstractRoute();
+    return toRule(
+        graph,
+        router,
+        route,
+        candidate.getAvailabilityGuard(),
+        candidate.getSelectionGuard());
+  }
+
+  @Nullable
+  private static ForwardingRule toRule(
+      TrafficGraph graph,
+      String router,
+      AbstractRoute route,
+      RouteGuard availability,
+      RouteGuard selection) {
     Prefix prefix = route.getNetwork();
-    RouteGuard availability = candidate.getAvailabilityGuard();
     int preference = route.getAdministrativeCost();
     NextHop nextHop = route.getNextHop();
     if (nextHop instanceof NextHopDiscard) {
-      return ForwardingRule.terminal(prefix, availability, preference);
+      return ForwardingRule.terminal(prefix, availability, selection, preference);
     }
     if (nextHop instanceof NextHopInterface) {
       TrafficGraphEdge edge =
           outgoingByInterface(graph, router, ((NextHopInterface) nextHop).getInterfaceName());
       if (edge == null) {
-        return ForwardingRule.terminal(prefix, availability, preference);
+        return ForwardingRule.terminal(prefix, availability, selection, preference);
       }
-      return ForwardingRule.direct(prefix, availability, preference, edge);
+      return ForwardingRule.direct(prefix, availability, selection, preference, edge);
     }
     if (nextHop instanceof NextHopIp) {
-      return ForwardingRule.indirect(prefix, availability, preference, ((NextHopIp) nextHop).getIp());
+      return ForwardingRule.indirect(
+          prefix, availability, selection, preference, ((NextHopIp) nextHop).getIp());
     }
     return null;
   }

@@ -29,9 +29,15 @@ public class RouteSelectionEncodingTest {
   private static final Ip DST_IP = DEST.getStartIp();
 
   private static ForwardingRule direct(RouteGuard guard, int preference) {
+    return direct(guard, guard, preference);
+  }
+
+  private static ForwardingRule direct(
+      RouteGuard availability, RouteGuard selection, int preference) {
     return ForwardingRule.direct(
         DEST,
-        guard,
+        availability,
+        selection,
         preference,
         new TrafficGraphEdge("a_b", "a", "b", "Ethernet0", "Ethernet0", 95.0, false));
   }
@@ -49,8 +55,8 @@ public class RouteSelectionEncodingTest {
   public void testWorseRouteRequiresBetterRouteAbsent() {
     RouteGuard gHigh = GUARDS.variable("g_high");
     RouteGuard gLow = GUARDS.variable("g_low");
-    ForwardingRule high = direct(gHigh, 10);
-    ForwardingRule low = direct(gLow, 20);
+    ForwardingRule high = direct(gHigh, gHigh, 10);
+    ForwardingRule low = direct(gLow, gLow.and(gHigh.not()), 20);
     List<ForwardingRule> rib = Arrays.asList(high, low);
 
     assertThat(
@@ -58,6 +64,23 @@ public class RouteSelectionEncodingTest {
     assertThat(
         RouteSelectionEncoding.selection(low, rib, DST_IP)
             .isEquivalentTo(gLow.and(gHigh.not())),
+        equalTo(true));
+  }
+
+  @Test
+  public void testControlPlaneSelectionGuardOverridesTrafficPreferenceFallback() {
+    RouteGuard selectedByCompleteBgpComparator = GUARDS.variable("bgp_best");
+    ForwardingRule route =
+        ForwardingRule.direct(
+            DEST,
+            GUARDS.trueGuard(),
+            selectedByCompleteBgpComparator,
+            /* preference= */ 20,
+            new TrafficGraphEdge("a_b", "a", "b", "Ethernet0", "Ethernet0", 95.0, false));
+
+    assertThat(
+        RouteSelectionEncoding.selection(route, Collections.singletonList(route), DST_IP)
+            .isEquivalentTo(selectedByCompleteBgpComparator),
         equalTo(true));
   }
 
@@ -85,20 +108,19 @@ public class RouteSelectionEncodingTest {
   }
 
   @Test
-  public void testLongerPrefixIsStrictlyPreferred() {
+  public void testExplicitSelectionGuardPreservesPrefixSelection() {
     RouteGuard gDefault = GUARDS.variable("g_def");
     RouteGuard gExact = GUARDS.variable("g_exact");
     ForwardingRule def =
         ForwardingRule.direct(
             Prefix.parse("0.0.0.0/0"),
             gDefault,
+            gDefault.and(gExact.not()),
             10,
             new TrafficGraphEdge("a_b", "a", "b", "Ethernet0", "Ethernet0", 95.0, false));
-    ForwardingRule exact = direct(gExact, 10);
+    ForwardingRule exact = direct(gExact, gExact, 10);
     List<ForwardingRule> rib = Arrays.asList(def, exact);
 
-    assertThat(RouteSelectionEncoding.strictlyPreferred(exact, def), equalTo(true));
-    assertThat(RouteSelectionEncoding.strictlyPreferred(def, exact), equalTo(false));
     assertThat(
         RouteSelectionEncoding.selection(def, rib, DST_IP)
             .isEquivalentTo(gDefault.and(gExact.not())),
@@ -106,21 +128,13 @@ public class RouteSelectionEncodingTest {
   }
 
   @Test
-  public void testEqualPreferenceIsNotStrictlyPreferred() {
-    ForwardingRule r1 = direct(GUARDS.variable("a"), 10);
-    ForwardingRule r2 = direct(GUARDS.variable("b"), 10);
-    assertThat(RouteSelectionEncoding.strictlyPreferred(r1, r2), equalTo(false));
-    assertThat(RouteSelectionEncoding.strictlyPreferred(r2, r1), equalTo(false));
-  }
-
-  @Test
   public void testThreePreferenceLevels() {
     RouteGuard g1 = GUARDS.variable("g1");
     RouteGuard g2 = GUARDS.variable("g2");
     RouteGuard g3 = GUARDS.variable("g3");
-    ForwardingRule r1 = direct(g1, 10);
-    ForwardingRule r2 = direct(g2, 20);
-    ForwardingRule r3 = direct(g3, 30);
+    ForwardingRule r1 = direct(g1, g1, 10);
+    ForwardingRule r2 = direct(g2, g2.and(g1.not()), 20);
+    ForwardingRule r3 = direct(g3, g3.and(g1.not()).and(g2.not()), 30);
     List<ForwardingRule> rib = Arrays.asList(r1, r2, r3);
     assertThat(
         RouteSelectionEncoding.selection(r3, rib, DST_IP)

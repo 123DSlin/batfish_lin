@@ -21,11 +21,9 @@ import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
  * #simulate(TrafficFlow)} sums hop matrices {@code M_1 + … + M_{I'}} on real links; {@code τ_l}
  * must use that accumulated matrix, not {@code M_I}.
  *
- * <p>When the parsed graph has a finite {@code failureModel.maxFailures} {@code k}, each hop
- * matrix is replaced by its {@code k}-failure equivalent polynomial (YU §5.2 KREDUCE). That is
- * what makes Algorithm 1's output look like Figure 5 ({@code 1*x1 + 0.5*¬x1¬x2¬x3}) instead of a
- * full {@code 2^n} hop-accumulation DAG. In-flight mass that exists only under more than {@code k}
- * failures becomes 0 and ends the accumulated loop.
+ * <p>This execution intentionally does not apply YU §5.2 KREDUCE. Failure budgets are enforced by
+ * the downstream TLP solver; test snapshots use {@code k = 1}. This keeps the Algorithm 1
+ * semantics exact while the MTBDD optimization is disabled.
  *
  * <p>This class models <em>link traversal</em> only. Local delivery, RIB miss, unreachable
  * next-hop, and unreachable SR segment all produce an empty {@code forward} matrix: that mass is
@@ -193,9 +191,6 @@ public class SymbolicTrafficExecution {
     SymbolicTrafficMatrix accumulated = new SymbolicTrafficMatrix();
     SymbolicTrafficMatrix current = previous;
     List<String> routers = new ArrayList<>(_graph.getRouters());
-    List<String> failureVars = _graph.getFailureVariables();
-    int k = _graph.getMaxFailures();
-    boolean reduce = k < Integer.MAX_VALUE && !failureVars.isEmpty();
     int completed = 0;
     for (int hop = 1; hop <= _maxIterations; hop++) {
       current = new SymbolicTrafficMatrix();
@@ -209,15 +204,9 @@ public class SymbolicTrafficExecution {
           current.add(_forwarding.forward(router, flow, stack, omega));
         }
       }
-      if (reduce) {
-        current = current.kReduce(k, failureVars);
-      }
       completed = hop;
       if (accumulate) {
         accumulated.addRealLinks(current);
-        if (reduce) {
-          accumulated = accumulated.kReduce(k, failureVars);
-        }
         if (current.isZero()) {
           break;
         }

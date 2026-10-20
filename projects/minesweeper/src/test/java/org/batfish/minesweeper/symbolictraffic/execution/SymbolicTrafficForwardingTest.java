@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import org.batfish.datamodel.Ip;
 import org.batfish.datamodel.Prefix;
+import org.batfish.minesweeper.symbolicroute.RouteGuard;
 import org.batfish.minesweeper.symbolicroute.Z3RouteGuardFactory;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficFlow;
 import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraph;
@@ -67,8 +68,11 @@ public class SymbolicTrafficForwardingTest {
     TrafficGraphEdge ab = edge("a_b", "a", "b");
     TrafficGraphEdge ac = edge("a_c", "a", "c");
     TrafficGraph g = graph(f, ab, ac);
-    ForwardingRule high = ForwardingRule.direct(DEST, GUARDS.variable("g_high"), 10, ab);
-    ForwardingRule low = ForwardingRule.direct(DEST, GUARDS.variable("g_low"), 20, ac);
+    RouteGuard highAvailable = GUARDS.variable("g_high");
+    RouteGuard lowAvailable = GUARDS.variable("g_low");
+    ForwardingRule high = ForwardingRule.direct(DEST, highAvailable, highAvailable, 10, ab);
+    ForwardingRule low =
+        ForwardingRule.direct(DEST, lowAvailable, lowAvailable.and(highAvailable.not()), 20, ac);
     Map<String, List<ForwardingRule>> ribs = new HashMap<>();
     ribs.put("a", java.util.Arrays.asList(high, low));
     SymbolicTrafficForwarding forwarding =
@@ -100,6 +104,34 @@ public class SymbolicTrafficForwardingTest {
         forwarding.forward("d", f, TrafficLabelStack.empty(), SymbolicTrafficFraction.one());
     assertThat(
         matrix.get(de, TrafficLabelStack.empty()).evaluate(new HashMap<>()), closeTo(1.0, 1e-9));
+  }
+
+  @Test
+  public void testResolveNhIpUsesSeparateUnderlayRib() {
+    TrafficFlow f = flow("d");
+    TrafficGraphEdge de = edge("d_e", "d", "e");
+    TrafficGraphEdge dc = edge("d_c", "d", "c");
+    TrafficGraph g = graph(f, de, dc);
+    Prefix nipPrefix = Prefix.parse("10.0.0.6/32");
+    ForwardingRule bgp = ForwardingRule.indirect(DEST, GUARDS.trueGuard(), 10, NIP);
+    // This route is deliberately present only in the main RIB. VIGP must not use it.
+    ForwardingRule mainRibResolution =
+        ForwardingRule.direct(nipPrefix, GUARDS.trueGuard(), 10, dc);
+    ForwardingRule underlayResolution =
+        ForwardingRule.direct(nipPrefix, GUARDS.trueGuard(), 10, de);
+    Map<String, List<ForwardingRule>> mainRibs = new HashMap<>();
+    mainRibs.put("d", java.util.Arrays.asList(bgp, mainRibResolution));
+    Map<String, List<ForwardingRule>> underlayRibs = new HashMap<>();
+    underlayRibs.put("d", Collections.singletonList(underlayResolution));
+    SymbolicTrafficForwarding forwarding =
+        new SymbolicTrafficForwarding(
+            g, mainRibs, underlayRibs, Collections.emptyMap(), Collections.emptyMap());
+
+    SymbolicTrafficMatrix matrix =
+        forwarding.forward("d", f, TrafficLabelStack.empty(), SymbolicTrafficFraction.one());
+    assertThat(
+        matrix.get(de, TrafficLabelStack.empty()).evaluate(new HashMap<>()), closeTo(1.0, 1e-9));
+    assertThat(matrix.get(dc, TrafficLabelStack.empty()).isZero(), equalTo(true));
   }
 
   @Test
@@ -179,8 +211,10 @@ public class SymbolicTrafficForwardingTest {
     TrafficGraphEdge ac = edge("a_c", "a", "c");
     TrafficGraph g = graph(f, ab, ac);
     ForwardingRule def =
-        ForwardingRule.direct(Prefix.parse("0.0.0.0/0"), GUARDS.trueGuard(), 10, ac);
-    ForwardingRule exact = ForwardingRule.direct(DEST, GUARDS.trueGuard(), 10, ab);
+        ForwardingRule.direct(
+            Prefix.parse("0.0.0.0/0"), GUARDS.trueGuard(), GUARDS.falseGuard(), 10, ac);
+    ForwardingRule exact =
+        ForwardingRule.direct(DEST, GUARDS.trueGuard(), GUARDS.trueGuard(), 10, ab);
     Map<String, List<ForwardingRule>> ribs = new HashMap<>();
     ribs.put("a", java.util.Arrays.asList(def, exact));
     SymbolicTrafficForwarding forwarding =
