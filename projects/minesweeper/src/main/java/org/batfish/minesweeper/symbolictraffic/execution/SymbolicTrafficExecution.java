@@ -21,9 +21,9 @@ import org.batfish.minesweeper.symbolictraffic.parse.TrafficGraphEdge;
  * #simulate(TrafficFlow)} sums hop matrices {@code M_1 + … + M_{I'}} on real links; {@code τ_l}
  * must use that accumulated matrix, not {@code M_I}.
  *
- * <p>This execution intentionally does not apply YU §5.2 KREDUCE. Failure budgets are enforced by
- * the downstream TLP solver; test snapshots use {@code k = 1}. This keeps the Algorithm 1
- * semantics exact while the MTBDD optimization is disabled.
+ * <p>For a finite failure budget {@code k}, each iteration applies YU §5.2 {@code KREDUCE} to
+ * {@code M_i} before it becomes the next iteration's input. Thus the result is exact on the
+ * configured at-most-{@code k}-failure domain. The current demo uses {@code k = 1}.
  *
  * <p>This class models <em>link traversal</em> only. Local delivery, RIB miss, unreachable
  * next-hop, and unreachable SR segment all produce an empty {@code forward} matrix: that mass is
@@ -191,6 +191,9 @@ public class SymbolicTrafficExecution {
     SymbolicTrafficMatrix accumulated = new SymbolicTrafficMatrix();
     SymbolicTrafficMatrix current = previous;
     List<String> routers = new ArrayList<>(_graph.getRouters());
+    List<String> failureVars = _graph.getFailureVariables();
+    int k = _graph.getMaxFailures();
+    boolean reduce = k < Integer.MAX_VALUE && !failureVars.isEmpty();
     int completed = 0;
     for (int hop = 1; hop <= _maxIterations; hop++) {
       current = new SymbolicTrafficMatrix();
@@ -204,9 +207,15 @@ public class SymbolicTrafficExecution {
           current.add(_forwarding.forward(router, flow, stack, omega));
         }
       }
+      if (reduce) {
+        current = current.kReduce(k, failureVars);
+      }
       completed = hop;
       if (accumulate) {
         accumulated.addRealLinks(current);
+        if (reduce) {
+          accumulated = accumulated.kReduce(k, failureVars);
+        }
         if (current.isZero()) {
           break;
         }

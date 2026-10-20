@@ -47,4 +47,19 @@ public final class BooleanGuardAstTest {
       assertThat(rebuilt.isEquivalentTo(expected), equalTo(true));
     }
   }
+
+  @Test
+  public void testDisplaySimplificationExactlyMergesMinterms() {
+    try (Context context = new Context()) {
+      Z3RouteGuardFactory guards = new Z3RouteGuardFactory(context);
+      RouteGuard a = guards.variable("a");
+      RouteGuard b = guards.variable("b");
+      RouteGuard c = guards.variable("c");
+      RouteGuard minterms = a.and(b).and(c).or(a.and(b).and(c.not()));
+
+      RouteGuard simplified = minterms.simplifyForDisplay();
+      assertThat(simplified.isEquivalentTo(minterms), equalTo(true));
+      assertThat(simplified.getAst(), equalTo(a.and(b).getAst()));
+    }
+  }
 }

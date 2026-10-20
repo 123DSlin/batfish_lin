@@ -9,12 +9,18 @@ import com.microsoft.z3.Goal;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import com.microsoft.z3.Tactic;
+import java.util.ArrayList;
+import java.util.BitSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import javax.annotation.Nonnull;
 
 /** A {@link RouteGuard} backed by a Z3 Boolean expression. */
 public final class Z3RouteGuard implements RouteGuard {
+
+  /** Keep exact display minimization bounded; larger guards retain the solver simplification. */
+  private static final int DISPLAY_MINIMIZATION_MAX_VARIABLES = 10;
 
   @Nonnull private final Context _context;
   @Nonnull private final BoolExpr _expression;
@@ -77,6 +83,10 @@ public final class Z3RouteGuard implements RouteGuard {
 
   @Override
   public RouteGuard simplifyForDisplay() {
+    List<String> variables = new ArrayList<>(_ast.getVariables());
+    if (variables.size() <= DISPLAY_MINIMIZATION_MAX_VARIABLES) {
+      return withAst(minimizeExactDnf(_ast, variables));
+    }
     Goal goal = _context.mkGoal(false, false, false);
     goal.add(_expression);
     Tactic tactic =
@@ -90,6 +100,172 @@ public final class Z3RouteGuard implements RouteGuard {
       return simplify();
     }
     return new Z3RouteGuard(_context, (BoolExpr) subgoals[0].AsBoolExpr().simplify(), _ast);
+  }
+
+  /** Exact small-guard DNF minimization; it changes only syntax, never failure semantics. */
+  private static BooleanGuardAst minimizeExactDnf(BooleanGuardAst ast, List<String> variables) {
+    int assignments = 1 << variables.size();
+    BitSet onSet = new BitSet(assignments);
+    for (int assignment = 0; assignment < assignments; assignment++) {
+      if (evaluateAst(ast, variables, assignment)) {
+        onSet.set(assignment);
+      }
+    }
+    if (onSet.isEmpty()) {
+      return BooleanGuardAst.falseValue();
+    }
+    if (onSet.cardinality() == assignments) {
+      return BooleanGuardAst.trueValue();
+    }
+    List<Implicant> candidates = new ArrayList<>();
+    enumerateImplicants(onSet, 0, new int[variables.size()], candidates);
+    List<Implicant> prime = new ArrayList<>();
+    for (Implicant candidate : candidates) {
+      boolean subsumed = false;
+      for (Implicant other : candidates) {
+        if (candidate != other && other.strictlySubsumes(candidate)) {
+          subsumed = true;
+          break;
+        }
+      }
+      if (!subsumed) {
+        prime.add(candidate);
+      }
+    }
+    BitSet uncovered = (BitSet) onSet.clone();
+    List<BooleanGuardAst> terms = new ArrayList<>();
+    while (!uncovered.isEmpty()) {
+      Implicant best = null;
+      int bestCoverage = -1;
+      for (Implicant candidate : prime) {
+        BitSet coverage = (BitSet) candidate._covered.clone();
+        coverage.and(uncovered);
+        int count = coverage.cardinality();
+        if (count > bestCoverage
+            || (count == bestCoverage
+                && best != null
+                && candidate.literalCount() < best.literalCount())) {
+          best = candidate;
+          bestCoverage = count;
+        }
+      }
+      if (best == null || bestCoverage == 0) {
+        throw new IllegalStateException("exact guard minimizer failed to cover an on-set assignment");
+      }
+      terms.add(best.toAst(variables));
+      uncovered.andNot(best._covered);
+    }
+    return BooleanGuardAst.or(terms);
+  }
+
+  private static void enumerateImplicants(
+      BitSet onSet, int index, int[] values, List<Implicant> result) {
+    if (index == values.length) {
+      Implicant candidate = Implicant.from(values, onSet);
+      if (candidate != null) {
+        result.add(candidate);
+      }
+      return;
+    }
+    for (int value = -1; value <= 1; value++) {
+      values[index] = value;
+      enumerateImplicants(onSet, index + 1, values, result);
+    }
+  }
+
+  private static boolean evaluateAst(BooleanGuardAst ast, List<String> variables, int assignment) {
+    switch (ast.getOperator()) {
+      case TRUE:
+        return true;
+      case FALSE:
+        return false;
+      case VARIABLE:
+        return (assignment & (1 << variables.indexOf(ast.getVariableId()))) != 0;
+      case NOT:
+        return !evaluateAst(ast.getChildren().get(0), variables, assignment);
+      case AND:
+        for (BooleanGuardAst child : ast.getChildren()) {
+          if (!evaluateAst(child, variables, assignment)) {
+            return false;
+          }
+        }
+        return true;
+      case OR:
+        for (BooleanGuardAst child : ast.getChildren()) {
+          if (evaluateAst(child, variables, assignment)) {
+            return true;
+          }
+        }
+        return false;
+      default:
+        throw new IllegalArgumentException("unsupported Boolean guard operator");
+    }
+  }
+
+  private static final class Implicant {
+    private final int[] _values;
+    private final BitSet _covered;
+
+    private Implicant(int[] values, BitSet covered) {
+      _values = values;
+      _covered = covered;
+    }
+
+    private static Implicant from(int[] values, BitSet onSet) {
+      BitSet covered = new BitSet();
+      int assignments = 1 << values.length;
+      for (int assignment = 0; assignment < assignments; assignment++) {
+        boolean matches = true;
+        for (int index = 0; index < values.length; index++) {
+          if (values[index] != -1
+              && ((assignment & (1 << index)) != 0) != (values[index] == 1)) {
+            matches = false;
+            break;
+          }
+        }
+        if (matches) {
+          if (!onSet.get(assignment)) {
+            return null;
+          }
+          covered.set(assignment);
+        }
+      }
+      return covered.isEmpty() ? null : new Implicant(values.clone(), covered);
+    }
+
+    private boolean strictlySubsumes(Implicant other) {
+      boolean moreGeneral = false;
+      for (int index = 0; index < _values.length; index++) {
+        if (_values[index] == -1 && other._values[index] != -1) {
+          moreGeneral = true;
+        } else if (_values[index] != other._values[index]) {
+          return false;
+        }
+      }
+      return moreGeneral;
+    }
+
+    private int literalCount() {
+      int result = 0;
+      for (int value : _values) {
+        if (value != -1) {
+          result++;
+        }
+      }
+      return result;
+    }
+
+    private BooleanGuardAst toAst(List<String> variables) {
+      List<BooleanGuardAst> literals = new ArrayList<>();
+      for (int index = 0; index < _values.length; index++) {
+        if (_values[index] == -1) {
+          continue;
+        }
+        BooleanGuardAst variable = BooleanGuardAst.variable(variables.get(index));
+        literals.add(_values[index] == 1 ? variable : BooleanGuardAst.not(variable));
+      }
+      return BooleanGuardAst.and(literals);
+    }
   }
 
   @Override

@@ -795,7 +795,7 @@ public class SymbolicTrafficFraction {
       case CONST:
         return Double.toString(_const);
       case GUARD:
-        return formatAst(_guard.getAst());
+        return formatGuardAst(_guard.getAst());
       case WEIGHT:
         return _weightVar;
       case PLUS:
@@ -855,7 +855,7 @@ public class SymbolicTrafficFraction {
         break;
       case GUARD:
         node.put("op", "guard");
-        node.put("formula", formatAst(_guard.getAst()));
+        node.put("formula", formatGuardAst(_guard.getAst()));
         break;
       case WEIGHT:
         node.put("op", "weight");
@@ -885,8 +885,8 @@ public class SymbolicTrafficFraction {
     return id;
   }
 
-  /** Solver-independent formula text; never calls Z3 {@code Expr.toString()}. */
-  private static String formatAst(BooleanGuardAst ast) {
+  /** Stable, human-readable Boolean syntax shared by traffic reports and fraction serialization. */
+  static String formatGuardAst(BooleanGuardAst ast) {
     switch (ast.getOperator()) {
       case TRUE:
         return "1";
@@ -895,7 +895,7 @@ public class SymbolicTrafficFraction {
       case VARIABLE:
         return ast.getVariableId();
       case NOT:
-        return "(not " + formatAst(ast.getChildren().get(0)) + ")";
+        return "(not " + formatGuardAst(ast.getChildren().get(0)) + ")";
       case AND:
       case OR:
         StringBuilder out = new StringBuilder("(");
@@ -904,7 +904,7 @@ public class SymbolicTrafficFraction {
           if (i > 0) {
             out.append(op);
           }
-          out.append(formatAst(ast.getChildren().get(i)));
+          out.append(formatGuardAst(ast.getChildren().get(i)));
         }
         return out.append(')').toString();
       default:
@@ -1058,7 +1058,7 @@ public class SymbolicTrafficFraction {
       case CONST:
         return formatConst(_const);
       case GUARD:
-        return formatAst(_guard.getAst());
+        return formatGuardAst(_guard.getAst());
       case WEIGHT:
         return _weightVar;
       case PLUS:

@@ -29,6 +29,7 @@ public final class SymbolicTrafficPipeline {
 
   public static final int SCHEMA_VERSION = 1;
 
+  /** Keep the raw matrix readable; SR shares have a dedicated, non-expanded summary below. */
   private static final int TXT_FORMULA_NODE_LIMIT = 64;
 
   private SymbolicTrafficPipeline() {}
@@ -142,12 +143,89 @@ public final class SymbolicTrafficPipeline {
       out.append("YU ALGORITHM 1 EXECUTION\n");
       out.append("M_f[l,S] is hop-accumulated STF on real links (excludes l_R / M_0).\n");
       out.append("Per-flow STF is Σ_S M_f[l,S]. τ_l = Σ_{f,S} V_f · M_f[l,S].\n");
-      out.append("Formulas are exact, unpruned symbolic expressions (YU §5.2 KREDUCE disabled).\n");
+      int k = _graph.getMaxFailures();
+      if (k < Integer.MAX_VALUE) {
+        out.append("Formulas are exact on the at-most-")
+            .append(k)
+            .append("-failure domain (YU §5.2 KREDUCE each iteration).\n");
+      }
       out.append("AllUp evaluates every guard variable as true (no failures).\n");
+      appendSrPathShares(out);
       appendMatrix(out);
       appendFlowStf(out);
       appendTau(out);
       return out.toString();
+    }
+
+    /**
+     * Prints YU's policy-level equation before the expanded Algorithm-1 matrices. This is the
+     * useful boundary between guarded control-plane output ({@code g_p}) and traffic execution:
+     * the matrix later contains the same expression after it has been propagated hop by hop.
+     */
+    private void appendSrPathShares(StringBuilder out) {
+      if (_srPolicies.isEmpty()) {
+        return;
+      }
+      out.append("\n=== SR policy path shares  c_p = (g_p w_p) / Σ_q(g_q w_q) ===\n");
+      List<SrPolicy> policies = new ArrayList<>();
+      for (List<SrPolicy> routerPolicies : _srPolicies.values()) {
+        policies.addAll(routerPolicies);
+      }
+      policies.sort(
+          (left, right) -> {
+            int router = left.getRouter().compareTo(right.getRouter());
+            if (router != 0) {
+              return router;
+            }
+            return policyName(left).compareTo(policyName(right));
+          });
+      for (SrPolicy policy : policies) {
+        List<SrPolicy.Path> paths = new ArrayList<>(policy.getPaths());
+        paths.sort((left, right) -> pathName(left).compareTo(pathName(right)));
+        List<String> weightedGuards = new ArrayList<>();
+        for (SrPolicy.Path path : paths) {
+          weightedGuards.add("(" + guardText(path) + " * " + weightText(path) + ")");
+        }
+        String denominator = String.join(" + ", weightedGuards);
+        out.append("Policy ")
+            .append(policy.getRouter())
+            .append('/')
+            .append(policyName(policy))
+            .append("\n");
+        for (SrPolicy.Path path : paths) {
+          String numerator = "(" + guardText(path) + " * " + weightText(path) + ")";
+          out.append("  ")
+              .append(pathName(path))
+              .append(": g_p = ")
+              .append(guardText(path))
+              .append(", w_p = ")
+              .append(weightText(path))
+              .append(", c_p = ")
+              .append(numerator)
+              .append(" / (")
+              .append(denominator)
+              .append(")\n");
+        }
+      }
+    }
+
+    private static String policyName(SrPolicy policy) {
+      return policy.getName() == null ? "<unnamed>" : policy.getName();
+    }
+
+    private static String pathName(SrPolicy.Path path) {
+      return path.getId() == null ? "<unnamed-path>" : path.getId();
+    }
+
+    private static String guardText(SrPolicy.Path path) {
+      return SymbolicTrafficFraction.formatGuardAst(path.getGuard().simplifyForDisplay().getAst());
+    }
+
+    private static String weightText(SrPolicy.Path path) {
+      String configVar = path.getWeightConfigVar();
+      return configVar == null || configVar.isEmpty()
+          ? Integer.toString(path.getWeight())
+          : configVar + " (default " + path.getWeight() + ')';
     }
 
     private void appendMatrix(StringBuilder out) {
