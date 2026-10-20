@@ -142,12 +142,7 @@ public final class SymbolicTrafficPipeline {
       out.append("YU ALGORITHM 1 EXECUTION\n");
       out.append("M_f[l,S] is hop-accumulated STF on real links (excludes l_R / M_0).\n");
       out.append("Per-flow STF is Σ_S M_f[l,S]. τ_l = Σ_{f,S} V_f · M_f[l,S].\n");
-      int k = _graph.getMaxFailures();
-      if (k < Integer.MAX_VALUE) {
-        out.append("Formulas are k-failure equivalent (YU §5.2 KREDUCE, k=")
-            .append(k)
-            .append(").\n");
-      }
+      out.append("Formulas are exact, unpruned symbolic expressions (YU §5.2 KREDUCE disabled).\n");
       out.append("AllUp evaluates every guard variable as true (no failures).\n");
       appendMatrix(out);
       appendFlowStf(out);

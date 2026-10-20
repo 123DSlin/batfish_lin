@@ -74,6 +74,7 @@ public final class SymbolicTrafficPipelineTest {
     assertThat(text, containsString("M_f[l, S]"));
     assertThat(text, containsString("Per-flow link STF"));
     assertThat(text, containsString("τ_l"));
+    assertThat(text, containsString("KREDUCE disabled"));
     assertThat(text, containsString("a-to-b"));
   }
 }
