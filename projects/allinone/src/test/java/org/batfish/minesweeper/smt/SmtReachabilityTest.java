@@ -110,7 +110,8 @@ public class SmtReachabilityTest {
         runfiles.rlocation(
             SYMBOLIC
                 ? "batfish/networks/tolerance-symbolic-route"
-                : "batfish/networks/tolerance_sr_te_demo_1_d_x");
+                : "batfish/networks/tolerance-symbolic-route_1_r3_r4");
+    // : "batfish/networks/tolerance_sr_te_demo_1_d_x");
     // String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
     // String configPath =
     // runfiles.rlocation("batfish/networks/userstudy_networks/userstudy_network");
@@ -170,12 +171,22 @@ public class SmtReachabilityTest {
     if (SYMBOLIC) {
       writeToleranceSymbolicRoutes(dataPlane);
     } else {
-      RibPrinter.printRouteTable(routesAnswer, _dataPlaneWriter);
+      RibPrinter.printRouteTable(
+          routesAnswer, _dataPlaneWriter, SmtReachabilityTest::selectedOutputProtocol);
       writeSnapshotSymbolicRoutes(dataPlane, configPath);
     }
     long end = System.currentTimeMillis();
     System.out.println(
         "[Time taken to compute data plane and print RIBs: " + (end - start) + " ms]");
+  }
+
+  private static boolean selectedOutputProtocol(String protocolName) {
+    String normalized = protocolName.toLowerCase(java.util.Locale.ROOT);
+    Set<SmtProtocolSelection.Family> selected = SmtProtocolSelection.fromRuntime();
+    return (selected.contains(SmtProtocolSelection.Family.BGP)
+            && (normalized.equals("bgp") || normalized.equals("ibgp")))
+        || (selected.contains(SmtProtocolSelection.Family.OSPF) && normalized.startsWith("ospf"))
+        || (selected.contains(SmtProtocolSelection.Family.ISIS) && normalized.startsWith("isis"));
   }
 
   @After
@@ -353,16 +364,16 @@ public class SmtReachabilityTest {
     final ReachabilityQuestion question = new ReachabilityQuestion();
 
     // tolerance-symbolic traffic
-   // question.setIngressNodeRegex("s");
-   // question.setFinalNodeRegex("d");
-   // IpWildcard ipWildcard = IpWildcard.parse("5.5.5.5/32");
-   // question.setDstIps(Set.of(ipWildcard));
+    // question.setIngressNodeRegex("s");
+    // question.setFinalNodeRegex("d");
+    // IpWildcard ipWildcard = IpWildcard.parse("5.5.5.5/32");
+    // question.setDstIps(Set.of(ipWildcard));
 
     // tolerance-symbolic-route
-     question.setIngressNodeRegex("r1");
-     question.setFinalNodeRegex("r4");
-     IpWildcard ipWildcard = IpWildcard.parse("192.0.14.2/32");
-     question.setDstIps(Set.of(ipWildcard));
+    question.setIngressNodeRegex("r4");
+    question.setFinalNodeRegex("r1");
+    IpWildcard ipWildcard = IpWildcard.parse("10.0.0.0/24");
+    question.setDstIps(Set.of(ipWildcard));
 
     // user-study specification 1: ECMP reachability
     // question.setIngressNodeRegex("r3");

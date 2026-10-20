@@ -141,7 +141,9 @@ class Optimizations {
    * This will be the case if there is at least one route reflector client in use.
    */
   private void computeNeedClientIds() {
-    _needOriginatorIds = _encoderSlice.getGraph().getRouteReflectorParent().size() > 0;
+    _needOriginatorIds =
+        selected(SmtProtocolSelection.Family.BGP)
+            && _encoderSlice.getGraph().getRouteReflectorParent().size() > 0;
   }
 
   /*
@@ -149,6 +151,9 @@ class Optimizations {
    * then the variable can be removed from the encoding.
    */
   private boolean computeKeepLocalPref() {
+    if (!selected(SmtProtocolSelection.Family.BGP)) {
+      return false;
+    }
     if (!Optimizations.ENABLE_SLICING_OPTIMIZATION) {
       return true;
     }
@@ -217,7 +222,7 @@ class Optimizations {
   private boolean computeKeepMed() {
     // NOTE: Always enable MED.
     // return !Optimizations.ENABLE_SLICING_OPTIMIZATION;
-    return true;
+    return selected(SmtProtocolSelection.Family.BGP);
     /* if (!PolicyQuotient.ENABLE_SLICING_OPTIMIZATION) {
         return true;
     }
@@ -230,6 +235,9 @@ class Optimizations {
    * then it is unnecessary.
    */
   private boolean computeKeepOspfType() {
+    if (!selected(SmtProtocolSelection.Family.OSPF)) {
+      return false;
+    }
     if (!Optimizations.ENABLE_SLICING_OPTIMIZATION) {
       return true;
     }
@@ -278,17 +286,31 @@ class Optimizations {
    */
   private void initProtocols() {
     Graph g = _encoderSlice.getGraph();
+    Set<SmtProtocolSelection.Family> selectedProtocols =
+        _encoderSlice.getEncoder().getProtocolSelection();
     g.getConfigurations().forEach((router, conf) -> getProtocols().put(router, new ArrayList<>()));
     g.getConfigurations()
         .forEach(
             (router, conf) -> {
               List<Protocol> protos = getProtocols().get(router);
-              if (!conf.getDefaultVrf().getOspfProcesses().isEmpty()) {
+              if (selectedProtocols.contains(SmtProtocolSelection.Family.OSPF)
+                  && !conf.getDefaultVrf().getOspfProcesses().isEmpty()) {
                 protos.add(Protocol.OSPF);
+              }
+              if (selectedProtocols.contains(SmtProtocolSelection.Family.ISIS)
+                  && conf.getDefaultVrf().getIsisProcess() != null) {
+                if (conf.getDefaultVrf().getIsisProcess().getLevel1() != null) {
+                  protos.add(Protocol.ISIS_L1);
+                }
+                if (conf.getDefaultVrf().getIsisProcess().getLevel2() != null) {
+                  protos.add(Protocol.ISIS_L2);
+                }
               }
               // TODO: re-evaluate this in the future
               // TODO: do we want to model BGP's impact on IGP in other slices?
-              if (conf.getDefaultVrf().getBgpProcess() != null && _encoderSlice.isMainSlice()) {
+              if (selectedProtocols.contains(SmtProtocolSelection.Family.BGP)
+                  && conf.getDefaultVrf().getBgpProcess() != null
+                  && _encoderSlice.isMainSlice()) {
                 protos.add(Protocol.BGP);
               }
               if (needToModelConnected(conf)) {
@@ -365,6 +387,9 @@ class Optimizations {
    */
   private void computeBgpInternalNeeded() {
     _needBgpInternal = new HashSet<>();
+    if (!selected(SmtProtocolSelection.Family.BGP)) {
+      return;
+    }
     _encoderSlice
         .getGraph()
         .getIbgpNeighbors()
@@ -409,7 +434,7 @@ class Optimizations {
               // Can be no peer-specific export, which includes dropping due to
               // the neighbor already being the root of the tree.
               for (Protocol proto : getProtocols().get(router)) {
-                if (proto.isConnected() || proto.isStatic()) {
+                if (proto.isConnected() || proto.isStatic() || proto.isIsis()) {
                   map.put(proto, noFailures && Optimizations.ENABLE_EXPORT_MERGE_OPTIMIZATION);
 
                 } else if (proto.isOspf()) {
@@ -480,7 +505,8 @@ class Optimizations {
                 if (Optimizations.ENABLE_IMPORT_EXPORT_MERGE_OPTIMIZATION
                     && !proto.isConnected()
                     && !proto.isStatic()
-                    && !proto.isOspf()) {
+                    && !proto.isOspf()
+                    && !proto.isIsis()) {
 
                   for (GraphEdge ge : _encoderSlice.getGraph().getEdgeMap().get(router)) {
 
@@ -664,6 +690,10 @@ class Optimizations {
 
   boolean getNeedOriginatorIds() {
     return _needOriginatorIds;
+  }
+
+  private boolean selected(SmtProtocolSelection.Family family) {
+    return _encoderSlice.getEncoder().getProtocolSelection().contains(family);
   }
 
   Map<String, List<Protocol>> getProtocols() {

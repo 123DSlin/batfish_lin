@@ -1,7 +1,6 @@
 package org.batfish.minesweeper.smt;
 
 import com.microsoft.z3.ArithExpr;
-import com.microsoft.z3.BitVecExpr;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
@@ -215,6 +214,12 @@ public abstract class SymbolicRouteBase {
       if (opts.getKeepOspfType()) {
         _ospfType = new SymbolicOspfType(slice, _name + "_ospfType");
       }
+    } else if (proto.isIsis()) {
+      _metric = ctx.mkIntConst(_name + "_metric");
+      _localPref = null;
+      _adminDist = (modelAd ? ctx.mkIntConst(_name + "_adminDist") : null);
+      _med = null;
+      _bgpInternal = null;
     }
 
     boolean bestAndNeedId =

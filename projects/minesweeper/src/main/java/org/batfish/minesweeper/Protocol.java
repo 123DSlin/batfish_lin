@@ -15,6 +15,8 @@ public class Protocol {
   enum Type {
     BEST,
     OSPF,
+    ISIS_L1,
+    ISIS_L2,
     BGP,
     CONNECTED,
     STATIC
@@ -29,6 +31,10 @@ public class Protocol {
   public static final Protocol BGP = new Protocol(Type.BGP);
 
   public static final Protocol OSPF = new Protocol(Type.OSPF);
+
+  public static final Protocol ISIS_L1 = new Protocol(Type.ISIS_L1);
+
+  public static final Protocol ISIS_L2 = new Protocol(Type.ISIS_L2);
 
   public static final Protocol STATIC = new Protocol(Type.STATIC);
 
@@ -47,6 +53,10 @@ public class Protocol {
         return Protocol.BGP;
       case OSPF:
         return Protocol.OSPF;
+      case ISIS_L1:
+        return Protocol.ISIS_L1;
+      case ISIS_L2:
+        return Protocol.ISIS_L2;
       default:
         return null;
     }
@@ -58,6 +68,10 @@ public class Protocol {
         return RoutingProtocol.BGP;
       case OSPF:
         return RoutingProtocol.OSPF;
+      case ISIS_L1:
+        return RoutingProtocol.ISIS_L1;
+      case ISIS_L2:
+        return RoutingProtocol.ISIS_L2;
       case CONNECTED:
         return RoutingProtocol.CONNECTED;
       case STATIC:
@@ -73,6 +87,18 @@ public class Protocol {
 
   public boolean isOspf() {
     return _type == Type.OSPF;
+  }
+
+  public boolean isIsis() {
+    return isIsisL1() || isIsisL2();
+  }
+
+  public boolean isIsisL1() {
+    return _type == Type.ISIS_L1;
+  }
+
+  public boolean isIsisL2() {
+    return _type == Type.ISIS_L2;
   }
 
   public boolean isConnected() {

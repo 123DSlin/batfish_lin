@@ -65,7 +65,6 @@ import org.batfish.datamodel.routing_policy.expr.PrefixSetExpr;
 import org.batfish.datamodel.routing_policy.statement.Statement;
 import org.batfish.minesweeper.CommunityVar.Type;
 import org.batfish.minesweeper.bdd.CommunityVarConverter;
-import org.batfish.minesweeper.smt.Encoder;
 import org.batfish.minesweeper.collections.Table2;
 import org.batfish.minesweeper.communities.RoutePolicyStatementVarCollector;
 
@@ -133,14 +132,16 @@ public class Graph {
 
   /**
    * A graph with a static route with a dynamic next hop cannot be encoded to SMT, so some of the
-   * Minesweeper analyses will fail. Compression is still possible though.
-   * FIXME: annotated by yongzheng on 20250318
+   * Minesweeper analyses will fail. Compression is still possible though. FIXME: annotated by
+   * yongzheng on 20250318
    */
   private boolean _hasStaticRouteWithDynamicNextHop;
 
   private final Set<CommunityVar> _allCommunities;
 
-  /** EXACT/OTHER only; bit index {@code i} is the {@code i}th entry in {@link CommunityVar} sort. */
+  /**
+   * EXACT/OTHER only; bit index {@code i} is the {@code i}th entry in {@link CommunityVar} sort.
+   */
   private final ImmutableMap<CommunityVar, Integer> _allCommunitiesIndex;
 
   /**
@@ -361,6 +362,9 @@ public class Graph {
     if (proto.isStatic()) {
       return null;
     }
+    if (proto.isIsis()) {
+      return null;
+    }
     if (proto.isConnected()) {
       return null;
     }
@@ -372,6 +376,14 @@ public class Graph {
     Vrf vrf = conf.getDefaultVrf();
     if (!vrf.getOspfProcesses().isEmpty()) {
       allNetworks.addAll(getOriginatedNetworks(conf, Protocol.OSPF));
+    }
+    if (vrf.getIsisProcess() != null) {
+      if (vrf.getIsisProcess().getLevel1() != null) {
+        allNetworks.addAll(getOriginatedNetworks(conf, Protocol.ISIS_L1));
+      }
+      if (vrf.getIsisProcess().getLevel2() != null) {
+        allNetworks.addAll(getOriginatedNetworks(conf, Protocol.ISIS_L2));
+      }
     }
     if (vrf.getBgpProcess() != null) {
       allNetworks.addAll(getOriginatedNetworks(conf, Protocol.BGP));
@@ -400,6 +412,19 @@ public class Graph {
           if (iface.getActive() && iface.getOspfEnabled()) {
             acc.add(iface.getConcreteAddress().getPrefix());
           }
+        }
+      }
+      return acc;
+    }
+
+    if (proto.isIsis()) {
+      for (Interface iface : conf.getAllInterfaces(Configuration.DEFAULT_VRF_NAME).values()) {
+        if (!iface.getActive() || iface.getConcreteAddress() == null || iface.getIsis() == null) {
+          continue;
+        }
+        if ((proto.isIsisL1() && iface.getIsis().getLevel1() != null)
+            || (proto.isIsisL2() && iface.getIsis().getLevel2() != null)) {
+          acc.add(iface.getConcreteAddress().getPrefix());
         }
       }
       return acc;
@@ -495,7 +520,8 @@ public class Graph {
       String router = entry.getKey();
       Configuration conf = entry.getValue();
       Set<NodeInterfacePair> ifacePairs = new HashSet<>();
-      for (Entry<String, Interface> entry2 : conf.getAllInterfaces(Configuration.DEFAULT_VRF_NAME).entrySet()) {
+      for (Entry<String, Interface> entry2 :
+          conf.getAllInterfaces(Configuration.DEFAULT_VRF_NAME).entrySet()) {
         String name = entry2.getKey();
         Interface iface = entry2.getValue();
         NodeInterfacePair nip = NodeInterfacePair.of(router, name);
@@ -554,7 +580,7 @@ public class Graph {
   /*
    * Collect all static routes after inferring which interface they indicate
    * should be used for the next-hop.
-   * 
+   *
    * A static route's next-hop can be configured in three ways:
    *   + Next-Hop IP Address (Neighbor Router Interface)
    *     ip route 192.168.2.0 255.255.255.0 192.168.1.2 (Neighbor Interface Ip Address)
@@ -1082,8 +1108,8 @@ public class Graph {
 
   public List<CommunityVar> getCommunityDependencies(CommunityVar cvar) {
     if (!_communityDependencies.containsKey(cvar)) {
-      throw new BatfishException("Graph.getCommunityDependencies: " +
-          "variable " + cvar + " not found");
+      throw new BatfishException(
+          "Graph.getCommunityDependencies: " + "variable " + cvar + " not found");
     }
     return _communityDependencies.get(cvar);
   }
@@ -1136,9 +1162,7 @@ public class Graph {
     return comms;
   }
 
-  /**
-   * Collect community literals and regexes from all CommunityList definitions on a router.
-   */
+  /** Collect community literals and regexes from all CommunityList definitions on a router. */
   private static Set<CommunityVar> findAllCommunitiesFromCommunityLists(Configuration conf) {
     ImmutableSet.Builder<CommunityVar> builder = ImmutableSet.builder();
     for (CommunityList cl : conf.getCommunityLists().values()) {
@@ -1152,8 +1176,7 @@ public class Graph {
   private static void collectCommunityVarsFromExpr(
       CommunitySetExpr expr, ImmutableSet.Builder<CommunityVar> builder) {
     if (expr instanceof LiteralCommunity) {
-      builder.add(
-          CommunityVarConverter.toCommunityVar(((LiteralCommunity) expr).getCommunity()));
+      builder.add(CommunityVarConverter.toCommunityVar(((LiteralCommunity) expr).getCommunity()));
     } else if (expr instanceof RegexCommunitySet) {
       builder.add(CommunityVarConverter.toCommunityVar((RegexCommunitySet) expr));
     } else if (expr instanceof LiteralCommunitySet) {
@@ -1255,7 +1278,7 @@ public class Graph {
   public long findRouterId(GraphEdge ge, Protocol proto) {
     GraphEdge eOther = _otherEnd.get(ge);
 
-    if (proto.isOspf() || proto.isConnected() || proto.isStatic()) {
+    if (proto.isOspf() || proto.isIsis() || proto.isConnected() || proto.isStatic()) {
       return 0L;
     }
 
@@ -1295,6 +1318,12 @@ public class Graph {
     if (proto.isOspf()) {
       return iface.getActive() && iface.getOspfEnabled();
     }
+    if (proto.isIsis()) {
+      return iface.getActive()
+          && iface.getIsis() != null
+          && ((proto.isIsisL1() && iface.getIsis().getLevel1() != null)
+              || (proto.isIsisL2() && iface.getIsis().getLevel2() != null));
+    }
     return iface.getActive();
   }
 
@@ -1326,6 +1355,9 @@ public class Graph {
 
     // Don't use ospf over edges to hosts / external
     if ((ge.getPeer() == null || isHost(ge.getPeer())) && proto.isOspf()) {
+      return false;
+    }
+    if ((ge.getPeer() == null || isHost(ge.getPeer())) && proto.isIsis()) {
       return false;
     }
 
@@ -1387,6 +1419,9 @@ public class Graph {
     if (proto.isOspf()) {
       return null;
     }
+    if (proto.isIsis()) {
+      return null;
+    }
     if (proto.isBgp()) {
       BgpPeerConfig n = findBgpNeighbor(ge);
       return Optional.ofNullable(n)
@@ -1417,6 +1452,9 @@ public class Graph {
       }
       String exp = p.getExportPolicy();
       return conf.getRoutingPolicies().get(exp);
+    }
+    if (proto.isIsis()) {
+      return null;
     }
     if (proto.isBgp()) {
       BgpPeerConfig n = findBgpNeighbor(ge);

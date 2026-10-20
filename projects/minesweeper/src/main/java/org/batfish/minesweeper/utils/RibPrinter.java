@@ -1,29 +1,33 @@
 package org.batfish.minesweeper.utils;
 
-import org.batfish.datamodel.answers.AnswerElement;
-import org.batfish.datamodel.table.TableAnswerElement;
-import org.batfish.datamodel.table.Row;
-import org.batfish.datamodel.Configuration;
 import com.fasterxml.jackson.databind.JsonNode;
-
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
+import org.batfish.datamodel.Configuration;
+import org.batfish.datamodel.answers.AnswerElement;
+import org.batfish.datamodel.table.Row;
+import org.batfish.datamodel.table.TableAnswerElement;
 
-/**
- * Utility class for printing a Batfish-style route table from an AnswerElement.
- */
+/** Utility class for printing a Batfish-style route table from an AnswerElement. */
 public class RibPrinter {
   /**
    * Pretty-print the route table in a tabular format from a TableAnswerElement.
    *
-   * @param answerElement a Batfish AnswerElement expected to be a TableAnswerElement
-   *                      containing routing table entries
+   * @param answerElement a Batfish AnswerElement expected to be a TableAnswerElement containing
+   *     routing table entries
    */
   public static void printRouteTable(AnswerElement answerElement, PrintWriter writer) {
+    printRouteTable(answerElement, writer, unused -> true);
+  }
+
+  /** Pretty-prints only rows whose protocol name is accepted by {@code protocolFilter}. */
+  public static void printRouteTable(
+      AnswerElement answerElement, PrintWriter writer, Predicate<String> protocolFilter) {
     // Ensure the answer element is a TableAnswerElement
     if (!(answerElement instanceof TableAnswerElement)) {
       System.out.println("Provided AnswerElement is not a TableAnswerElement.");
@@ -43,8 +47,19 @@ public class RibPrinter {
 
     // Define table header format and header (column widths)
     String format = "%-12s %-8s %-19s %-10s %-16s %-25s %-10s %-8s %-8s %-8s\n";
-    String header = String.format(format, "Node", "VRF", "Network", "Protocol", "NextHopIP",
-        "NextHopInterface", "NextHop", "Metric", "AD", "Tag");
+    String header =
+        String.format(
+            format,
+            "Node",
+            "VRF",
+            "Network",
+            "Protocol",
+            "NextHopIP",
+            "NextHopInterface",
+            "NextHop",
+            "Metric",
+            "AD",
+            "Tag");
     // Print column headers
     writer.print(header);
     // System.out.print(header);
@@ -62,6 +77,9 @@ public class RibPrinter {
       String node = getFieldAsText(row, "Node", "name");
       String network = getFieldAsText(row, "Network");
       String protocol = getFieldAsText(row, "Protocol");
+      if (!protocolFilter.test(protocol)) {
+        continue;
+      }
       String nextHopIp = getFieldAsText(row, "Next_Hop_IP");
       String nextHopInterface = getFieldAsText(row, "Next_Hop_Interface");
       String nextHop = getFieldAsText(row, "Next_Hop");
@@ -128,7 +146,7 @@ public class RibPrinter {
   private static String repeatChar(char c, int count) {
     StringBuilder builder = new StringBuilder(count);
     for (int i = 0; i < count; i++) {
-        builder.append(c);
+      builder.append(c);
     }
     return builder.toString();
   }

@@ -305,6 +305,7 @@ public class Encoder {
   private boolean _modelIgp;
 
   private HeaderQuestion _question;
+  private final ImmutableSet<SmtProtocolSelection.Family> _protocolSelection;
   private Map<String, EncoderSlice> _slices;
   private Map<String, Map<String, BoolExpr>> _sliceReachability;
 
@@ -415,6 +416,8 @@ public class Encoder {
       int id) {
     _graph = graph;
     _previousEncoder = enc;
+    _protocolSelection =
+        enc == null ? SmtProtocolSelection.fromRuntime() : enc.getProtocolSelection();
     _modelIgp = true;
     _encodingId = id;
     _question = q;
@@ -550,7 +553,9 @@ public class Encoder {
    * to determine if messages sent to/from a neighbor will arrive.
    */
   private void initSlices(HeaderSpace h, Graph g) {
-    if (g.getIbgpNeighbors().isEmpty() || !_modelIgp) {
+    if (!_protocolSelection.contains(SmtProtocolSelection.Family.BGP)
+        || g.getIbgpNeighbors().isEmpty()
+        || !_modelIgp) {
       _slices.put(
           MAIN_SLICE_NAME, new EncoderSlice(this, h, g, "", _unusedCfwdWriter, _historyEnumWriter));
       // Write a flag indicating that we are NOT modeling IGP
@@ -563,7 +568,7 @@ public class Encoder {
       _modelIgpWriter.println("1");
     }
 
-    if (_modelIgp) {
+    if (_modelIgp && _protocolSelection.contains(SmtProtocolSelection.Family.BGP)) {
       SortedSet<MsPair<String, Ip>> ibgpRouters = new TreeSet<>();
 
       for (Entry<GraphEdge, BgpActivePeerConfig> entry : g.getIbgpNeighbors().entrySet()) {
@@ -1277,6 +1282,7 @@ public class Encoder {
     String outputKeyPrefixlistFileName = _outputDirectoryName + "/0_key_prefixlists.txt";
     String outputUnmatchedCommunitiesFileName =
         _outputDirectoryName + "/0_unmatched_communities.txt";
+    String outputProtocolsFileName = _outputDirectoryName + "/0_protocols.txt";
 
     File outputSmtFile = new File(outputSmtFileName);
     File outputModelIgpFile = new File(outputModelIgpName);
@@ -1293,6 +1299,10 @@ public class Encoder {
     File outputUnmatchedCommunitiesFile = new File(outputUnmatchedCommunitiesFileName);
 
     try {
+      try (PrintWriter protocolWriter =
+          new PrintWriter(new FileWriter(outputProtocolsFileName, false), true)) {
+        protocolWriter.println(SmtProtocolSelection.format(_protocolSelection));
+      }
       _smtWriter = new PrintWriter(new FileWriter(outputSmtFile, true), true);
       _modelIgpWriter = new PrintWriter(new FileWriter(outputModelIgpFile, true), true);
       _hostnameWriter = new PrintWriter(new FileWriter(outputHostnameFile, true), true);
@@ -1438,6 +1448,10 @@ public class Encoder {
     return _question;
   }
 
+  ImmutableSet<SmtProtocolSelection.Family> getProtocolSelection() {
+    return _protocolSelection;
+  }
+
   public String getDirectoryName() {
     return _outputDirectoryName;
   }
@@ -1481,44 +1495,48 @@ public class Encoder {
     _interfaceWriter.flush();
     _interfaceWriter.close();
 
-    // write all eBGP neighbor pairs (with as-number)
-    for (Map.Entry<GraphEdge, BgpActivePeerConfig> entry : _graph.getEbgpNeighbors().entrySet()) {
-      GraphEdge ge = entry.getKey();
-      BgpActivePeerConfig bgpConfig = entry.getValue();
+    // Write eBGP-only metadata only when BGP participates in this encoding.
+    if (_protocolSelection.contains(SmtProtocolSelection.Family.BGP)) {
+      for (Map.Entry<GraphEdge, BgpActivePeerConfig> entry : _graph.getEbgpNeighbors().entrySet()) {
+        GraphEdge ge = entry.getKey();
+        BgpActivePeerConfig bgpConfig = entry.getValue();
 
-      // skip destination port without peer
-      if (null == ge.getPeer() || null == ge.getEnd()) {
-        continue;
+        // skip destination port without peer
+        if (null == ge.getPeer() || null == ge.getEnd()) {
+          continue;
+        }
+
+        String ebgpNeighborPair =
+            ge.getRouter()
+                + ","
+                + ge.getStart().getName()
+                + " ("
+                + bgpConfig.getLocalAs()
+                + ") -> "
+                + ge.getPeer()
+                + ","
+                + ge.getEnd().getName()
+                + " ("
+                + bgpConfig.getRemoteAsns()
+                + ")";
+        _ebgpneighborWriter.println(ebgpNeighborPair);
       }
-
-      String ebgpNeighborPair =
-          ge.getRouter()
-              + ","
-              + ge.getStart().getName()
-              + " ("
-              + bgpConfig.getLocalAs()
-              + ") -> "
-              + ge.getPeer()
-              + ","
-              + ge.getEnd().getName()
-              + " ("
-              + bgpConfig.getRemoteAsns()
-              + ")";
-      _ebgpneighborWriter.println(ebgpNeighborPair);
     }
     _ebgpneighborWriter.flush();
     _ebgpneighborWriter.close();
 
     // write all communities and related indexes (exclude other community type now)
     ImmutableMap<CommunityVar, Integer> allCommsIndex = _graph.getAllCommunitiesIndex();
-    _commsIndexWriter.println(allCommsIndex.size());
-    for (Map.Entry<CommunityVar, Integer> entry : allCommsIndex.entrySet()) {
-      CommunityVar comm = entry.getKey();
-      int index = entry.getValue();
-      if (CommunityVar.Type.EXACT == comm.getType()) {
-        Community literal = comm.getLiteralValue();
-        assert literal != null;
-        _commsIndexWriter.println(literal.toString() + ": " + index);
+    if (_protocolSelection.contains(SmtProtocolSelection.Family.BGP)) {
+      _commsIndexWriter.println(allCommsIndex.size());
+      for (Map.Entry<CommunityVar, Integer> entry : allCommsIndex.entrySet()) {
+        CommunityVar comm = entry.getKey();
+        int index = entry.getValue();
+        if (CommunityVar.Type.EXACT == comm.getType()) {
+          Community literal = comm.getLiteralValue();
+          assert literal != null;
+          _commsIndexWriter.println(literal.toString() + ": " + index);
+        }
       }
     }
     _commsIndexWriter.flush();
@@ -1566,8 +1584,12 @@ public class Encoder {
   }
 
   private void initConfigurationConstants() {
-    IsisSpfSmtEncoder.initConfigurationConstants(
-        _ctx, _solver, _allVariables, _graph.getConfigurations());
+    if (_protocolSelection.contains(SmtProtocolSelection.Family.ISIS)) {
+      IsisSpfSmtEncoder.initConfigurationConstants(
+          _ctx, _solver, _allVariables, _graph.getConfigurations());
+      SrPolicySmtEncoder.initConfigurationConstants(
+          _ctx, _solver, _allVariables, _graph.getConfigurations());
+    }
     for (Map.Entry<String, Configuration> configEntry : _graph.getConfigurations().entrySet()) {
       String hostName = configEntry.getKey();
       Configuration config = configEntry.getValue();
