@@ -1,0 +1,105 @@
+{
+  "schemaName" : "batfish-minesweeper-symbolic-traffic-loads",
+  "schemaVersion" : 1,
+  "engine" : "YU_ALGORITHM_1",
+  "links" : [
+    {
+      "capacityGbps" : 95.0,
+      "id" : "a_d",
+      "peer" : "d",
+      "router" : "a",
+      "tau" : "((not d_x) * 20)"
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "a_d",
+      "peer" : "a",
+      "router" : "d",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "a_s",
+      "peer" : "s",
+      "router" : "a",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "a_s",
+      "peer" : "a",
+      "router" : "s",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "a_x",
+      "peer" : "x",
+      "router" : "a",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "a_x",
+      "peer" : "a",
+      "router" : "x",
+      "tau" : "((not d_x) * 20)"
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "b_d",
+      "peer" : "d",
+      "router" : "b",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "b_d",
+      "peer" : "b",
+      "router" : "d",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "b_s",
+      "peer" : "s",
+      "router" : "b",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "b_s",
+      "peer" : "b",
+      "router" : "s",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "b_x",
+      "peer" : "x",
+      "router" : "b",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "b_x",
+      "peer" : "b",
+      "router" : "x",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "d_x",
+      "peer" : "x",
+      "router" : "d",
+      "tau" : 0.0
+    },
+    {
+      "capacityGbps" : 95.0,
+      "id" : "d_x",
+      "peer" : "d",
+      "router" : "x",
+      "tau" : "(d_x * 20)"
+    }
+  ]
+}

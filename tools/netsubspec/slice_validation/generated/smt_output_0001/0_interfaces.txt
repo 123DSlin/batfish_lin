@@ -1,0 +1,15 @@
+x,GigabitEthernet0/2
+d,GigabitEthernet0/1
+b,GigabitEthernet0/1
+d,GigabitEthernet0/0
+x,GigabitEthernet0/0
+s,GigabitEthernet0/0
+d,GigabitEthernet0/2
+a,GigabitEthernet0/0
+x,GigabitEthernet0/1
+a,GigabitEthernet0/2
+b,GigabitEthernet0/2
+s,GigabitEthernet0/1
+d,Loopback0
+b,GigabitEthernet0/0
+a,GigabitEthernet0/1

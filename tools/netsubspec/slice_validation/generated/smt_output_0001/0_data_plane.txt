@@ -1,0 +1,5 @@
+Node         VRF      Network             Protocol   NextHopIP        NextHopInterface          NextHop    Metric   AD       Tag     
+======================================================================================================================================
+a            default  5.5.5.5/32          bgp        10.0.25.2        dynamic                   d          0        20       -       
+b            default  5.5.5.5/32          bgp        10.0.45.2        dynamic                   d          0        20       -       
+x            default  5.5.5.5/32          bgp        10.0.15.2        dynamic                   d          0        20       -       

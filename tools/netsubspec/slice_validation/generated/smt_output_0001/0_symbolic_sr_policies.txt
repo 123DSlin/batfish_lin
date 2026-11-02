@@ -1,0 +1,3 @@
+SR POLICY FORWARDING BRANCHES
+Node     VRF       Color    Endpoint         Policy               Candidate              Pref     Weight   SegmentList        Labels               NextHops           SelectionGuard
+========================================================================================================================================================================

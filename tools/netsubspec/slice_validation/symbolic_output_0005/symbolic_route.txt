@@ -1,0 +1,63 @@
+SYMBOLIC ROUTING INFORMATION BASE
+Guards describe route availability and final selection conditions.
+
+MAIN RIB (guarded forwarding selections)
+Node     VRF       Network            Protocol   Metric   AD    NextHop    NextHopIP        NextHopInterface   SelectionGuard                                          ForwardingPath
+========================================================================================================================================================================
+r1       default   10.0.0.0/24        CONNECTED  0        0     null       -                Loopback0          true                                                    r1
+r1       default   10.0.0.1/32        LOCAL      0        0     null       -                Loopback0          true                                                    r1
+r1       default   192.0.12.0/30      CONNECTED  0        0     null       -                Ethernet12         r1_r2                                                   r1
+r1       default   192.0.12.1/32      LOCAL      0        0     null       -                Ethernet12         r1_r2                                                   r1
+r1       default   192.0.13.0/30      CONNECTED  0        0     null       -                Ethernet13         r1_r3                                                   r1
+r1       default   192.0.13.1/32      LOCAL      0        0     null       -                Ethernet13         r1_r3                                                   r1
+r1       default   192.0.14.0/30      CONNECTED  0        0     null       -                Ethernet14         r1_r4                                                   r1
+r1       default   192.0.14.1/32      LOCAL      0        0     null       -                Ethernet14         r1_r4                                                   r1
+r2       default   10.0.0.0/24        BGP        0        20    r1         192.0.12.1       -                  r1_r2                                                   r2 -> r1
+r2       default   10.0.0.0/24        BGP        0        20    r4         192.0.24.2       -                  (and r1_r4 r2_r4 (not r1_r2))                           r2 -> r4 -> r1
+r2       default   10.0.0.0/24        BGP        0        20    r4         192.0.24.2       -                  (and r1_r3 r3_r4 (not r1_r4) r2_r4 (not r1_r2))         r2 -> r4 -> r3 -> r1
+r2       default   192.0.12.0/30      CONNECTED  0        0     null       -                Ethernet21         r1_r2                                                   r2
+r2       default   192.0.12.2/32      LOCAL      0        0     null       -                Ethernet21         r1_r2                                                   r2
+r2       default   192.0.24.0/30      CONNECTED  0        0     null       -                Ethernet24         r2_r4                                                   r2
+r2       default   192.0.24.1/32      LOCAL      0        0     null       -                Ethernet24         r2_r4                                                   r2
+r3       default   10.0.0.0/24        BGP        0        20    r1         192.0.13.1       -                  r1_r3                                                   r3 -> r1
+r3       default   10.0.0.0/24        BGP        0        20    r4         192.0.34.2       -                  (and r1_r4 (not (and r1_r2 r2_r4)) r3_r4 (not r1_r3))   r3 -> r4 -> r1
+r3       default   10.0.0.0/24        BGP        0        20    r4         192.0.34.2       -                  (and r1_r2 r2_r4 r3_r4 (not r1_r3))                     r3 -> r4 -> r2 -> r1
+r3       default   192.0.13.0/30      CONNECTED  0        0     null       -                Ethernet31         r1_r3                                                   r3
+r3       default   192.0.13.2/32      LOCAL      0        0     null       -                Ethernet31         r1_r3                                                   r3
+r3       default   192.0.34.0/30      CONNECTED  0        0     null       -                Ethernet34         r3_r4                                                   r3
+r3       default   192.0.34.1/32      LOCAL      0        0     null       -                Ethernet34         r3_r4                                                   r3
+r4       default   10.0.0.0/24        BGP        0        20    r1         192.0.14.1       -                  (and r1_r4 (not (and r1_r2 r2_r4)))                     r4 -> r1
+r4       default   10.0.0.0/24        BGP        0        20    r2         192.0.24.1       -                  (and r1_r2 r2_r4)                                       r4 -> r2 -> r1
+r4       default   10.0.0.0/24        BGP        0        20    r3         192.0.34.1       -                  (and r1_r3 r3_r4 (not r1_r4) (not (and r1_r2 r2_r4)))   r4 -> r3 -> r1
+r4       default   192.0.14.0/30      CONNECTED  0        0     null       -                Ethernet41         r1_r4                                                   r4
+r4       default   192.0.14.2/32      LOCAL      0        0     null       -                Ethernet41         r1_r4                                                   r4
+r4       default   192.0.24.0/30      CONNECTED  0        0     null       -                Ethernet42         r2_r4                                                   r4
+r4       default   192.0.24.2/32      LOCAL      0        0     null       -                Ethernet42         r2_r4                                                   r4
+r4       default   192.0.34.0/30      CONNECTED  0        0     null       -                Ethernet43         r3_r4                                                   r4
+r4       default   192.0.34.2/32      LOCAL      0        0     null       -                Ethernet43         r3_r4                                                   r4
+
+BGP LOC-RIB (protocol detail)
+Node     VRF       Network            Protocol   Metric   AD    NextHop    NextHopIP        NextHopInterface   SelectionGuard                                          AdvertisementPath
+========================================================================================================================================================================
+r1       default   10.0.0.0/24        BGP        0        20    null       -                -                  true                                                    r1
+r2       default   10.0.0.0/24        BGP        0        20    r1         192.0.12.1       -                  r1_r2                                                   r1 -> r2
+r2       default   10.0.0.0/24        BGP        0        20    r4         192.0.24.2       -                  (and r1_r4 r2_r4 (not r1_r2))                           r1 -> r4 -> r2
+r2       default   10.0.0.0/24        BGP        0        20    r4         192.0.24.2       -                  (and r1_r3 r3_r4 (not r1_r4) r2_r4 (not r1_r2))         r1 -> r3 -> r4 -> r2
+r3       default   10.0.0.0/24        BGP        0        20    r1         192.0.13.1       -                  r1_r3                                                   r1 -> r3
+r3       default   10.0.0.0/24        BGP        0        20    r4         192.0.34.2       -                  (and r1_r4 (not (and r1_r2 r2_r4)) r3_r4 (not r1_r3))   r1 -> r4 -> r3
+r3       default   10.0.0.0/24        BGP        0        20    r4         192.0.34.2       -                  (and r1_r2 r2_r4 r3_r4 (not r1_r3))                     r1 -> r2 -> r4 -> r3
+r4       default   10.0.0.0/24        BGP        0        20    r1         192.0.14.1       -                  (and r1_r4 (not (and r1_r2 r2_r4)))                     r1 -> r4
+r4       default   10.0.0.0/24        BGP        0        20    r2         192.0.24.1       -                  (and r1_r2 r2_r4)                                       r1 -> r2 -> r4
+r4       default   10.0.0.0/24        BGP        0        20    r3         192.0.34.1       -                  (and r1_r3 r3_r4 (not r1_r4) (not (and r1_r2 r2_r4)))   r1 -> r3 -> r4
+
+IS-IS LEVEL-1 RIB (protocol detail)
+Node     VRF       Network            Protocol   Metric   AD    NextHop    NextHopIP        NextHopInterface   SelectionGuard                                          AdvertisementPath
+========================================================================================================================================================================
+
+IS-IS LEVEL-2 RIB (protocol detail)
+Node     VRF       Network            Protocol   Metric   AD    NextHop    NextHopIP        NextHopInterface   SelectionGuard                                          AdvertisementPath
+========================================================================================================================================================================
+
+SR POLICY FORWARDING BRANCHES
+Node     VRF       Color    Endpoint         Policy               Candidate              Pref     Weight   SegmentList        Labels               NextHops           SelectionGuard
+========================================================================================================================================================================

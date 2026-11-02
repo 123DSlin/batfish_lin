@@ -1,0 +1,56 @@
+Line-Level Subspecs
+==================
+
+Line Group: Config_r1_RouteFilterList_pl__Line1
+Subspecs (2):
+  1. (>= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__length 0) AND (<= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__length 32) AND (>= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_end 0) AND (<= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_end 32) AND (>= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_start 0) AND (<= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_start 32) AND (>= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_end Config_r1_RouteFilterList_pl__Line1__10_0_0_0__length) AND (>= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_start Config_r1_RouteFilterList_pl__Line1__10_0_0_0__length) [from r4-r2-r1]
+  2. (>= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__length 0) AND (>= Config_r1_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_end Config_r1_RouteFilterList_pl__Line1__10_0_0_0__length) AND (= 24 Config_r1_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_start) AND (= 24 Config_r1_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_end) AND (= ((_ extract 7 0) Config_r1_RouteFilterList_pl__Line1__10_0_0_0__mask) #x00) AND (= (concat #x0 ((_ extract 27 27) Config_r1_RouteFilterList_pl__Line1__10_0_0_0__mask) #b0 ((_ extract 25 25) Config_r1_RouteFilterList_pl__Line1__10_0_0_0__mask) #b0000000000000000000000000) (bvand Config_r1_RouteFilterList_pl__Line1__10_0_0_0__ip Config_r1_RouteFilterList_pl__Line1__10_0_0_0__mask)) AND Config_r1_RouteFilterList_pl__Line1__10_0_0_0__enable AND Config_r1_RouteFilterList_pl__Line1__10_0_0_0__action [from r4-r1]
+--------------------------------------------------
+
+Line Group: Config_r1_RoutingPolicy_REDISTRIBUTE_CONNECTED__Seq10__Line1
+Subspecs (2):
+  1. Config_r1_RoutingPolicy_REDISTRIBUTE_CONNECTED__Seq10__Line1__match_prefixlist_enable [from r4-r1]
+  2. empty
+--------------------------------------------------
+
+Line Group: Config_r4_RouteFilterList_pl__Line1
+Subspecs (2):
+  1. (>= Config_r4_RouteFilterList_pl__Line1__10_0_0_0__length 0) AND (= ((_ extract 7 0) Config_r4_RouteFilterList_pl__Line1__10_0_0_0__mask) #x00) AND (= (concat #x0 ((_ extract 27 27) Config_r4_RouteFilterList_pl__Line1__10_0_0_0__mask) #b0 ((_ extract 25 25) Config_r4_RouteFilterList_pl__Line1__10_0_0_0__mask) #b0000000000000000000000000) (bvand Config_r4_RouteFilterList_pl__Line1__10_0_0_0__ip Config_r4_RouteFilterList_pl__Line1__10_0_0_0__mask)) AND (= 24 Config_r4_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_start) AND Config_r4_RouteFilterList_pl__Line1__10_0_0_0__action AND (>= Config_r4_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_end Config_r4_RouteFilterList_pl__Line1__10_0_0_0__length) AND Config_r4_RouteFilterList_pl__Line1__10_0_0_0__enable AND (= Config_r4_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_start Config_r4_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_end) [from r4-r2-r1]
+  2. (>= Config_r4_RouteFilterList_pl__Line1__10_0_0_0__length 0) AND Config_r4_RouteFilterList_pl__Line1__10_0_0_0__action AND (= ((_ extract 7 0) Config_r4_RouteFilterList_pl__Line1__10_0_0_0__mask) #x00) AND (= (concat #x0 ((_ extract 27 27) Config_r4_RouteFilterList_pl__Line1__10_0_0_0__mask) #b0 ((_ extract 25 25) Config_r4_RouteFilterList_pl__Line1__10_0_0_0__mask) #b0000000000000000000000000) (bvand Config_r4_RouteFilterList_pl__Line1__10_0_0_0__ip Config_r4_RouteFilterList_pl__Line1__10_0_0_0__mask)) AND Config_r4_RouteFilterList_pl__Line1__10_0_0_0__enable AND (>= Config_r4_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_end Config_r4_RouteFilterList_pl__Line1__10_0_0_0__length) AND (= Config_r4_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_start Config_r4_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_end) AND (= 24 Config_r4_RouteFilterList_pl__Line1__10_0_0_0__prefix_range_start) [from r4-r1]
+--------------------------------------------------
+
+Line Group: Config_r4_RoutingPolicy_R4_IN_FROM_R1__Seq10__Line1
+Subspecs (2):
+  1. Config_r4_RoutingPolicy_R4_IN_FROM_R1__Seq10__Line1__match_prefixlist_enable [from r4-r1]
+  2. empty
+--------------------------------------------------
+
+Line Group: Config_r4_RoutingPolicy_R4_IN_FROM_R1__Seq10__Line2
+Subspecs (2):
+  1. (>= Config_r4_RoutingPolicy_R4_IN_FROM_R1__Seq10__Line2__set_localpreference_100 0) AND (< Config_r4_RoutingPolicy_R4_IN_FROM_R1__Seq10__Line2__set_localpreference_100 200) [from r4-r2-r1]
+  2. (>= Config_r4_RoutingPolicy_R4_IN_FROM_R1__Seq10__Line2__set_localpreference_100 50) AND (<= Config_r4_RoutingPolicy_R4_IN_FROM_R1__Seq10__Line2__set_localpreference_100 4294967295) [from r4-r1]
+--------------------------------------------------
+
+Line Group: Config_r4_RoutingPolicy_R4_IN_FROM_R2__Seq10__Line1
+Subspecs (2):
+  1. Config_r4_RoutingPolicy_R4_IN_FROM_R2__Seq10__Line1__match_prefixlist_enable [from r4-r2-r1]
+  2. empty
+--------------------------------------------------
+
+Line Group: Config_r4_RoutingPolicy_R4_IN_FROM_R2__Seq10__Line2
+Subspecs (2):
+  1. (> Config_r4_RoutingPolicy_R4_IN_FROM_R2__Seq10__Line2__set_localpreference_200 100) AND (<= Config_r4_RoutingPolicy_R4_IN_FROM_R2__Seq10__Line2__set_localpreference_200 4294967295) [from r4-r2-r1]
+  2. (>= Config_r4_RoutingPolicy_R4_IN_FROM_R2__Seq10__Line2__set_localpreference_200 0) AND (<= Config_r4_RoutingPolicy_R4_IN_FROM_R2__Seq10__Line2__set_localpreference_200 4294967295) [from r4-r1]
+--------------------------------------------------
+
+Line Group: Config_r4_RoutingPolicy_R4_IN_FROM_R3__Seq10__Line1
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Line Group: Config_r4_RoutingPolicy_R4_IN_FROM_R3__Seq10__Line2
+Subspecs (2):
+  1. (>= Config_r4_RoutingPolicy_R4_IN_FROM_R3__Seq10__Line2__set_localpreference_50 0) AND (<= Config_r4_RoutingPolicy_R4_IN_FROM_R3__Seq10__Line2__set_localpreference_50 100) [from r4-r1]
+  2. (>= Config_r4_RoutingPolicy_R4_IN_FROM_R3__Seq10__Line2__set_localpreference_50 0) AND (<= Config_r4_RoutingPolicy_R4_IN_FROM_R3__Seq10__Line2__set_localpreference_50 200) [from r4-r2-r1]
+--------------------------------------------------
+

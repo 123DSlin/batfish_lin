@@ -1,0 +1,70 @@
+SYMBOLIC ROUTING INFORMATION BASE
+Guards describe route availability and final selection conditions.
+
+MAIN RIB (guarded forwarding selections)
+Node     VRF       Network            Protocol   Metric   AD    NextHop    NextHopIP        NextHopInterface   AvailabilityGuard            SelectionGuard                                          ForwardingPath
+========================================================================================================================================================================
+a        default   10.0.12.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/0 a_x                          a_x                                                     a
+a        default   10.0.12.2/32       LOCAL      0        0     null       -                GigabitEthernet0/0 a_x                          a_x                                                     a
+a        default   10.0.23.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/2 a_s                          a_s                                                     a
+a        default   10.0.23.2/32       LOCAL      0        0     null       -                GigabitEthernet0/2 a_s                          a_s                                                     a
+a        default   10.0.25.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/1 a_d                          a_d                                                     a
+a        default   10.0.25.1/32       LOCAL      0        0     null       -                GigabitEthernet0/1 a_d                          a_d                                                     a
+a        default   5.5.5.5/32         BGP        0        20    x          10.0.12.1        -                  (and b_d b_x (not d_x) (not (and a_d a_x)) a_x (not a_d) (not (and d_x a_x))) (and b_d b_x (not d_x) (not (and a_d a_x)) a_x (not a_d) (not (and d_x a_x))) a -> x -> b -> d
+a        default   5.5.5.5/32         BGP        0        20    x          10.0.12.1        -                  (and d_x a_x (not a_d))      (and d_x a_x (not a_d))                                 a -> x -> d
+a        default   5.5.5.5/32         BGP        0        20    d          10.0.25.2        -                  a_d                          a_d                                                     a -> d
+b        default   10.0.14.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/2 b_x                          b_x                                                     b
+b        default   10.0.14.2/32       LOCAL      0        0     null       -                GigabitEthernet0/2 b_x                          b_x                                                     b
+b        default   10.0.34.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/0 b_s                          b_s                                                     b
+b        default   10.0.34.2/32       LOCAL      0        0     null       -                GigabitEthernet0/0 b_s                          b_s                                                     b
+b        default   10.0.45.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/1 b_d                          b_d                                                     b
+b        default   10.0.45.1/32       LOCAL      0        0     null       -                GigabitEthernet0/1 b_d                          b_d                                                     b
+b        default   5.5.5.5/32         BGP        0        20    x          10.0.14.1        -                  (and a_d a_x (not d_x) b_x (not b_d) (not (and d_x b_x))) (and a_d a_x (not d_x) b_x (not b_d) (not (and d_x b_x))) b -> x -> a -> d
+b        default   5.5.5.5/32         BGP        0        20    x          10.0.14.1        -                  (and d_x b_x (not b_d))      (and d_x b_x (not b_d))                                 b -> x -> d
+b        default   5.5.5.5/32         BGP        0        20    d          10.0.45.2        -                  b_d                          b_d                                                     b -> d
+d        default   10.0.15.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/0 d_x                          d_x                                                     d
+d        default   10.0.15.2/32       LOCAL      0        0     null       -                GigabitEthernet0/0 d_x                          d_x                                                     d
+d        default   10.0.25.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/1 a_d                          a_d                                                     d
+d        default   10.0.25.2/32       LOCAL      0        0     null       -                GigabitEthernet0/1 a_d                          a_d                                                     d
+d        default   10.0.45.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/2 b_d                          b_d                                                     d
+d        default   10.0.45.2/32       LOCAL      0        0     null       -                GigabitEthernet0/2 b_d                          b_d                                                     d
+d        default   5.5.5.5/32         CONNECTED  0        0     null       -                Loopback0          true                         true                                                    d
+s        default   10.0.23.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/0 a_s                          a_s                                                     s
+s        default   10.0.23.1/32       LOCAL      0        0     null       -                GigabitEthernet0/0 a_s                          a_s                                                     s
+s        default   10.0.34.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/1 b_s                          b_s                                                     s
+s        default   10.0.34.1/32       LOCAL      0        0     null       -                GigabitEthernet0/1 b_s                          b_s                                                     s
+x        default   10.0.12.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/1 a_x                          a_x                                                     x
+x        default   10.0.12.1/32       LOCAL      0        0     null       -                GigabitEthernet0/1 a_x                          a_x                                                     x
+x        default   10.0.14.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/2 b_x                          b_x                                                     x
+x        default   10.0.14.1/32       LOCAL      0        0     null       -                GigabitEthernet0/2 b_x                          b_x                                                     x
+x        default   10.0.15.0/30       CONNECTED  0        0     null       -                GigabitEthernet0/0 d_x                          d_x                                                     x
+x        default   10.0.15.1/32       LOCAL      0        0     null       -                GigabitEthernet0/0 d_x                          d_x                                                     x
+x        default   5.5.5.5/32         BGP        0        20    a          10.0.12.2        -                  (and a_d a_x (not d_x))      (and a_d a_x (not d_x))                                 x -> a -> d
+x        default   5.5.5.5/32         BGP        0        20    b          10.0.14.2        -                  (and b_d b_x (not d_x) (not (and a_d a_x))) (and b_d b_x (not d_x) (not (and a_d a_x)))             x -> b -> d
+x        default   5.5.5.5/32         BGP        0        20    d          10.0.15.2        -                  d_x                          d_x                                                     x -> d
+
+BGP LOC-RIB (protocol detail)
+Node     VRF       Network            Protocol   Metric   AD    NextHop    NextHopIP        NextHopInterface   AvailabilityGuard            SelectionGuard                                          AdvertisementPath
+========================================================================================================================================================================
+a        default   5.5.5.5/32         BGP        0        20    x          10.0.12.1        -                  (and b_d b_x (not d_x) (not (and a_d a_x)) a_x) (and b_d b_x (not d_x) (not (and a_d a_x)) a_x (not a_d) (not (and d_x a_x))) d -> b -> x -> a
+a        default   5.5.5.5/32         BGP        0        20    x          10.0.12.1        -                  (and d_x a_x)                (and d_x a_x (not a_d))                                 d -> x -> a
+a        default   5.5.5.5/32         BGP        0        20    d          10.0.25.2        -                  a_d                          a_d                                                     d -> a
+b        default   5.5.5.5/32         BGP        0        20    x          10.0.14.1        -                  (and a_d a_x (not d_x) b_x)  (and a_d a_x (not d_x) b_x (not b_d) (not (and d_x b_x))) d -> a -> x -> b
+b        default   5.5.5.5/32         BGP        0        20    x          10.0.14.1        -                  (and d_x b_x)                (and d_x b_x (not b_d))                                 d -> x -> b
+b        default   5.5.5.5/32         BGP        0        20    d          10.0.45.2        -                  b_d                          b_d                                                     d -> b
+d        default   5.5.5.5/32         BGP        0        20    null       -                -                  true                         true                                                    d
+x        default   5.5.5.5/32         BGP        0        20    a          10.0.12.2        -                  (and a_d a_x)                (and a_d a_x (not d_x))                                 d -> a -> x
+x        default   5.5.5.5/32         BGP        0        20    b          10.0.14.2        -                  (and b_d b_x)                (and b_d b_x (not d_x) (not (and a_d a_x)))             d -> b -> x
+x        default   5.5.5.5/32         BGP        0        20    d          10.0.15.2        -                  d_x                          d_x                                                     d -> x
+
+IS-IS LEVEL-1 RIB (protocol detail)
+Node     VRF       Network            Protocol   Metric   AD    NextHop    NextHopIP        NextHopInterface   AvailabilityGuard            SelectionGuard                                          AdvertisementPath
+========================================================================================================================================================================
+
+IS-IS LEVEL-2 RIB (protocol detail)
+Node     VRF       Network            Protocol   Metric   AD    NextHop    NextHopIP        NextHopInterface   AvailabilityGuard            SelectionGuard                                          AdvertisementPath
+========================================================================================================================================================================
+
+SR POLICY CANDIDATES AND FORWARDING BRANCHES
+Kind               Node     VRF       Color    Endpoint         Policy               Candidate          Pref     Weight   SegmentList        Labels               NextHops           AvailabilityGuard        SelectionGuard
+========================================================================================================================================================================

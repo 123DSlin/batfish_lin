@@ -1,0 +1,19 @@
+================================================================================
+SYMBOLIC SUBSPECIFICATION INTERSECTION
+================================================================================
+
+Overall status: PASS
+Scope: MAIN | at-most-1 link failures
+Intersected branches: 7 | final fields: 19 | final lines: 9
+Semantics: per-config-owner conjunction of every branch-local symbolic subspecification
+
+Per-router results:
+  r1: fields 7 (7 constrained) | lines 2 (2 constrained)
+  r2: fields 0 (0 constrained) | lines 0 (0 constrained) | no owned configuration targets
+  r3: fields 0 (0 constrained) | lines 0 (0 constrained) | no owned configuration targets
+  r4: fields 12 (11 constrained) | lines 7 (6 constrained)
+
+Exact formulas are stored in the per-router field/line reports.
+Every final formula retains its contributing branch formulas in JSON.
+
+All branch subspecifications were intersected exactly. ✓
