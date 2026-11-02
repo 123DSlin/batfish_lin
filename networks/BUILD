@@ -40,6 +40,7 @@ filegroup(
     srcs = glob([
         "tolerance_sr_te_demo/**",
         "tolerance_sr_te_demo_1_*/**",
+        "tolerance_sr_te_demo_bgp_x_b/**",
     ]),
 )
 

@@ -87,14 +87,11 @@ public final class ToleranceSrTeDemoConfigTest {
         new RoutesAnswerer(new RoutesQuestion(), batfish).answer(batfish.getSnapshot());
     RibPrinter.printRouteTable(concreteRoutes, new PrintWriter(concreteRibText));
     assertThat(
-        countForwardingRows(concreteRibText.toString(), "b", "10.0.12.0/30", "d"),
-        equalTo(1L));
+        countForwardingRows(concreteRibText.toString(), "b", "10.0.12.0/30", "d"), equalTo(1L));
     assertThat(
-        countForwardingRows(concreteRibText.toString(), "s", "10.0.15.0/30", "a"),
-        equalTo(1L));
+        countForwardingRows(concreteRibText.toString(), "s", "10.0.15.0/30", "a"), equalTo(1L));
     assertThat(
-        countForwardingRows(concreteRibText.toString(), "s", "10.0.15.0/30", "b"),
-        equalTo(1L));
+        countForwardingRows(concreteRibText.toString(), "s", "10.0.15.0/30", "b"), equalTo(1L));
     Set<AnnotatedRoute<AbstractRoute>> xRoutesToD =
         dataPlane
             .getRibs()
@@ -114,6 +111,50 @@ public final class ToleranceSrTeDemoConfigTest {
             batfish.getTopologyProvider().getBgpTopology(batfish.getSnapshot()).getGraph(),
             isisTopology,
             GUARDS);
+    BatfishSymbolicRoutePipelineInput bgpOnly =
+        BatfishParsedSnapshotPipelineInputBuilder.buildSelected(
+            configurations,
+            dataPlane.getRibs(),
+            batfish.getTopologyProvider().getBgpTopology(batfish.getSnapshot()).getGraph(),
+            isisTopology,
+            GUARDS,
+            java.util.EnumSet.of(org.batfish.minesweeper.smt.SmtProtocolSelection.Family.BGP));
+    BatfishSymbolicRoutePipelineInput isisOnly =
+        BatfishParsedSnapshotPipelineInputBuilder.buildSelected(
+            configurations,
+            dataPlane.getRibs(),
+            batfish.getTopologyProvider().getBgpTopology(batfish.getSnapshot()).getGraph(),
+            isisTopology,
+            GUARDS,
+            java.util.EnumSet.of(org.batfish.minesweeper.smt.SmtProtocolSelection.Family.ISIS));
+    assertThat(isisOnly.getBgpEdges(), hasSize(0));
+    assertThat(isisOnly.getBgpSessions(), hasSize(0));
+    assertThat(isisOnly.getRedistributionRules(), hasSize(0));
+    assertThat(isisOnly.getIsisL2Seeds().isEmpty(), equalTo(false));
+    assertThat(bgpOnly.getIsisSeeds(), hasSize(0));
+    assertThat(bgpOnly.getIsisL2Seeds(), hasSize(0));
+    assertThat(bgpOnly.getIsisEdges(), hasSize(0));
+    assertThat(bgpOnly.getIsisL2Edges(), hasSize(0));
+    assertThat(bgpOnly.getBgpEdges().size(), equalTo(input.getBgpEdges().size()));
+    bgpOnly
+        .getConcreteMainRibs()
+        .values()
+        .forEach(
+            byVrf ->
+                byVrf
+                    .values()
+                    .forEach(
+                        rib ->
+                            rib.getRoutes()
+                                .forEach(
+                                    route ->
+                                        assertThat(
+                                            route.getProtocol().name().startsWith("ISIS"),
+                                            equalTo(false)))));
+    String bgpOnlyJson = BatfishSymbolicRoutePipeline.run(bgpOnly).toControlPlaneJson();
+    assertThat(
+        java.util.regex.Pattern.compile("\"protocol\"\\s*:\\s*\"ISIS").matcher(bgpOnlyJson).find(),
+        equalTo(false));
     assertThat(input.getRedistributionRules(), hasSize(0));
     assertThat(
         input.getMainSeeds().stream()

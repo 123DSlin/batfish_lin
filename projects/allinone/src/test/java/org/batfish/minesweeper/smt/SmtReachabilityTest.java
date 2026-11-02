@@ -56,7 +56,8 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 public class SmtReachabilityTest {
-  private static final boolean SYMBOLIC = true;
+  private static final boolean SYMBOLIC =
+      Boolean.parseBoolean(System.getenv().getOrDefault("SMT_SYMBOLIC", "true"));
   private static final int K = 1;
 
   @Rule public TemporaryFolder _temp = new TemporaryFolder();
@@ -106,11 +107,10 @@ public class SmtReachabilityTest {
 
     // read the configurations from the filesystem
     Runfiles runfiles = Runfiles.create();
-    String configPath =
-        runfiles.rlocation(
-            SYMBOLIC
-                ? "batfish/networks/tolerance-symbolic-route"
-                : "batfish/networks/tolerance-symbolic-route_1_r3_r4");
+    String defaultNetwork =
+        SYMBOLIC ? "tolerance-symbolic-route" : "tolerance-symbolic-route_1_r3_r4";
+    String network = System.getenv().getOrDefault("SMT_NETWORK", defaultNetwork);
+    String configPath = runfiles.rlocation("batfish/networks/" + network);
     // : "batfish/networks/tolerance_sr_te_demo_1_d_x");
     // String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
     // String configPath =
@@ -317,12 +317,13 @@ public class SmtReachabilityTest {
     IsisTopology isisTopology =
         IsisTopology.initIsisTopology(configurations, synthesizeL3Topology(configurations));
     return BatfishSymbolicRoutePipeline.run(
-        BatfishParsedSnapshotPipelineInputBuilder.build(
+        BatfishParsedSnapshotPipelineInputBuilder.buildSelected(
             configurations,
             dataPlane.getRibs(),
             _batfish.getTopologyProvider().getBgpTopology(_batfish.getSnapshot()).getGraph(),
             isisTopology,
-            new Z3RouteGuardFactory(context)));
+            new Z3RouteGuardFactory(context),
+            SmtProtocolSelection.fromRuntime()));
   }
 
   private void writeSymbolicRouteFiles(BatfishSymbolicRoutePipelineResult result)
@@ -341,9 +342,9 @@ public class SmtReachabilityTest {
                 ? result.toReadableText()
                 : result.toReadableTextForDestinations(destinations))
             .getBytes(StandardCharsets.UTF_8));
-    Files.write(
-        Paths.get(_outputDir, "0_symbolic_control_plane.json"),
-        result.toControlPlaneJson().getBytes(StandardCharsets.UTF_8));
+    byte[] controlPlaneJson = result.toControlPlaneJson().getBytes(StandardCharsets.UTF_8);
+    Files.write(Paths.get(_outputDir, "0_symbolic_control_plane.json"), controlPlaneJson);
+    Files.write(Paths.get(_outputDir, "symbolic_route.json"), controlPlaneJson);
     Files.write(
         Paths.get(_outputDir, "0_symbolic_sr_policies.json"),
         result.toSrPolicyExportJson().getBytes(StandardCharsets.UTF_8));
@@ -370,10 +371,15 @@ public class SmtReachabilityTest {
     // question.setDstIps(Set.of(ipWildcard));
 
     // tolerance-symbolic-route
-    question.setIngressNodeRegex("r4");
-    question.setFinalNodeRegex("r1");
-    IpWildcard ipWildcard = IpWildcard.parse("10.0.0.0/24");
+    question.setIngressNodeRegex(System.getenv().getOrDefault("SMT_INGRESS", "r4"));
+    question.setFinalNodeRegex(System.getenv().getOrDefault("SMT_FINAL", "r1"));
+    IpWildcard ipWildcard =
+        IpWildcard.parse(System.getenv().getOrDefault("SMT_DST", "10.0.0.0/24"));
     question.setDstIps(Set.of(ipWildcard));
+    String failures = System.getenv("SMT_FAILURES");
+    if (failures != null) {
+      question.setFailures(Integer.parseInt(failures));
+    }
 
     // user-study specification 1: ECMP reachability
     // question.setIngressNodeRegex("r3");

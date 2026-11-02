@@ -116,6 +116,11 @@ encodings and consistency checks.
 - [PROTOCOL_PIPELINE.md](PROTOCOL_PIPELINE.md): currently executable protocol pipeline and scope.
 - [CODE_ORGANIZATION.md](CODE_ORGANIZATION.md): file ownership, naming rules, and future package
   boundaries.
+- [IMPLEMENTATION_WALKTHROUGH_CN.md](IMPLEMENTATION_WALKTHROUGH_CN.md): implementation-level Chinese
+  walkthrough of identities, fields, maps, algorithms, queue processing, pipeline assembly, and
+  source/test reading order.
+- [DATA_STRUCTURE_CATALOG_CN.md](DATA_STRUCTURE_CATALOG_CN.md): source-derived catalog mapping each
+  symbolic-route data structure to its file, responsibility, invariants, and test files.
 
 Run the tolerance R1-to-R4 reachability question and generate its readable Symbolic RIB with
 `./tools/generate_tolerance_symbolic_rib.sh`. `SmtReachabilityTest` creates the next available
