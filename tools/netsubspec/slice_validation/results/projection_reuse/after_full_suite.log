@@ -1,0 +1,137 @@
+test_final_atoms_retain_exact_branch_sources (test_branch_intersection.SymbolicIntersectionIntegrationTest.test_final_atoms_retain_exact_branch_sources) ... ok
+test_final_local_preference_intervals_are_exact_and_readable (test_branch_intersection.SymbolicIntersectionIntegrationTest.test_final_local_preference_intervals_are_exact_and_readable) ... ok
+test_intersects_every_branch_target (test_branch_intersection.SymbolicIntersectionIntegrationTest.test_intersects_every_branch_target) ... ok
+test_results_use_config_owner_and_retain_verification_router (test_branch_intersection.SymbolicIntersectionIntegrationTest.test_results_use_config_owner_and_retain_verification_router) ... ok
+test_structured_report_is_bound_to_stage3_and_seed_hashes (test_branch_intersection.SymbolicIntersectionIntegrationTest.test_structured_report_is_bound_to_stage3_and_seed_hashes) ... ok
+test_writes_one_final_formula_per_target (test_branch_intersection.SymbolicIntersectionIntegrationTest.test_writes_one_final_formula_per_target) ... ok
+test_constraint_provenance_resolves_to_exact_symbolic_scenario_sets (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_constraint_provenance_resolves_to_exact_symbolic_scenario_sets) ... ok
+test_debug_consistency_report_cannot_open_stage3_gate (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_debug_consistency_report_cannot_open_stage3_gate) ... ok
+test_derives_every_consistent_branch (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_derives_every_consistent_branch) ... ok
+test_every_result_is_fully_projected_to_its_target_configs (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_every_result_is_fully_projected_to_its_target_configs) ... ok
+test_ip_and_mask_are_released_as_original_field_pair (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_ip_and_mask_are_released_as_original_field_pair) ... ok
+test_line_level_releases_the_complete_line_only (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_line_level_releases_the_complete_line_only) ... ok
+test_nontrivial_result_comes_from_staged_symbolic_projection (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_nontrivial_result_comes_from_staged_symbolic_projection) ... ok
+test_releases_only_the_target_config_pin (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_releases_only_the_target_config_pin) ... ok
+test_selected_local_preference_is_recomputed_not_frozen (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_selected_local_preference_is_recomputed_not_frozen) ... ok
+test_selected_r1_local_preference_retains_tie_boundary (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_selected_r1_local_preference_retains_tie_boundary) ... ok
+test_symbolic_projection_preserves_expected_local_preference_ranges (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_symbolic_projection_preserves_expected_local_preference_ranges) ... ok
+test_symbolic_projection_survives_if_shared_normalizer_fails (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_symbolic_projection_survives_if_shared_normalizer_fails) ... ok
+test_writes_only_compact_and_structured_reports (test_branch_simplifier.SymbolicSubspecifierIntegrationTest.test_writes_only_compact_and_structured_reports) ... ok
+test_context_keeps_complete_device_rib_and_predecessor (test_consistency_seed_modules.BranchLoaderTest.test_context_keeps_complete_device_rib_and_predecessor) ... ok
+test_loads_complete_structured_export (test_consistency_seed_modules.BranchLoaderTest.test_loads_complete_structured_export) ... ok
+test_local_connected_adapter_fails_closed_for_unknown_interface (test_consistency_seed_modules.BranchLoaderTest.test_local_connected_adapter_fails_closed_for_unknown_interface) ... ok
+test_local_connected_origin_is_proven_by_route_and_interface_data (test_consistency_seed_modules.BranchLoaderTest.test_local_connected_origin_is_proven_by_route_and_interface_data) ... ok
+test_neighbor_interface_mapping (test_consistency_seed_modules.BranchLoaderTest.test_neighbor_interface_mapping) ... ok
+test_property_context_keeps_all_covering_peer_prefixes (test_consistency_seed_modules.BranchLoaderTest.test_property_context_keeps_all_covering_peer_prefixes) ... ok
+test_property_destination_matches_non_local_covering_prefix (test_consistency_seed_modules.BranchLoaderTest.test_property_destination_matches_non_local_covering_prefix) ... ok
+test_property_destination_retains_selected_fallback_prefixes (test_consistency_seed_modules.BranchLoaderTest.test_property_destination_retains_selected_fallback_prefixes) ... ok
+test_branch_fails_when_a_later_guarded_assignment_is_unsat (test_consistency_seed_modules.FormalConsistencyCheckerTest.test_branch_fails_when_a_later_guarded_assignment_is_unsat) ... ok
+test_checks_every_failure_assignment_not_only_one_witness (test_consistency_seed_modules.FormalConsistencyCheckerTest.test_checks_every_failure_assignment_not_only_one_witness) ... ok
+test_empty_scope_fails_closed (test_consistency_seed_modules.FormalConsistencyCheckerTest.test_empty_scope_fails_closed) ... ok
+test_global_scope_discovers_all_devices_and_property_prefixes (test_consistency_seed_modules.FormalConsistencyCheckerTest.test_global_scope_discovers_all_devices_and_property_prefixes) ... ok
+test_optional_router_and_prefix_filters_are_debug_scope (test_consistency_seed_modules.FormalConsistencyCheckerTest.test_optional_router_and_prefix_filters_are_debug_scope) ... ok
+test_concrete_assignment_respects_guard_variable_polarity (test_consistency_seed_modules.GuardEncoderTest.test_concrete_assignment_respects_guard_variable_polarity) ... ok
+test_enumerates_every_guarded_failure_assignment (test_consistency_seed_modules.GuardEncoderTest.test_enumerates_every_guarded_failure_assignment) ... ok
+test_exact_at_most_k_feasibility (test_consistency_seed_modules.GuardEncoderTest.test_exact_at_most_k_feasibility) ... ok
+test_failure_budget_counts_down_links (test_consistency_seed_modules.GuardEncoderTest.test_failure_budget_counts_down_links) ... ok
+test_guard_uses_structured_ast (test_consistency_seed_modules.GuardEncoderTest.test_guard_uses_structured_ast) ... ok
+test_builds_runnable_seed_for_each_k_pruned_r4_branch (test_consistency_seed_modules.RouteBinderAndSeedBuilderTest.test_builds_runnable_seed_for_each_k_pruned_r4_branch) ... ok
+test_local_connected_origin_is_normalized_then_formally_bound (test_consistency_seed_modules.RouteBinderAndSeedBuilderTest.test_local_connected_origin_is_normalized_then_formally_bound) ... ok
+test_missing_predecessor_record_fails_closed (test_consistency_seed_modules.RouteBinderAndSeedBuilderTest.test_missing_predecessor_record_fails_closed) ... ok
+test_only_symbolic_inter_router_failure_pins_are_released (test_consistency_seed_modules.RouteBinderAndSeedBuilderTest.test_only_symbolic_inter_router_failure_pins_are_released) ... ok
+test_symbol_table_reads_control_forwarding (test_consistency_seed_modules.RouteBinderAndSeedBuilderTest.test_symbol_table_reads_control_forwarding) ... ok
+test_bad_active_next_hop_is_rejected (test_observable.ObservableTest.test_bad_active_next_hop_is_rejected) ... ok
+test_direct_bgp_preference_and_fallback_without_binder (test_observable.ObservableTest.test_direct_bgp_preference_and_fallback_without_binder) ... ok
+test_local_delivery_has_route_without_outgoing_forwarding (test_observable.ObservableTest.test_local_delivery_has_route_without_outgoing_forwarding) ... ok
+test_no_route_explicitly_disables_all_forwarding (test_observable.ObservableTest.test_no_route_explicitly_disables_all_forwarding) ... ok
+test_unknown_guard_cannot_silently_pass (test_observable.ObservableTest.test_unknown_guard_cannot_silently_pass) ... ok
+test_index_reuse_preserves_target_specific_release_and_document_scope (test_projection_reuse.SnapshotReuseTest.test_index_reuse_preserves_target_specific_release_and_document_scope) ... ok
+test_different_definitions_and_tactics_cannot_share_answers (test_projection_reuse.SolverReuseTest.test_different_definitions_and_tactics_cannot_share_answers) ... ok
+test_lru_eviction_size_limits_and_disable (test_projection_reuse.SolverReuseTest.test_lru_eviction_size_limits_and_disable) ... ok
+test_parallel_queries_preserve_bounds_and_answers (test_projection_reuse.SolverReuseTest.test_parallel_queries_preserve_bounds_and_answers) ... ok
+test_precise_goals_are_reused (test_projection_reuse.SolverReuseTest.test_precise_goals_are_reused) ... ok
+test_reuses_only_identical_requests_and_returns_fresh_results (test_projection_reuse.SolverReuseTest.test_reuses_only_identical_requests_and_returns_fresh_results) ... ok
+test_timeout_is_not_cached_and_can_be_retried (test_projection_reuse.SolverReuseTest.test_timeout_is_not_cached_and_can_be_retried) ... ok
+test_uncertain_or_failed_answers_are_not_cached (test_projection_reuse.SolverReuseTest.test_uncertain_or_failed_answers_are_not_cached) ... ok
+test_auxiliary_igp_slice_rules_preserved (test_protocol_slicing.ProtocolSlicingTest.test_auxiliary_igp_slice_rules_preserved) ... ok
+test_bgp_owner_precedence_and_export_boundary (test_protocol_slicing.ProtocolSlicingTest.test_bgp_owner_precedence_and_export_boundary) ... ok
+test_default_registry_and_no_shared_state (test_protocol_slicing.ProtocolSlicingTest.test_default_registry_and_no_shared_state) ... ok
+test_device_names_and_shared_export (test_protocol_slicing.ProtocolSlicingTest.test_device_names_and_shared_export) ... ok
+test_isis_cli_preserves_existing_output (test_protocol_slicing.ProtocolSlicingTest.test_isis_cli_preserves_existing_output) ...
+  test_isis_cli_preserves_existing_output (test_protocol_slicing.ProtocolSlicingTest.test_isis_cli_preserves_existing_output) (script='1_smt_slicer.py') ... FAIL
+  test_isis_cli_preserves_existing_output (test_protocol_slicing.ProtocolSlicingTest.test_isis_cli_preserves_existing_output) (script='run.py') ... FAIL
+test_scope_adapter_mismatch_rejected (test_protocol_slicing.ProtocolSlicingTest.test_scope_adapter_mismatch_rejected) ... FAIL
+test_shared_engine_accepts_non_bgp_adapter (test_protocol_slicing.ProtocolSlicingTest.test_shared_engine_accepts_non_bgp_adapter) ... ERROR
+test_unsupported_and_mixed_protocols_never_fall_back (test_protocol_slicing.ProtocolSlicingTest.test_unsupported_and_mixed_protocols_never_fall_back) ... ok
+test_all_covering_prefixes_and_duplicate_prefix_candidates_survive (test_route_queries.RouteQueryTest.test_all_covering_prefixes_and_duplicate_prefix_candidates_survive) ... ok
+test_bad_prefix_is_not_silently_ignored (test_route_queries.RouteQueryTest.test_bad_prefix_is_not_silently_ignored) ... ok
+test_cache_bound_does_not_limit_query_results (test_route_queries.RouteQueryTest.test_cache_bound_does_not_limit_query_results) ... ok
+test_context_reuses_complete_peer_ribs_across_current_branches (test_route_queries.RouteQueryTest.test_context_reuses_complete_peer_ribs_across_current_branches) ... ok
+test_context_without_destination_keeps_exact_prefix_and_local_entries (test_route_queries.RouteQueryTest.test_context_without_destination_keeps_exact_prefix_and_local_entries) ... ok
+test_empty_results_are_cached_and_caches_are_per_rib (test_route_queries.RouteQueryTest.test_empty_results_are_cached_and_caches_are_per_rib) ... ok
+test_exact_filters_match_original_scan_and_sort (test_route_queries.RouteQueryTest.test_exact_filters_match_original_scan_and_sort) ... ok
+test_ipv6_scope_and_host_bits_are_preserved (test_route_queries.RouteQueryTest.test_ipv6_scope_and_host_bits_are_preserved) ... ok
+test_predecessor_cache_uses_provenance_not_only_candidate_id (test_route_queries.RouteQueryTest.test_predecessor_cache_uses_provenance_not_only_candidate_id) ... ok
+test_default_checks_every_constructed_seed_without_guard_skips (test_seed_contracts.SeedContractTest.test_default_checks_every_constructed_seed_without_guard_skips) ... ok
+test_empty_environment_is_not_a_valid_reverse_proof (test_seed_contracts.SeedContractTest.test_empty_environment_is_not_a_valid_reverse_proof) ... ok
+test_missing_provenance_is_rejected_by_default (test_seed_contracts.SeedContractTest.test_missing_provenance_is_rejected_by_default) ... ok
+test_peer_assumption_implies_expected_output (test_seed_contracts.SeedContractTest.test_peer_assumption_implies_expected_output) ... ok
+test_reverse_does_not_assume_current_output (test_seed_contracts.SeedContractTest.test_reverse_does_not_assume_current_output) ... ok
+test_unclassified_seed_constraints_fail_closed (test_seed_contracts.SeedContractTest.test_unclassified_seed_constraints_fail_closed) ... ok
+test_branch_contract_audit_does_not_enlarge_device_slice (test_symbolic_smt_slicer.SymbolicSmtSlicerTest.test_branch_contract_audit_does_not_enlarge_device_slice) ... ok
+test_device_semantic_scope_is_topology_driven_and_keeps_peer_boundaries (test_symbolic_smt_slicer.SymbolicSmtSlicerTest.test_device_semantic_scope_is_topology_driven_and_keeps_peer_boundaries) ... ok
+test_direct_device_slices_cover_requirements_and_form_audit_union (test_symbolic_smt_slicer.SymbolicSmtSlicerTest.test_direct_device_slices_cover_requirements_and_form_audit_union) ... ok
+test_generated_slices_pass_the_formal_consistency_gate (test_symbolic_smt_slicer.SymbolicSmtSlicerTest.test_generated_slices_pass_the_formal_consistency_gate) ... ok
+test_requirements_are_derived_from_all_k_feasible_device_branches (test_symbolic_smt_slicer.SymbolicSmtSlicerTest.test_requirements_are_derived_from_all_k_feasible_device_branches) ... ok
+test_groups_sr_path_fields_into_one_device_line (test_traffic_subspecification.TrafficSubspecificationTest.test_groups_sr_path_fields_into_one_device_line) ... ok
+test_joint_projection_quantifies_failures_and_intersects_links (test_traffic_subspecification.TrafficSubspecificationTest.test_joint_projection_quantifies_failures_and_intersects_links) ... ok
+test_localized_projection_pins_other_weight (test_traffic_subspecification.TrafficSubspecificationTest.test_localized_projection_pins_other_weight) ... ok
+test_projects_isis_interface_cost_as_config_field (test_traffic_subspecification.TrafficSubspecificationTest.test_projects_isis_interface_cost_as_config_field) ... ok
+test_rejects_unclassified_assertion (test_traffic_subspecification.TrafficSubspecificationTest.test_rejects_unclassified_assertion) ... ok
+test_reports_unsatisfiable_device_field_and_line_views (test_traffic_subspecification.TrafficSubspecificationTest.test_reports_unsatisfiable_device_field_and_line_views) ... ok
+test_writes_auditable_artifacts (test_traffic_subspecification.TrafficSubspecificationTest.test_writes_auditable_artifacts) ... ok
+test_closure_follows_peer_feedback_and_retains_competing_candidate (test_validation_baseline.BaselineTest.test_closure_follows_peer_feedback_and_retains_competing_candidate) ... ok
+test_constant_contradiction_is_never_dropped (test_validation_baseline.BaselineTest.test_constant_contradiction_is_never_dropped) ... ok
+test_counterexample_detects_bad_behavior_that_sat_compatibility_misses (test_validation_baseline.BaselineTest.test_counterexample_detects_bad_behavior_that_sat_compatibility_misses) ... ok
+test_failed_empty_report_does_not_print_success (test_validation_baseline.BaselineTest.test_failed_empty_report_does_not_print_success) ... ok
+
+======================================================================
+ERROR: test_shared_engine_accepts_non_bgp_adapter (test_protocol_slicing.ProtocolSlicingTest.test_shared_engine_accepts_non_bgp_adapter)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/slice_validation/tests/test_protocol_slicing.py", line 76, in test_shared_engine_accepts_non_bgp_adapter
+    adapter = ToyAdapter(); slicer.InputValidator(str(work), adapter)._validate_input_files()
+                            ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+TypeError: InputValidator.__init__() takes 2 positional arguments but 3 were given
+
+======================================================================
+FAIL: test_isis_cli_preserves_existing_output (test_protocol_slicing.ProtocolSlicingTest.test_isis_cli_preserves_existing_output) (script='1_smt_slicer.py')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/slice_validation/tests/test_protocol_slicing.py", line 65, in test_isis_cli_preserves_existing_output
+    self.assertIn('IS-IS slicing is not implemented', p.stderr)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'IS-IS slicing is not implemented' not found in 'usage: 1_smt_slicer.py [-h] --k K [--vrf VRF] [-v] [-d] work_directory\n1_smt_slicer.py: error: unrecognized arguments: --slicing-protocol IS-IS\n'
+
+======================================================================
+FAIL: test_isis_cli_preserves_existing_output (test_protocol_slicing.ProtocolSlicingTest.test_isis_cli_preserves_existing_output) (script='run.py')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/slice_validation/tests/test_protocol_slicing.py", line 65, in test_isis_cli_preserves_existing_output
+    self.assertIn('IS-IS slicing is not implemented', p.stderr)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'IS-IS slicing is not implemented' not found in 'usage: 1_smt_slicer.py [-h] --k K [--vrf VRF] [-v] [-d] work_directory\n1_smt_slicer.py: error: unrecognized arguments: --slicing-protocol IS-IS\nPipeline stopped: stage 1 failed with exit code 2 after 0.10s.\n'
+
+======================================================================
+FAIL: test_scope_adapter_mismatch_rejected (test_protocol_slicing.ProtocolSlicingTest.test_scope_adapter_mismatch_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/slice_validation/tests/test_protocol_slicing.py", line 88, in test_scope_adapter_mismatch_rejected
+    with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(SymbolicSliceError, 'mismatch'):
+                                                     ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: SymbolicSliceError not raised
+
+----------------------------------------------------------------------
+Ran 94 tests in 47.881s
+
+FAILED (failures=3, errors=1)

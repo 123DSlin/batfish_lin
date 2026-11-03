@@ -16,6 +16,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from functools import cached_property
 import hashlib
 import ipaddress
 import json
@@ -390,6 +391,28 @@ class SubspecificationReport:
 class _SmtDocument(_SharedSmtDocument):
     """Stage-3 view over the shared parsed SMT seed."""
 
+    @cached_property
+    def _value_dependencies(self) -> dict[str, set[str]]:
+        return _device_value_dependencies(
+            self.assertions, self.assertion_names, self.declarations
+        )
+
+    @cached_property
+    def _route_attribute_snapshots(
+        self,
+    ) -> tuple[tuple[int, str, frozenset[str]], ...]:
+        return tuple(
+            (
+                index,
+                name,
+                frozenset(_literal_bound_symbols(expression, self.declarations)),
+            )
+            for index, (expression, name) in enumerate(
+                zip(self.assertions, self.assertion_names)
+            )
+            if name is not None and _is_route_attribute_snapshot_name(name)
+        )
+
     def metadata_source(
         self, pins: ConfigPin | tuple[ConfigPin, ...]
     ) -> str:
@@ -579,9 +602,7 @@ class _SmtDocument(_SharedSmtDocument):
         if not value_targets:
             return frozenset(), (), ()
 
-        dependencies = _device_value_dependencies(
-            self.assertions, self.assertion_names, self.declarations
-        )
+        dependencies = self._value_dependencies
         dependent = set(value_targets)
         pending = list(value_targets)
         while pending:
@@ -594,14 +615,8 @@ class _SmtDocument(_SharedSmtDocument):
         released_indices: set[int] = set()
         released_names: list[str] = []
         released_symbols: set[str] = set()
-        for index, (expression, name) in enumerate(
-            zip(self.assertions, self.assertion_names)
-        ):
-            if name is None or not _is_route_attribute_snapshot_name(name):
-                continue
-            affected = _literal_bound_symbols(
-                expression, self.declarations
-            ).intersection(dependent)
+        for index, name, symbols in self._route_attribute_snapshots:
+            affected = symbols.intersection(dependent)
             if not affected:
                 continue
             released_indices.add(index)

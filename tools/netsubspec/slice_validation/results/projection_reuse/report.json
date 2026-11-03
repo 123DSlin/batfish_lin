@@ -1,0 +1,75 @@
+{
+  "status": "PASS",
+  "cases": [
+    {
+      "case": "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/pipeline_runs/0083_k2",
+      "stage3_identical": true,
+      "stage4_identical": true,
+      "before": {
+        "z3_processes": 1323,
+        "dependency_graph_builds": 18,
+        "stage3_seconds": 75.92861079191789,
+        "total_seconds": 80.47256083320826,
+        "stage3_cache": null,
+        "stage4_cache": null
+      },
+      "after": {
+        "z3_processes": 859,
+        "dependency_graph_builds": 3,
+        "stage3_seconds": 57.782292124815285,
+        "total_seconds": 60.374692040961236,
+        "stage3_cache": {
+          "hits": 327,
+          "misses": 691,
+          "entries": 128,
+          "bytes": 2967083,
+          "max_entries": 128,
+          "max_bytes": 8388608
+        },
+        "stage4_cache": {
+          "hits": 137,
+          "misses": 168,
+          "entries": 128,
+          "bytes": 1024514,
+          "max_entries": 128,
+          "max_bytes": 8388608
+        }
+      }
+    },
+    {
+      "case": "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/slice_validation/symbolic_output_0010",
+      "stage3_identical": true,
+      "stage4_identical": true,
+      "before": {
+        "z3_processes": 1064,
+        "dependency_graph_builds": 12,
+        "stage3_seconds": 60.717548333108425,
+        "total_seconds": 63.74106462486088,
+        "stage3_cache": null,
+        "stage4_cache": null
+      },
+      "after": {
+        "z3_processes": 665,
+        "dependency_graph_builds": 2,
+        "stage3_seconds": 52.17114808270708,
+        "total_seconds": 54.086456374730915,
+        "stage3_cache": {
+          "hits": 308,
+          "misses": 496,
+          "entries": 128,
+          "bytes": 2155572,
+          "max_entries": 128,
+          "max_bytes": 8388608
+        },
+        "stage4_cache": {
+          "hits": 91,
+          "misses": 169,
+          "entries": 128,
+          "bytes": 757414,
+          "max_entries": 128,
+          "max_bytes": 8388608
+        }
+      }
+    }
+  ]
+}

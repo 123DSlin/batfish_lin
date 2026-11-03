@@ -8,12 +8,14 @@ their owning stage scripts.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
 import re
 import shutil
 import subprocess
+from threading import Lock
 import time
 from typing import Any, Optional
 
@@ -140,11 +142,41 @@ class SmtSolver:
         *,
         z3_path: Optional[Path | str] = None,
         timeout_seconds: float = 30.0,
+        cache_entries: int = 128,
+        cache_bytes: int = 8 * 1024 * 1024,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if cache_entries < 0 or cache_bytes < 0:
+            raise ValueError("solver cache limits must be nonnegative")
         self.z3_path = self._resolve_z3(z3_path)
         self.timeout_seconds = timeout_seconds
+        # Exact requests only: declarations, definitions, assertions, tactics,
+        # executable and timeout all participate. Never cache uncertain results.
+        self._cache: OrderedDict[
+            tuple[str, float, str], tuple[str, str, int]
+        ] = OrderedDict()
+        self._cache_lock = Lock()
+        self._cache_entries = cache_entries
+        self._cache_limit_bytes = cache_bytes
+        self._cache_bytes = self._cache_hits = self._cache_misses = 0
+
+    def cache_info(self) -> dict[str, int]:
+        """Expose reuse; bytes counts UTF-8 payload, excluding Python overhead."""
+        with self._cache_lock:
+            return {
+                "hits": self._cache_hits,
+                "misses": self._cache_misses,
+                "entries": len(self._cache),
+                "bytes": self._cache_bytes,
+                "max_entries": self._cache_entries,
+                "max_bytes": self._cache_limit_bytes,
+            }
+
+    def clear_cache(self) -> None:
+        with self._cache_lock:
+            self._cache.clear()
+            self._cache_bytes = self._cache_hits = self._cache_misses = 0
 
     @staticmethod
     def _resolve_z3(z3_path: Optional[Path | str]) -> Path:
@@ -307,14 +339,63 @@ class SmtSolver:
     def _invoke(
         self, query: str, *, timeout: Optional[float] = None
     ) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [str(self.z3_path), "-in", "-smt2"],
+        executable = str(self.z3_path)
+        effective_timeout = self.timeout_seconds if timeout is None else timeout
+        key = (executable, effective_timeout, query)
+        args = [executable, "-in", "-smt2"]
+        with self._cache_lock:
+            cached = self._cache.get(key)
+            if cached is not None:
+                self._cache.move_to_end(key)
+                self._cache_hits += 1
+                # CompletedProcess is mutable; never expose cached state.
+                return subprocess.CompletedProcess(args, 0, cached[0], cached[1])
+            self._cache_misses += 1
+        result = subprocess.run(
+            args,
             input=query,
             text=True,
             capture_output=True,
-            timeout=self.timeout_seconds if timeout is None else timeout,
+            timeout=effective_timeout,
             check=False,
         )
+        if (
+            self._cache_entries
+            and self._cache_limit_bytes
+            and self._cacheable(result)
+        ):
+            size = len(
+                (executable + query + result.stdout + result.stderr).encode("utf-8")
+            )
+            if size <= self._cache_limit_bytes:
+                with self._cache_lock:
+                    previous = self._cache.pop(key, None)
+                    if previous is not None:
+                        self._cache_bytes -= previous[2]
+                    self._cache[key] = (result.stdout, result.stderr, size)
+                    self._cache_bytes += size
+                    while (
+                        len(self._cache) > self._cache_entries
+                        or self._cache_bytes > self._cache_limit_bytes
+                    ):
+                        _, evicted = self._cache.popitem(last=False)
+                        self._cache_bytes -= evicted[2]
+        return result
+
+    @staticmethod
+    def _cacheable(result: subprocess.CompletedProcess[str]) -> bool:
+        if result.returncode or result.stderr.strip() or "(error " in result.stdout:
+            return False
+        output = result.stdout.strip()
+        if output in {"sat", "unsat"}:
+            return True
+        if not output.startswith("(goals"):
+            return False
+        try:
+            _, precise = _parse_goal(output)
+            return precise
+        except (SubspecificationError, ValueError, IndexError):
+            return False
 
 
 def and_expression(expressions: Any) -> object:
