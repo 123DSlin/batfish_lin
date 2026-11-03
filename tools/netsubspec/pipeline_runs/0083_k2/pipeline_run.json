@@ -1,0 +1,62 @@
+{
+  "source": "batfish/smts/smt_output_0083",
+  "stages": [
+    {
+      "stage": 1,
+      "command": [
+        "1_smt_slicer.py",
+        "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/pipeline_runs/0083_k2",
+        "--k",
+        "2"
+      ],
+      "exit_code": 0,
+      "seconds": 0.62,
+      "log": "logs/stage_1.log"
+    },
+    {
+      "stage": 2,
+      "command": [
+        "2_consistency_checker.py",
+        "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/pipeline_runs/0083_k2",
+        "--k",
+        "2"
+      ],
+      "exit_code": 0,
+      "seconds": 3.29,
+      "log": "logs/stage_2.log"
+    },
+    {
+      "stage": 3,
+      "command": [
+        "3_branch_simplifier.py",
+        "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/pipeline_runs/0083_k2",
+        "--workers",
+        "4"
+      ],
+      "exit_code": 0,
+      "seconds": 40.65,
+      "log": "logs/stage_3.log"
+    },
+    {
+      "stage": 4,
+      "command": [
+        "4_branch_intersection.py",
+        "/Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/pipeline_runs/0083_k2"
+      ],
+      "exit_code": 0,
+      "seconds": 4.35,
+      "log": "logs/stage_4.log"
+    }
+  ],
+  "complete": true,
+  "input_hashes": {
+    "smt_encoding.smt2": "ddd078a9d6ae19c92cfbe72acbec6882525398bfacadc56294a4d302c0a263e5",
+    "symbolic_route.json": "3dc2cae1638fc7a3fb1d0e8de55725689aad78afd6b0a8e907a3d4b8a5d07aba",
+    "0_protocols.txt": "8ec31c5521927a761567f56a7ece82b47b7e4e9b63c47f679856f9facb76cff8"
+  },
+  "supplementary_checks": {
+    "seed_forward_reverse": "PASS",
+    "report": "2_consistency_check/forward_reverse/report.json",
+    "stage2_provenance_rerun_seed_hashes_unchanged": true
+  }
+}

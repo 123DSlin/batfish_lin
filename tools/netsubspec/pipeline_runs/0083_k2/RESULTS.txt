@@ -1,0 +1,20 @@
+0083 pipeline stages 1-4: PASS
+Scope: BGP, MAIN, destination 5.5.5.5, at-most-2 link failures.
+Source: batfish/smts/smt_output_0083; original directory not modified.
+
+Stage 1: PASS; device slices a,b,d,x; audit union also generated.
+  1_sliced_device_smt_encoding/
+Stage 2: PASS; 10/10 SAT. Fresh seeds, not archived seeds.
+  2_consistency_check/consistency_report.txt
+  Supplementary per-seed forward/reverse: 10/10 PASS.
+  2_consistency_check/forward_reverse/check_results.txt
+Stage 3: PASS; 10 branches; 99 field evaluations; 39 line evaluations.
+  3_branch_subspecs/branch_subspecs.txt
+Stage 4: PASS; 19 final fields; 9 final lines.
+  d: 7 fields, 2 lines; x: 12 fields, 7 lines.
+  a,b: no owned configuration targets.
+  4_final_subspecs/final_subspecs.txt
+
+Logs: logs/stage_1.log through logs/stage_4.log
+Execution details: pipeline_run.json
+Stage 2 was rerun to record input provenance. All seed hashes were unchanged; stage 3/4 inputs remain identical.

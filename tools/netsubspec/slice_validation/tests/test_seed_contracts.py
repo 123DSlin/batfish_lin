@@ -10,6 +10,14 @@ from validate_slices import solve
 
 
 class SeedContractTest(unittest.TestCase):
+    def test_missing_provenance_is_rejected_by_default(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / 'smt_encoding.smt2').write_text('(assert true)')
+            (directory / 'symbolic_route.json').write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'Stale/missing'):
+                run(directory, directory / 'results', 2)
+
     def test_default_checks_every_constructed_seed_without_guard_skips(self):
         directory = Path(__file__).resolve().parents[1] / 'generated' / 'smt_output_0001'
         with tempfile.TemporaryDirectory() as temporary, contextlib.redirect_stdout(io.StringIO()):

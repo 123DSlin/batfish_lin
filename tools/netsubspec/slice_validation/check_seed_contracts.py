@@ -50,13 +50,14 @@ def queries(local, domain, assumptions, guarantees):
     return inputs, inputs + guarantees, reverse
 
 
-def run(work, output, k, per_scenario=False):
+def run(work, output, k, per_scenario=False, audit_archived_seeds=False):
     output.mkdir(parents=True, exist_ok=True)
     report_path = work / '2_consistency_check' / 'input_hashes.json'
     hashes = {name: baseline.hashlib.sha256((work / name).read_bytes()).hexdigest()
               for name in ('smt_encoding.smt2', 'symbolic_route.json')}
-    if not report_path.exists() or json.loads(report_path.read_text()) != hashes:
-        raise ValueError('Stale/missing Stage 2 input provenance')
+    provenance_verified = report_path.exists() and json.loads(report_path.read_text()) == hashes
+    if not provenance_verified and not audit_archived_seeds:
+        raise ValueError('Stale/missing Stage 2 input provenance; use --audit-archived-seeds only to audit existing seed files, not validate current JSON')
     stage_report = json.loads((work / '2_consistency_check' / 'consistency_report.json').read_text())
     if stage_report['scope']['k'] != k:
         raise ValueError('Requested k differs from constructed seeds; regenerate Stage 2')
@@ -121,7 +122,9 @@ def run(work, output, k, per_scenario=False):
             record['artifact_directory'] = str(folder.relative_to(output))
             results.append(record)
     active = [r for r in results if r.get('guard_feasible', 'sat') == 'sat']
-    report = {'input_hashes': hashes, 'mode': 'per_scenario_audit' if per_scenario else 'constructed_seed', 'k': k, 'checks': results,
+    report = {'input_hashes': hashes, 'input_provenance_verified': provenance_verified,
+              'archived_seed_audit': audit_archived_seeds,
+              'validation_scope': 'existing seed files versus device slices; current JSON correspondence NOT validated' if audit_archived_seeds else 'constructed seeds with verified input provenance', 'mode': 'per_scenario_audit' if per_scenario else 'constructed_seed', 'k': k, 'checks': results,
               'admissibility_pass': bool(active) and all(r.get('forward') == 'sat' and r['constructed_seed'] == 'sat' for r in active)
                   and all(r.get('guard_feasible', 'sat') in ('sat', 'unsat') for r in results),
               'assume_guarantee_pass': bool(active) and all(r['status'] == 'FORWARD_AND_REVERSE_PASS' for r in active)
@@ -136,10 +139,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work-dir', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--audit-archived-seeds', action='store_true', help='Explicitly audit archived seed files without claiming current JSON correspondence')
     parser.add_argument('--per-scenario', action='store_true', help='Optional exhaustive scenario audit; default checks each complete seed')
     parser.add_argument('--k', type=int, default=2)
     args = parser.parse_args()
     if args.k < 0:
         parser.error('k must be nonnegative')
-    result = run(args.work_dir, args.output, args.k, args.per_scenario)
+    result = run(args.work_dir, args.output, args.k, args.per_scenario, args.audit_archived_seeds)
     raise SystemExit(0 if result['assume_guarantee_pass'] else 1)

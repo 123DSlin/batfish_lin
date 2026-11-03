@@ -1,0 +1,11 @@
+Seed | Constructed seed | Environment | Forward | Reverse | Result
+seed_a-d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS
+seed_a-x-b-d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS
+seed_a-x-d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS
+seed_b-d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS
+seed_b-x-a-d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS
+seed_b-x-d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS
+seed_d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS
+seed_x-a-d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS
+seed_x-b-d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS
+seed_x-d.smt2 | sat | sat | sat | unsat | FORWARD_AND_REVERSE_PASS

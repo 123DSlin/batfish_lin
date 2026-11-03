@@ -1,0 +1,5 @@
+SR POLICY FORWARDING BRANCHES
+Node     VRF       Color    Endpoint         Policy               Candidate              Pref     Weight   SegmentList        Labels               NextHops           SelectionGuard
+========================================================================================================================================================================
+s        default   100      5.5.5.5          split-to-D           explicit:lower-via-B   100      50       lower-via-B        [24003, 24004]       -                  (and b_d b_s)
+s        default   100      5.5.5.5          split-to-D           explicit:upper-via-A   100      50       upper-via-A        [24001, 24002]       -                  (and a_d a_s)

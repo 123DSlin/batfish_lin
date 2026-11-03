@@ -1,0 +1,216 @@
+{
+  "guardVariables" : [
+    {
+      "kind" : "LINK_AVAILABILITY",
+      "link" : {
+        "firstRouter" : "a",
+        "secondRouter" : "d"
+      },
+      "polarity" : "UP",
+      "variableId" : "a_d"
+    },
+    {
+      "kind" : "LINK_AVAILABILITY",
+      "link" : {
+        "firstRouter" : "a",
+        "secondRouter" : "s"
+      },
+      "polarity" : "UP",
+      "variableId" : "a_s"
+    },
+    {
+      "kind" : "LINK_AVAILABILITY",
+      "link" : {
+        "firstRouter" : "b",
+        "secondRouter" : "d"
+      },
+      "polarity" : "UP",
+      "variableId" : "b_d"
+    },
+    {
+      "kind" : "LINK_AVAILABILITY",
+      "link" : {
+        "firstRouter" : "b",
+        "secondRouter" : "s"
+      },
+      "polarity" : "UP",
+      "variableId" : "b_s"
+    }
+  ],
+  "records" : [
+    {
+      "availabilityGuard" : "(and b_s b_d)",
+      "availabilityGuardAst" : {
+        "children" : [
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "b_d"
+          },
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "b_s"
+          }
+        ],
+        "operator" : "AND"
+      },
+      "candidate" : "explicit:lower-via-B",
+      "color" : 100,
+      "endpoint" : "5.5.5.5",
+      "kind" : "CANDIDATE",
+      "node" : "s",
+      "policy" : "split-to-D",
+      "preference" : 100,
+      "segmentList" : "lower-via-B",
+      "selectionGuard" : "(and b_s b_d)",
+      "selectionGuardAst" : {
+        "children" : [
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "b_d"
+          },
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "b_s"
+          }
+        ],
+        "operator" : "AND"
+      },
+      "vrf" : "default",
+      "weight" : 50
+    },
+    {
+      "availabilityGuard" : "(and b_s b_d)",
+      "availabilityGuardAst" : {
+        "children" : [
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "b_d"
+          },
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "b_s"
+          }
+        ],
+        "operator" : "AND"
+      },
+      "candidate" : "explicit:lower-via-B",
+      "color" : 100,
+      "endpoint" : "5.5.5.5",
+      "kind" : "FORWARDING_BRANCH",
+      "labels" : [
+        24003,
+        24004
+      ],
+      "node" : "s",
+      "policy" : "split-to-D",
+      "preference" : 100,
+      "segmentList" : "lower-via-B",
+      "selectionGuard" : "(and b_s b_d)",
+      "selectionGuardAst" : {
+        "children" : [
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "b_d"
+          },
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "b_s"
+          }
+        ],
+        "operator" : "AND"
+      },
+      "terminalNode" : "d",
+      "terminalVrf" : "default",
+      "vrf" : "default",
+      "weight" : 50
+    },
+    {
+      "availabilityGuard" : "(and a_s a_d)",
+      "availabilityGuardAst" : {
+        "children" : [
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "a_d"
+          },
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "a_s"
+          }
+        ],
+        "operator" : "AND"
+      },
+      "candidate" : "explicit:upper-via-A",
+      "color" : 100,
+      "endpoint" : "5.5.5.5",
+      "kind" : "CANDIDATE",
+      "node" : "s",
+      "policy" : "split-to-D",
+      "preference" : 100,
+      "segmentList" : "upper-via-A",
+      "selectionGuard" : "(and a_s a_d)",
+      "selectionGuardAst" : {
+        "children" : [
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "a_d"
+          },
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "a_s"
+          }
+        ],
+        "operator" : "AND"
+      },
+      "vrf" : "default",
+      "weight" : 50
+    },
+    {
+      "availabilityGuard" : "(and a_s a_d)",
+      "availabilityGuardAst" : {
+        "children" : [
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "a_d"
+          },
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "a_s"
+          }
+        ],
+        "operator" : "AND"
+      },
+      "candidate" : "explicit:upper-via-A",
+      "color" : 100,
+      "endpoint" : "5.5.5.5",
+      "kind" : "FORWARDING_BRANCH",
+      "labels" : [
+        24001,
+        24002
+      ],
+      "node" : "s",
+      "policy" : "split-to-D",
+      "preference" : 100,
+      "segmentList" : "upper-via-A",
+      "selectionGuard" : "(and a_s a_d)",
+      "selectionGuardAst" : {
+        "children" : [
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "a_d"
+          },
+          {
+            "operator" : "VARIABLE",
+            "variableId" : "a_s"
+          }
+        ],
+        "operator" : "AND"
+      },
+      "terminalNode" : "d",
+      "terminalVrf" : "default",
+      "vrf" : "default",
+      "weight" : 50
+    }
+  ],
+  "schemaName" : "batfish-minesweeper-symbolic-sr-policies",
+  "schemaVersion" : 1
+}

@@ -1,0 +1,20 @@
+0083 existing-seed consistency check results
+Scope: existing seed files versus existing device slices.
+Current symbolic_route.json correspondence: NOT VERIFIED (archived seeds lack input provenance).
+
+Seed                         Seed     Env      Forward   Reverse   Result
+--------------------------------------------------------------------------------
+seed_a-d.smt2                SAT      SAT      SAT       UNSAT     PASS
+seed_a-x-b-d.smt2            SAT      SAT      SAT       UNSAT     PASS
+seed_a-x-d.smt2              SAT      SAT      SAT       UNSAT     PASS
+seed_b-d.smt2                SAT      SAT      SAT       UNSAT     PASS
+seed_b-x-a-d.smt2            SAT      SAT      SAT       UNSAT     PASS
+seed_b-x-d.smt2              SAT      SAT      SAT       UNSAT     PASS
+seed_d.smt2                  SAT      SAT      SAT       UNSAT     PASS
+seed_x-a-d.smt2              SAT      SAT      SAT       UNSAT     PASS
+seed_x-b-d.smt2              SAT      SAT      SAT       UNSAT     PASS
+seed_x-d.smt2                SAT      SAT      SAT       UNSAT     PASS
+
+Total: 10; PASS: 10
+Expected: constructed seed SAT; environment SAT; forward SAT; reverse UNSAT.
+Source: report.json (recorded Z3 results).

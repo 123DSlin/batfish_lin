@@ -1,0 +1,115 @@
+{
+  "input_hashes": {
+    "smt_encoding.smt2": "ddd078a9d6ae19c92cfbe72acbec6882525398bfacadc56294a4d302c0a263e5",
+    "symbolic_route.json": "3dc2cae1638fc7a3fb1d0e8de55725689aad78afd6b0a8e907a3d4b8a5d07aba"
+  },
+  "input_provenance_verified": true,
+  "archived_seed_audit": false,
+  "validation_scope": "constructed seeds with verified input provenance",
+  "mode": "constructed_seed",
+  "k": 2,
+  "checks": [
+    {
+      "seed": "2_consistency_check/seeds/a/seed_a-d.smt2",
+      "seed_sha256": "d9d77fde78e3d4f87c71b1a1269e57b1dceb3dc1f72e4b833d8fc7e2c121aced",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "a/seed_a-d"
+    },
+    {
+      "seed": "2_consistency_check/seeds/a/seed_a-x-b-d.smt2",
+      "seed_sha256": "48c88bb21464b7b41451d82dc9a547018c82aa71ecba2c2143fe5ba7e11722e1",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "a/seed_a-x-b-d"
+    },
+    {
+      "seed": "2_consistency_check/seeds/a/seed_a-x-d.smt2",
+      "seed_sha256": "ea20934b1778c37d506434393abe48a200adf9bbc062fe1fa274185c6729014a",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "a/seed_a-x-d"
+    },
+    {
+      "seed": "2_consistency_check/seeds/b/seed_b-d.smt2",
+      "seed_sha256": "f9101c90c9bca677bf41a9b02e08e85416995ffab6682a2877068add1f0a931e",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "b/seed_b-d"
+    },
+    {
+      "seed": "2_consistency_check/seeds/b/seed_b-x-a-d.smt2",
+      "seed_sha256": "5f97d57d708975b20db564710193ea3ab1d47661b4580a5014ebba50668ff959",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "b/seed_b-x-a-d"
+    },
+    {
+      "seed": "2_consistency_check/seeds/b/seed_b-x-d.smt2",
+      "seed_sha256": "20ac6ed663fd5cbefc18fe3b24c3450121cae14e1c811a1812785112f6f0b51b",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "b/seed_b-x-d"
+    },
+    {
+      "seed": "2_consistency_check/seeds/d/seed_d.smt2",
+      "seed_sha256": "8360e883dec6727a09436bafa35d2286ed84a3588958f3e9a8d269fb2f1feca0",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "d/seed_d"
+    },
+    {
+      "seed": "2_consistency_check/seeds/x/seed_x-a-d.smt2",
+      "seed_sha256": "519bd4afed2c77db1d4194a837d0b068413f4cca4010dc0f85ec783e80f7341f",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "x/seed_x-a-d"
+    },
+    {
+      "seed": "2_consistency_check/seeds/x/seed_x-b-d.smt2",
+      "seed_sha256": "cb273bf4801d00b239ee341dc3d541571ed6cefb6bb35d7060377a4634a7393a",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "x/seed_x-b-d"
+    },
+    {
+      "seed": "2_consistency_check/seeds/x/seed_x-d.smt2",
+      "seed_sha256": "1d40bb2338259a0ee9159ba356dc8a74de647dee23bbff210b777d9db40a4c91",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "x/seed_x-d"
+    }
+  ],
+  "admissibility_pass": true,
+  "assume_guarantee_pass": true
+}
