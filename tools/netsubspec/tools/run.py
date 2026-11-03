@@ -63,6 +63,8 @@ def parse_args() -> argparse.Namespace:
             "smt_traffic_encoding.smt2 to SR-weight constraints"
         ),
     )
+    parser.add_argument("--slicing-protocol", default="bgp",
+                        help="stage-1 adapter (default: bgp; IS-IS reserved)")
     parser.add_argument("--z3", type=Path, help="optional Z3 executable")
     parser.add_argument(
         "--timeout",
@@ -95,6 +97,8 @@ def stage_command(
     if stage == 1 and args.verbose_slicer:
         command.append("-v")
     command.append(str(work_directory))
+    if stage == 1:
+        command.extend(("--slicing-protocol", args.slicing_protocol))
     if stage in {1, 2}:
         command.extend(("--k", str(args.k)))
     if stage == 3 and args.workers is not None:

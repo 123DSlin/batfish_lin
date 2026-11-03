@@ -141,3 +141,63 @@ intersection are accepted only after an `UNSAT` disagreement check.
 See [`docs/SYMBOLIC_CONSISTENCY_DESIGN.md`](docs/SYMBOLIC_CONSISTENCY_DESIGN.md)
 and [`docs/SYMBOLIC_SUBSPEC_REUSE_AUDIT.md`](docs/SYMBOLIC_SUBSPEC_REUSE_AUDIT.md)
 for the formal construction and reuse boundary.
+
+
+## Protocol-adapted device slicing
+
+Stage 1 dispatches through `slicing.ProtocolSliceAdapter`. Default `bgp`
+preserves the existing command line and byte-identical BGP outputs:
+
+```bash
+python3 1_smt_slicer.py WORK_DIRECTORY --k 2 --slicing-protocol bgp
+python3 tools/run.py WORK_DIRECTORY --k 2 --slicing-protocol bgp
+```
+
+This flag selects the slicing strategy, not the generation protocol switch.
+It does not filter or rewrite the input encoding or symbolic RIB. Matching
+run-level generation scope remains necessary. Mixed-protocol composition
+cannot be implemented by simply concatenating independently generated slices.
+
+| Component | Responsibility |
+| --- | --- |
+| `1_smt_slicer.py` | normalization, indexing, common configuration/failure/SSA closure, structural audits, output |
+| `slicing/base.py` | adapter and per-run assertion-rule interfaces |
+| `slicing/models.py` | device boundary and branch audit data |
+| `slicing/bgp.py` | existing BGP topology boundary, ownership, directional/single export rules and RouteBinder audit |
+| `slicing/registry.py` | explicit dispatch; unknown/mixed protocols are errors |
+| `slicing/isis.py` | reserved IS-IS interface; rejects before output generation |
+
+Adapters supply `required_input_files`, `build_scopes`, `build_requirements`,
+and `create_rules`. Rules supply `should_remove`, `assertion_owners`, and
+`dependency_keys`. Generic `protocol_equation_symbols` identify retained
+protocol roots; the compatibility property `incoming_export_symbols` exposes
+BGP roots for existing callers. Scope/adapter identities must agree.
+
+IS-IS is not implemented. Its adapter must define SPF/L1/L2, prefix origins,
+distances, ECMP, recursive dependencies and MAIN-RIB boundaries before enabling.
+`--slicing-protocol isis` (also `IS-IS`/`IS_IS`) errors without overwriting
+existing slices. A test-only protocol confirms that the shared engine accepts
+non-BGP equation roots and inputs; it is not an IS-IS approximation.
+
+`slice_validation/1_smt_slicer.py` now imports this production implementation;
+there is no second copy of BGP slicing logic to maintain.
+
+Differential validation against an immutable pre-refactor source directory:
+
+```bash
+python3 slice_validation/differential_slicing.py \
+  --baseline-root /absolute/path/to/pre-refactor/netsubspec \
+  --output slice_validation/results/protocol_adapter_refactor
+cd slice_validation
+python3 -m unittest discover -s tests
+```
+
+The comparison covers 0009/0010/0083 at k=1/2, default/explicit BGP selection,
+missing-input rejection, seeds, local forward/reverse contracts and full
+0083 k=2 stages 1–4. Device SMT and seeds are compared byte-for-byte. JSON
+comparison removes only timestamps, solver timing, work directory paths and
+the hash of the timestamped source report; formulas and seed hashes remain.
+
+Differential PASS means no regression, not that every old fixture is healthy.
+Historical 0009/0010 failures are marked PRE_EXISTING_FAILURE and both reports
+are retained. 0083 must actually pass semantic checks, not fail identically.

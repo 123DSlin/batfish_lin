@@ -1,0 +1,7 @@
+{
+  "admissibility_pass": true,
+  "assume_guarantee_pass": true,
+  "statuses": {
+    "FORWARD_AND_REVERSE_PASS": 7
+  }
+}

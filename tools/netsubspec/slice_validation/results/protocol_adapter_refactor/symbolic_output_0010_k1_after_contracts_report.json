@@ -1,0 +1,85 @@
+{
+  "input_hashes": {
+    "smt_encoding.smt2": "efdf06a4f19e293293c140ffe3e683c0857acbc655f929aed818c187ea40388c",
+    "symbolic_route.json": "6d5bdde65e612317983081ae88fe4c8d4800aa4af7b272b5913112c23be3881c"
+  },
+  "input_provenance_verified": true,
+  "archived_seed_audit": false,
+  "validation_scope": "constructed seeds with verified input provenance",
+  "mode": "constructed_seed",
+  "k": 1,
+  "checks": [
+    {
+      "seed": "2_consistency_check/seeds/r1/seed_r1.smt2",
+      "seed_sha256": "f2ef503f1a80a449196d9584c97f94f60a01f8192a53c87350c81090206f95fd",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "unsat",
+      "reverse": "sat",
+      "status": "SEED_NOT_ADMISSIBLE_OR_INCONCLUSIVE",
+      "artifact_directory": "r1/seed_r1"
+    },
+    {
+      "seed": "2_consistency_check/seeds/r2/seed_r2-r1.smt2",
+      "seed_sha256": "3ef18c175eed351b0fa35c6d63a7c1a8edb9f32b23d6bba4d4fa41a6a1245cc0",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "r2/seed_r2-r1"
+    },
+    {
+      "seed": "2_consistency_check/seeds/r2/seed_r2-r4-r1.smt2",
+      "seed_sha256": "3b99892689fe0c6db668d0267dab3ad022f650385cce37d8b8e3739679048308",
+      "constructed_seed": "sat",
+      "environment": "unsat",
+      "forward": "unsat",
+      "reverse": "unsat",
+      "status": "INVALID_OR_INCONCLUSIVE_ENVIRONMENT",
+      "artifact_directory": "r2/seed_r2-r4-r1"
+    },
+    {
+      "seed": "2_consistency_check/seeds/r3/seed_r3-r1.smt2",
+      "seed_sha256": "ff7c15302e8496dbb8d4d4580643417f51324926ddde1605c1370f5e615a38f2",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "r3/seed_r3-r1"
+    },
+    {
+      "seed": "2_consistency_check/seeds/r3/seed_r3-r4-r2-r1.smt2",
+      "seed_sha256": "1b16d1b1427d1e88159d7841477b704bd9d8bf5744865b8e95488e695584f107",
+      "constructed_seed": "sat",
+      "environment": "unsat",
+      "forward": "unsat",
+      "reverse": "unsat",
+      "status": "INVALID_OR_INCONCLUSIVE_ENVIRONMENT",
+      "artifact_directory": "r3/seed_r3-r4-r2-r1"
+    },
+    {
+      "seed": "2_consistency_check/seeds/r4/seed_r4-r1.smt2",
+      "seed_sha256": "ca9a0c0110a617a080269bd1b1a011038ed2afe99b0ab9bfcb8fc4e9a7f4beca",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "r4/seed_r4-r1"
+    },
+    {
+      "seed": "2_consistency_check/seeds/r4/seed_r4-r2-r1.smt2",
+      "seed_sha256": "95cd787e7aefa96d5e841d1abc47427ca38d78e55055fa9649800534081b942b",
+      "constructed_seed": "sat",
+      "environment": "sat",
+      "forward": "sat",
+      "reverse": "unsat",
+      "status": "FORWARD_AND_REVERSE_PASS",
+      "artifact_directory": "r4/seed_r4-r2-r1"
+    }
+  ],
+  "admissibility_pass": false,
+  "assume_guarantee_pass": false
+}

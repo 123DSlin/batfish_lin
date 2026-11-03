@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
-"""Topology-driven, branch-independent per-device SMT slicing.
+"""Protocol-adapted, branch-independent per-device SMT slicing.
 
-The full Minesweeper encoding is parsed and normalized once.  Each device
-slice retains its local import/best/forwarding semantics plus every directly
-connected peer's export toward the device.  Peer best-route records are
-boundary declarations whose values are supplied later by branch seeds.
+The shared engine normalizes the full Minesweeper encoding, resolves shared
+dependencies, audits declarations and writes device files. Protocol adapters
+supply boundaries, assertion ownership and protocol equation dependencies.
+The default BGP adapter preserves local import/best/forwarding equations and
+direct peers' exports. Peer best records are inputs bound by later seeds.
 
-The structured symbolic RIB, branch guards, and at-most-k budget do not choose
-slice assertions.  The same ``RouteBinder`` used by Stage 2 is run only as a
-fail-closed audit proving that every k-feasible branch can be represented by
-the independently constructed device slice. ``sliced_smt_encoding.smt2`` is a
-deduplicated audit union, not an intermediate slicing input.
+Symbolic branches and k determine a structural binding audit, not which
+assertions the BGP adapter selects. This audit checks representation, not a
+general semantic equivalence theorem. ``sliced_smt_encoding.smt2`` is the
+output audit union, never an intermediate slicing input.
 """
 
 import argparse
-from dataclasses import dataclass
 import re
 import os
 import sys
@@ -25,13 +24,15 @@ from typing import List, Set, Tuple, Optional, Dict
 from collections import OrderedDict, defaultdict, deque
 from pathlib import Path
 
-from consistency.branch_loader import (
-    NeighborTopology,
-    SymbolicRib,
-    SymbolicRouteFormatError,
+from slicing import (
+    DeviceSemanticScope, SymbolicSliceRequirements, SymbolicSliceError,
+    ProtocolSliceAdapter, get_protocol_adapter,
 )
-from consistency.guard_encoder import GuardEncoder, GuardEncodingError
-from consistency.route_binder import RouteBinder, SmtSymbolTable
+from slicing.symbols import (
+    _declared_symbol_set, _read_required_lines, _binding_symbols,
+    _tokenize_smt2_expression, extract_symbolic_variables, get_router_from_var,
+)
+from slicing.bgp import _is_local_semantic_symbol  # compatibility helper
 
 from utils.util_smt import (
     expand_let_expressions_ast_batch,
@@ -44,186 +45,10 @@ from utils.util_log import verbose_info
 logger = logging.getLogger(__name__)
 
 
-class SymbolicSliceError(ValueError):
-    """Raised when a sound symbolic device slice cannot be constructed."""
+def build_device_semantic_scopes(work_dir, declarations, *, protocol="bgp"):
+    """Compatibility entry point; semantics belong to the selected adapter."""
+    return get_protocol_adapter(protocol).build_scopes(work_dir, declarations)
 
-
-@dataclass(frozen=True)
-class SymbolicSliceRequirements:
-    """Per-device binding contract and local equation roots."""
-
-    required_by_router: Dict[str, Set[str]]
-    local_roots_by_router: Dict[str, Set[str]]
-
-
-@dataclass(frozen=True)
-class DeviceSemanticScope:
-    """Branch-independent semantic boundary for one device.
-
-    ``peer_boundary_symbols`` are declarations only: a branch seed supplies
-    their values. ``incoming_export_symbols`` and ``local_symbols`` are roots
-    whose equations belong to this device slice.
-    """
-
-    router: str
-    peers: Tuple[str, ...]
-    peer_boundary_symbols: Set[str]
-    incoming_export_symbols: Set[str]
-    local_symbols: Set[str]
-
-    @property
-    def required_declarations(self) -> Set[str]:
-        return (
-            set(self.peer_boundary_symbols)
-            | set(self.incoming_export_symbols)
-            | set(self.local_symbols)
-        )
-
-
-def _declared_symbol_set(declarations: List[str]) -> Set[str]:
-    symbols: Set[str] = set()
-    for declaration in declarations:
-        found = extract_symbolic_variables(declaration)
-        if found:
-            symbols.add(found[0])
-    return symbols
-
-
-def _is_local_semantic_symbol(symbol: str, router: str) -> bool:
-    """Return whether ``symbol`` is part of router-local routing semantics."""
-
-    route_marker = f"_{router}_"
-    local_records = (
-        "_CONNECTED_IMPORT_",
-        "_STATIC_IMPORT_",
-        "_BGP_IMPORT_",
-        "_OSPF_IMPORT_",
-        "_CONNECTED_BEST_",
-        "_STATIC_BEST_",
-        "_BGP_BEST_",
-        "_OSPF_BEST_",
-        "_OVERALL_BEST_",
-    )
-    return (
-        route_marker in symbol and any(marker in symbol for marker in local_records)
-    ) or f"CONTROL-FORWARDING_{router}_" in symbol or f"DATA-FORWARDING_{router}_" in symbol
-
-
-def build_device_semantic_scopes(
-    work_dir: Path | str, declarations: List[str]
-) -> Dict[str, DeviceSemanticScope]:
-    """Build one topology-driven, branch-independent scope per device.
-
-    A device owns its import/best/forwarding equations and every directly
-    connected peer's export *toward* that device.  Peer OVERALL_BEST and peer
-    control-forwarding records are explicit boundary inputs whose values are
-    supplied later by branch seeds.
-    """
-
-    directory = Path(work_dir)
-    try:
-        topology = NeighborTopology.from_file(directory / "0_ebgp_neighbors.txt")
-    except (OSError, SymbolicRouteFormatError) as error:
-        raise SymbolicSliceError(str(error)) from error
-    hostnames = set(_read_required_lines(directory / "0_hostnames.txt", "device inventory"))
-    routers = [router for router in topology.routers() if router in hostnames]
-    if not routers:
-        raise SymbolicSliceError("enabled BGP scope contains no session routers")
-
-    declared = _declared_symbol_set(declarations)
-    scopes: Dict[str, DeviceSemanticScope] = {}
-    for router in routers:
-        peers = topology.peers(router)
-        local_symbols = {
-            symbol for symbol in declared if _is_local_semantic_symbol(symbol, router)
-        }
-        if not local_symbols:
-            raise SymbolicSliceError(
-                f"full SMT encoding has no local routing symbols for {router}"
-            )
-
-        peer_boundary: Set[str] = set()
-        incoming_exports: Set[str] = set()
-        for peer in peers:
-            local_links = topology.links(router, peer)
-            reverse_links = topology.links(peer, router)
-            if not reverse_links:
-                raise SymbolicSliceError(
-                    f"topology has {router}->{peer} but no reverse {peer}->{router} mapping"
-                )
-
-            peer_boundary.update(
-                symbol
-                for symbol in declared
-                if f"_{peer}_OVERALL_BEST_" in symbol
-                or f"CONTROL-FORWARDING_{peer}_" in symbol
-                or f"DATA-FORWARDING_{peer}_" in symbol
-                # SINGLE-EXPORT records are shared, directionless boundary
-                # records in this Minesweeper encoding. Their one producer is
-                # selected by the legacy export dependency rule; treating all
-                # assertions that mention the shared record as roots would
-                # pull other devices' best-route equations into this slice.
-                or f"_{peer}_BGP_SINGLE-EXPORT_" in symbol
-            )
-            peer_interfaces = {link.local.interface for link in reverse_links}
-            incoming_exports.update(
-                symbol
-                for symbol in declared
-                if f"_{peer}_" in symbol
-                and "_BGP_EXPORT_" in symbol
-                and any(
-                    f"_{peer}_BGP_EXPORT_{interface}_" in symbol
-                    for interface in peer_interfaces
-                )
-            )
-
-            if not any(f"_{peer}_OVERALL_BEST_" in symbol for symbol in peer_boundary):
-                raise SymbolicSliceError(
-                    f"device {router} peer {peer} has no OVERALL_BEST boundary record"
-                )
-            peer_has_single_export = any(
-                f"_{peer}_BGP_SINGLE-EXPORT_" in symbol for symbol in peer_boundary
-            )
-            local_interfaces = {link.local.interface for link in local_links}
-            peer_has_local_import = any(
-                any(
-                    f"_{router}_BGP_IMPORT_{interface}_" in symbol
-                    for interface in local_interfaces
-                )
-                and (
-                    symbol.endswith("_permitted|")
-                    or symbol.endswith("_choice|")
-                )
-                for symbol in local_symbols
-            )
-            if not peer_has_local_import and not peer_has_single_export:
-                raise SymbolicSliceError(
-                    f"device {router} peer {peer} has no local BGP IMPORT permitted record"
-                )
-            peer_has_directional_export = bool(incoming_exports.intersection(
-                {
-                    symbol
-                    for symbol in declared
-                    if f"_{peer}_" in symbol
-                    and any(
-                        f"_{peer}_BGP_EXPORT_{interface}_" in symbol
-                        for interface in peer_interfaces
-                    )
-                }
-            ))
-            if not peer_has_directional_export and not peer_has_single_export:
-                raise SymbolicSliceError(
-                    f"device {router} peer {peer} has no incoming EXPORT record"
-                )
-
-        scopes[router] = DeviceSemanticScope(
-            router=router,
-            peers=peers,
-            peer_boundary_symbols=peer_boundary,
-            incoming_export_symbols=incoming_exports,
-            local_symbols=local_symbols,
-        )
-    return scopes
 
 ##########################################################################################
 ### SMT2 variable regex and constant regex
@@ -313,97 +138,7 @@ def extract_assert_expressions(smt2_lines: List[str]) -> List[str]:
 ##########################################################################################
 
 
-def _tokenize_smt2_expression(expr: str) -> List[str]:
-    """
-    Fast hand-rolled tokenizer for SMT2 expressions.
-    Replaces regex-based tokenization for better performance.
-    Supports quoted identifiers |...| (including escaped pipes \\|) and normal identifiers.
-    """
-    tokens: List[str] = []
-    i = 0
-    n = len(expr)
-    
-    while i < n:
-        # Skip whitespace
-        if expr[i].isspace():
-            i += 1
-            continue
-        
-        # Handle quoted identifier |...|
-        if expr[i] == '|':
-            start = i
-            i += 1
-            # Find closing |, handling escaped \|
-            while i < n:
-                if expr[i] == '|' and (i == start + 1 or expr[i-1] != '\\'):
-                    # Found unescaped closing |
-                    tokens.append(expr[start:i+1])
-                    i += 1
-                    break
-                elif expr[i] == '\\' and i + 1 < n and expr[i+1] == '|':
-                    # Escaped pipe, skip both chars
-                    i += 2
-                else:
-                    i += 1
-            else:
-                # No closing | found, treat as normal token starting with |
-                i = start + 1
-                while i < n and not expr[i].isspace() and expr[i] not in '()':
-                    i += 1
-                tokens.append(expr[start:i])
-            continue
-        
-        # Handle normal identifier (not starting with |)
-        if expr[i] not in '()':
-            start = i
-            while i < n and not expr[i].isspace() and expr[i] not in '()':
-                i += 1
-            if i > start:
-                tokens.append(expr[start:i])
-            continue
-        
-        # Handle parentheses as separate tokens (if needed, but we skip them in filtering)
-        if expr[i] in '()':
-            # We skip parentheses in the tokenizer since we only care about identifiers
-            i += 1
-            continue
-    
-    return tokens
-
-
-def extract_symbolic_variables(expr: str) -> List[str]:
-    """
-    Extract symbolic variables from an SMT expression.
-    Uses fast hand-rolled tokenizer instead of regex for better performance.
-    """
-    # Use hand-rolled tokenizer instead of regex
-    expr_tokens = _tokenize_smt2_expression(expr)
-    symbolic_variables: List = list()
-
-    smt2_keyword = {
-        'assert', 'declare-fun', 'define-fun', 'check-sat', 'set-option', 
-        'not', 'and', 'or', 'ite', 'let', 
-        '<', '<=', '>', '>=', '=', '=>', '+', '-', '*', 'div', 'mod', 
-        'bvnot', 'bvor', 'bvand', 'bvule', 'bvult', 'extract', 
-        'true', 'false', 
-        'Bool', 'Int', 'BitVec', '_'
-    }
-
-    for token in expr_tokens:
-        if token in smt2_keyword:
-            continue
-        elif re.fullmatch(r'#b[0-1]+', token):           # binary constant
-            continue
-        elif re.fullmatch(r'#[xX][0-9a-fA-F]+', token):  # hexadecimal constant
-            continue
-        elif re.fullmatch(r'\d+', token):                # decimal constant
-            continue
-        symbolic_variables.append(token)
-
-    return symbolic_variables
-
-
-def slice_smt_encoding(declare_fun_exprs: List[str], assert_exprs: List[str], 
+def slice_smt_encoding(declare_fun_exprs: List[str], assert_exprs: List[str],
                        target_vars: Set[str]) -> List[str]:
     """Slice SMT encoding based on target variables (same logic, faster data structures).
 
@@ -560,18 +295,6 @@ def slice_smt_encoding(declare_fun_exprs: List[str], assert_exprs: List[str],
 ### Device-level slicing functionality
 ##########################################################################################
 
-def get_router_from_var(variable: Optional[str], routers: List[str]) -> Optional[str]:
-    """Parses a variable name to determine which router it belongs to.
-    Supports device names xxx, xxx-1, xxx_1 by trying longest names first (so paris_1 matches before paris).
-    """
-    if not variable:
-        return None
-    # Assumes router names are embedded in variables like `_routername_`. Try longest first.
-    for router in sorted(routers, key=lambda r: (-len(r), r)):
-        if f"_{router}_" in variable:
-            return router
-    return None
-
 
 def _read_model_igp(work_dir: str) -> bool:
     """Read 0_model_igp.txt: 1 -> model_igp True, 0 or missing -> False."""
@@ -591,8 +314,8 @@ def _read_model_igp(work_dir: str) -> bool:
 
 class SmtSlicer:
     """
-    Slices a global SMT-LIB 2 encoding file into smaller, per-router files
-    based on a sophisticated set of priority-based rules and dependency resolution.
+    Shared device-slicing engine with protocol-owned classification rules.
+    Dependency closure, structural audits and file output are common mechanisms.
     """
 
     def __init__(
@@ -604,11 +327,14 @@ class SmtSlicer:
         semantic_scopes: Optional[Dict[str, DeviceSemanticScope]] = None,
         required_symbols: Optional[Dict[str, Set[str]]] = None,
         local_roots: Optional[Dict[str, Set[str]]] = None,
+        protocol_adapter: Optional[ProtocolSliceAdapter] = None,
     ):
         self.logger = logger if logger is not None else logging.getLogger(__name__)
         self.routers = routers
         self.output_dir = output_dir
         self.model_igp = model_igp
+        self.protocol_adapter = protocol_adapter or get_protocol_adapter("bgp")
+        self.protocol_adapter.ensure_supported()
         self.semantic_scopes = dict(semantic_scopes or {})
         self.required_symbols: Dict[str, Set[str]] = {
             router: set((required_symbols or {}).get(router, set()))
@@ -619,10 +345,15 @@ class SmtSlicer:
         }
         os.makedirs(self.output_dir, exist_ok=True)
 
+        incompatible = [r for r, scope in self.semantic_scopes.items()
+                        if scope.protocol != self.protocol_adapter.name]
+        if incompatible:
+            raise SymbolicSliceError("semantic scope/adapter mismatch: " + ", ".join(incompatible))
+
         # --- Data Structures ---
         self.router_data: Dict[str, Set[str]] = defaultdict(set)
         self.deferred_asserts: Dict[str, Dict[str, Set[str]]] = {
-            "EXPORT": defaultdict(set),
+            "PROTOCOL": defaultdict(set),
             "CONFIG": defaultdict(set),
             "FAILED": defaultdict(set),
             "SSA": defaultdict(set),
@@ -637,7 +368,7 @@ class SmtSlicer:
         self._assertion_vars: Dict[str, Set[str]] = {}
         self._assertions_by_symbol: Dict[str, Set[str]] = defaultdict(set)
 
-        # --- Pre-compiled Regex Patterns ---
+        # Protocol-owned assertion classification; engine stays protocol-neutral.
         self._compile_regex_patterns()
 
         missing_scopes = sorted(set(routers) - self.semantic_scopes.keys())
@@ -648,43 +379,9 @@ class SmtSlicer:
             )
 
     def _compile_regex_patterns(self) -> None:
-        """Initializes and pre-compiles all necessary regex patterns for efficiency."""
-        self.logger.info("Step 1: Initializing priority templates...")
-        high_priority_templates = [
-            r"_{router}_CONNECTED_IMPORT", r"_{router}_STATIC_IMPORT", r"_{router}_BGP_IMPORT",
-            r"_{router}_CONNECTED_BEST", r"_{router}_STATIC_BEST", r"_{router}_BGP_BEST",
-            r"_{router}_OVERALL_BEST",
-        ]
-        low_priority_templates = [
-            r"CONTROL-FORWARDING_{router}", r"DATA-FORWARDING_{router}",
-        ]
-        remove_templates = [r"reachable_{router}", r"reachable-id_{router}"]
+        """Create protocol rules once per engine instance."""
+        self.protocol_rules = self.protocol_adapter.create_rules(self.routers, self.model_igp)
 
-        # Longest-first order so paris_1 / paris-1 match before paris (device names xxx, xxx-1, xxx_1).
-        routers_sorted_longest_first = sorted(self.routers, key=lambda r: (-len(r), r))
-        routers_alt = "(?:" + "|".join(map(re.escape, routers_sorted_longest_first)) + ")"
-
-        self.patterns = {
-            "high": {r: [re.compile(p.format(router=re.escape(r))) for p in high_priority_templates] for r in self.routers},
-            "low": {r: [re.compile(p.format(router=re.escape(r))) for p in low_priority_templates] for r in self.routers},
-            "remove": [re.compile(p.format(router=routers_alt)) for p in remove_templates]
-        }
-
-        # Fast-path combined patterns: find routers in one pass instead of scanning all routers per line.
-        self._high_any = re.compile(
-            rf"_(?P<router>{routers_alt})_(?:CONNECTED_IMPORT|STATIC_IMPORT|BGP_IMPORT|CONNECTED_BEST|STATIC_BEST|BGP_BEST|OVERALL_BEST)"
-        )
-        self._low_any = re.compile(
-            rf"(?:CONTROL-FORWARDING|DATA-FORWARDING)_(?P<router>{routers_alt})"
-        )
-        # When model_igp: 0_SLICE-MAIN_{router}_CONNECTED_IMPORT/BEST etc. (7 kinds)
-        self._high_any_slice = re.compile(
-            rf"0_SLICE-MAIN_(?P<router>{routers_alt})_(?:CONNECTED_IMPORT|STATIC_IMPORT|BGP_IMPORT|CONNECTED_BEST|STATIC_BEST|BGP_BEST|OVERALL_BEST)"
-        )
-        # When model_igp: 0_SLICE-MAIN_CONTROL-FORWARDING_{router}, 0_SLICE-MAIN_DATA-FORWARDING_{router} (same role as low_any)
-        self._low_any_slice = re.compile(
-            rf"0_SLICE-MAIN_(?:CONTROL-FORWARDING|DATA-FORWARDING)_(?P<router>{routers_alt})"
-        )
 
     def _parse_input_file(self, input_file: str) -> None:
         """Reads the input file and separates lines into declarations and assertions."""
@@ -701,11 +398,10 @@ class SmtSlicer:
                     self.all_asserts.append(stripped_line)
 
     def slice_from_expressions(self, sliced_exprs: List[str]) -> None:
-        """Run device slicing directly from already-sliced expressions (no re-read/parse).
-        
-        This is a performance optimization: global slicing already produced the reduced set
-        of declarations/assertions, so we reuse it in memory instead of re-reading
-        `sliced_smt_encoding.smt2`.
+        """Run device slicing directly from normalized expressions (no re-read/parse).
+
+        The full normalized encoding is supplied once. The audit union is an
+        output, never an intermediate input to device slicing.
         """
         self.all_declarations.clear()
         self.all_asserts.clear()
@@ -714,7 +410,7 @@ class SmtSlicer:
         self.unhandled_asserts.clear()
         for bucket in self.deferred_asserts.values():
             bucket.clear()
-        
+
         for expr in sliced_exprs:
             stripped = expr.strip()
             if not stripped:
@@ -727,13 +423,13 @@ class SmtSlicer:
                 self.all_asserts.append(stripped)
 
         self._build_assertion_index()
-        
+
         self._classify_assertions()
         self._seed_device_semantic_roots()
         self._resolve_dependencies()
         self._report_unhandled_asserts()
         self._write_output_files()
-    
+
     def _classify_assertions(self) -> None:
         """
         Performs the main classification pass over all assertions.
@@ -741,23 +437,8 @@ class SmtSlicer:
         """
         self.logger.info("Step 2: First pass - Remove, Assign, Defer, and find Common Asserts...")
         for line in self.all_asserts:
-            # 1. Match and remove
-            if self.model_igp:
-                # In model_igp mode:
-                # - Drop 0_SLICE-MAIN__reachable statements (global reachable markers).
-                # - Keep 0_SLICE-{device}__reachable statements, even if they also contain legacy reachable_* markers.
-                if "0_SLICE-MAIN__reachable" in line:
-                    continue
-                if "0_SLICE-" in line and "__reachable" in line:
-                    # Keep and let _try_assign() handle broadcasting (3.2 logic).
-                    pass
-                else:
-                    if any(regex.search(line) for regex in self.patterns["remove"]):
-                        continue
-            else:
-                # Default behavior (non-model_igp): filter reachable_* and reachable-id_* statements.
-                if any(regex.search(line) for regex in self.patterns["remove"]):
-                    continue
+            if self.protocol_rules.should_remove(line):
+                continue
 
             # 2. Match and assign based on priority
             if self._try_assign(line):
@@ -766,7 +447,7 @@ class SmtSlicer:
             # 3. If unassigned, try to defer for dependency resolution
             if self._try_defer(line):
                 continue
-            
+
             # 4. New: If still unassigned, check if it's a common/global assertion
             if self._try_add_to_common(line):
                 continue
@@ -793,7 +474,7 @@ class SmtSlicer:
                 self._assertions_by_symbol[symbol].add(line)
 
     def _seed_device_semantic_roots(self) -> None:
-        """Seed every device with all local equations and incoming exports.
+        """Seed every device with all local equations and protocol equation roots.
 
         This step is deliberately independent of symbolic branches and ``k``.
         Branch-derived symbols are audited later but never enlarge the slice.
@@ -804,7 +485,7 @@ class SmtSlicer:
             # owner classifier. Do not select every assertion that merely
             # *uses* a local OVERALL_BEST record: those include this router's
             # outgoing exports and belong to neighboring device slices.
-            roots = set(scope.incoming_export_symbols)
+            roots = set(scope.protocol_equation_symbols)
             matched_assertions: Set[str] = set()
             for symbol in roots:
                 matched_assertions.update(self._assertions_by_symbol.get(symbol, set()))
@@ -816,85 +497,25 @@ class SmtSlicer:
                 )
 
     def _try_assign(self, line: str) -> bool:
-        """
-        Tries to assign an assertion to a router. Returns True if assigned, False otherwise.
-        When model_igp: use 0_SLICE-MAIN_{router}_* (7 kinds) and 0_SLICE-{router} in variables.
-        When not model_igp: use _{router}_CONNECTED_IMPORT/BEST etc. and CONTROL/DATA-FORWARDING_{router}.
-        """
-        is_special_case = False
-        if "_OVERALL_BEST" in line and ("_BGP_EXPORT" in line or "_BGP_SINGLE-EXPORT" in line):
-            variables = extract_symbolic_variables(line)
-            best_router = get_router_from_var(next((v for v in variables if "_OVERALL_BEST" in v), None), self.routers)
-            export_router = get_router_from_var(next((v for v in variables if "_BGP_EXPORT" in v or "_BGP_SINGLE-EXPORT" in v), None), self.routers)
-            if best_router and export_router and best_router == export_router:
-                is_special_case = True
+        owners = self.protocol_rules.assertion_owners(line)
+        for router in owners:
+            self.router_data[router].add(line)
+        return bool(owners)
 
-        if is_special_case:
-            return False
-
-        if self.model_igp:
-            # 0_SLICE-MAIN_{router}_CONNECTED_IMPORT/BEST etc. (7 kinds)
-            assigned_routers = {m.group("router") for m in self._high_any_slice.finditer(line)}
-            # 0_SLICE-{router}* variables:
-            #
-            # NOTE:
-            # - Some asserts mention 0_SLICE-{device}__reachable_* together with concrete per-router
-            #   0_SLICE-MAIN_{router}_* symbols (e.g., *_BGP_EXPORT_* and *_BGP_IMPORT_*).
-            # - In such cases, broadcasting the assert to ALL routers is too aggressive: it causes
-            #   router-local BGP logic to leak into unrelated routers' slices.
-            # - Therefore, we only broadcast on 0_SLICE-* reachability markers when 3.1 could not
-            #   identify any owning router (assigned_routers is empty).
-            if not assigned_routers:
-                assign_to_all_routers = False
-                for var in extract_symbolic_variables(line):
-                    var_content = var.strip("|")
-                    for router in sorted(self.routers, key=lambda r: (-len(r), r)):
-                        prefix = "0_SLICE-" + router
-                        if var_content == prefix or var_content.startswith(prefix):
-                            assign_to_all_routers = True
-                            break
-                    if assign_to_all_routers:
-                        break
-
-                if assign_to_all_routers:
-                    for router in self.routers:
-                        self.router_data[router].add(line)
-                    return True
-            # 0_SLICE-MAIN_CONTROL-FORWARDING_{router}, 0_SLICE-MAIN_DATA-FORWARDING_{router} (same as low_any for non-model_igp)
-            if not assigned_routers:
-                assigned_routers = {m.group("router") for m in self._low_any_slice.finditer(line)}
-        else:
-            assigned_routers = {m.group("router") for m in self._high_any.finditer(line)}
-            if not assigned_routers:
-                assigned_routers = {m.group("router") for m in self._low_any.finditer(line)}
-
-        if assigned_routers:
-            for router in assigned_routers:
-                self.router_data[router].add(line)
-            return True
-
-        return False
 
     def _try_defer(self, line: str) -> bool:
         """
         Collects an assertion into a deferred bucket. Returns True if deferred, False otherwise.
         """
         variables = extract_symbolic_variables(line)
-        export_vars = [v for v in variables if "_BGP_EXPORT" in v or "_BGP_SINGLE-EXPORT" in v]
+        protocol_keys = self.protocol_rules.dependency_keys(variables)
+        if protocol_keys:
+            for key in protocol_keys:
+                self.deferred_asserts["PROTOCOL"][key].add(line)
+            return True
         config_vars = [v for v in variables if "Config_" in v]
         failed_vars = [v for v in variables if "FAILED-EDGE_" in v or "FAILED-NODE_" in v]
 
-        # Export/config/failure assertions are definitional.  Index an export
-        # equation by its output record (prefer ``permitted``), rather than by
-        # every input symbol it mentions; indexing every input makes one local
-        # config field pull complete peer device encodings into the slice.
-        if export_vars:
-            key = next(
-                (variable for variable in export_vars if variable.endswith("_permitted|")),
-                export_vars[0],
-            )
-            self.deferred_asserts["EXPORT"][key].add(line)
-            return True
         if config_vars:
             # A relational assertion may constrain several configuration
             # fields. Index every field so closure does not depend on token
@@ -913,7 +534,7 @@ class SmtSlicer:
             return True
 
         return False
-    
+
     def _try_add_to_common(self, line: str) -> bool:
         """
         New: Checks if an assertion is a 'common' one (e.g., related to dst-ip)
@@ -975,10 +596,10 @@ class SmtSlicer:
         """
         _t0 = time.time()
         self.logger.info("Step 3: Resolving dependencies...")
-        
+
         # Cache: line -> set of variables (avoid repeated tokenization)
         _var_cache: Dict[str, Set[str]] = {}
-        
+
         def _get_vars_cached(line: str) -> Set[str]:
             """Get variables from a line, using cache to avoid repeated tokenization."""
             cached = _var_cache.get(line)
@@ -996,7 +617,7 @@ class SmtSlicer:
                         if var.startswith("SSA_"):
                             ssa_to_routers[var].add(router)
             return ssa_to_routers
-        
+
         pass_number = 0
         while True:
             pass_number += 1
@@ -1009,7 +630,7 @@ class SmtSlicer:
 
                 initial_size = len(self.router_data[router])
                 for var_key in referenced_vars:
-                    for bucket in ["EXPORT", "CONFIG", "FAILED", "SSA"]:
+                    for bucket in ["PROTOCOL", "CONFIG", "FAILED", "SSA"]:
                         self.router_data[router].update(
                             self.deferred_asserts[bucket].get(var_key, set())
                         )
@@ -1032,7 +653,7 @@ class SmtSlicer:
             # New: Combine this router's specific data with the common assertions
             final_assert_set = self.router_data[router] | self.common_asserts
             final_asserts = sorted(list(final_assert_set))
-            
+
             # Cache variable extraction (same line may appear multiple times)
             _var_cache_write: Dict[str, Set[str]] = {}
             # The slice is constructed exclusively from the branch-independent
@@ -1064,7 +685,7 @@ class SmtSlicer:
             unencoded_semantic_roots = sorted(
                 (
                     set(scope.local_symbols)
-                    | set(scope.incoming_export_symbols)
+                    | set(scope.protocol_equation_symbols)
                 )
                 - assertion_vars
             )
@@ -1074,7 +695,7 @@ class SmtSlicer:
                     f"{router} device semantic roots have no retained equation "
                     f"or domain constraint: {sample}"
                 )
-            
+
             missing_from_input = sorted(
                 self.required_symbols[router] - self.all_declarations.keys()
             )
@@ -1122,7 +743,7 @@ class SmtSlicer:
                 f.write("\n; ---- Assertions ----\n")
                 for assert_line in final_asserts:
                     f.write(assert_line + "\n")
-            
+
             self.logger.info(f"  -> Wrote file for '{router}' with {len(final_declarations)} declarations and {len(final_asserts)} asserts.")
 
     def write_audit_union(self, output_path: Path | str) -> None:
@@ -1150,7 +771,7 @@ class SmtSlicer:
             relevant_symbols.update(self.local_roots[router])
             scope = self.semantic_scopes[router]
             relevant_symbols.update(scope.local_symbols)
-            relevant_symbols.update(scope.incoming_export_symbols)
+            relevant_symbols.update(scope.protocol_equation_symbols)
             boundary_symbols.update(scope.peer_boundary_symbols)
             for expression in self.router_data[router]:
                 relevant_symbols.update(
@@ -1214,47 +835,29 @@ class SmtSlicer:
 
 class InputValidator:
     """Validates required input files for SMT slicing"""
-    
-    def __init__(self, work_dir: str):
+
+    def __init__(self, work_dir: str, protocol_adapter: Optional[ProtocolSliceAdapter] = None):
         self.work_dir = work_dir
-    
+        self.protocol_adapter = protocol_adapter or get_protocol_adapter("bgp")
+        self.protocol_adapter.ensure_supported()
+
     def _validate_input_files(self) -> None:
         """Validate that all required input files exist"""
         missing_files = []
 
-        for filename in (
-            "smt_encoding.smt2",
-            "symbolic_route.json",
-            "0_hostnames.txt",
-            "0_dst_ips.txt",
-            "0_ebgp_neighbors.txt",
-            "0_interfaces.txt",
-            "0_overall_history_enum.txt",
-            "0_communities_index.txt",
-        ):
+        for filename in self.protocol_adapter.required_input_files():
             if not os.path.exists(os.path.join(self.work_dir, filename)):
                 missing_files.append(filename)
-        
+
         if missing_files:
             raise SymbolicSliceError(
                 f"missing required input files in {self.work_dir}: "
                 + ", ".join(missing_files)
             )
-    
+
 ##########################################################################################
 ### pipeline
 ##########################################################################################
-
-
-def _read_required_lines(path: Path, description: str) -> List[str]:
-    try:
-        values = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
-    except OSError as error:
-        raise SymbolicSliceError(f"cannot read {description} {path}: {error}") from error
-    result = [value for value in values if value]
-    if not result:
-        raise SymbolicSliceError(f"{description} is empty: {path}")
-    return result
 
 
 def load_normalized_encoding(
@@ -1293,118 +896,18 @@ def load_normalized_encoding(
     return declarations, assertions
 
 
-def _binding_symbols(
-    binding_expressions: List[str], full_symbols: SmtSymbolTable
-) -> Set[str]:
-    required: Set[str] = set()
-    for expression in binding_expressions:
-        required.update(
-            symbol
-            for symbol in extract_symbolic_variables_let_aware(expression)
-            if symbol in full_symbols
-        )
-    return required
+def build_symbolic_device_requirements(work_dir, declarations, *, k, vrf="default", protocol="bgp"):
+    """Dispatch the binding audit without changing branch-independent slices."""
+    return get_protocol_adapter(protocol).build_requirements(work_dir, declarations, k=k, vrf=vrf)
 
-
-def build_symbolic_device_requirements(
-    work_dir: Path | str,
-    declarations: List[str],
-    *,
-    k: int,
-    vrf: str = "default",
-) -> SymbolicSliceRequirements:
-    """Return the exact full-encoding symbols required by each branch scope.
-
-    Requirements are derived by running the same ``RouteBinder`` used by Stage
-    2 against the *full* declaration table.  This avoids the circular behavior
-    where a field removed by Stage 1 becomes invisible to the later binder.
-    """
-
-    if k < 0:
-        raise SymbolicSliceError("k must be non-negative")
-    directory = Path(work_dir)
-    try:
-        topology = NeighborTopology.from_file(directory / "0_ebgp_neighbors.txt")
-    except (OSError, SymbolicRouteFormatError) as error:
-        raise SymbolicSliceError(str(error)) from error
-    hostnames = set(_read_required_lines(directory / "0_hostnames.txt", "device inventory"))
-    routers = [router for router in topology.routers() if router in hostnames]
-    if not routers:
-        raise SymbolicSliceError("enabled BGP scope contains no session routers")
-    destinations = _read_required_lines(
-        directory / "0_dst_ips.txt", "property destination inventory"
-    )
-    try:
-        rib = SymbolicRib.from_work_directory(directory)
-        guard_encoder = GuardEncoder(rib.guard_variables)
-        full_symbols = SmtSymbolTable.from_text("\n".join(declarations))
-    except (OSError, ValueError, SymbolicRouteFormatError, GuardEncodingError) as error:
-        raise SymbolicSliceError(str(error)) from error
-
-    required_by_router: Dict[str, Set[str]] = {router: set() for router in routers}
-    local_roots_by_router: Dict[str, Set[str]] = {router: set() for router in routers}
-    for router in routers:
-        branch_count = 0
-        for destination in destinations:
-            try:
-                contexts = rib.forwarding_branch_contexts(
-                    router=router,
-                    vrf=vrf,
-                    destination=destination,
-                    plane="MAIN",
-                    k=k,
-                    guard_encoder=guard_encoder,
-                )
-            except (ValueError, SymbolicRouteFormatError, GuardEncodingError) as error:
-                raise SymbolicSliceError(
-                    f"cannot build symbolic branch scope for {router}/{destination}: {error}"
-                ) from error
-            if not contexts:
-                raise SymbolicSliceError(
-                    f"no k-feasible MAIN branch for {router}/{destination}"
-                )
-            branch_count += len(contexts)
-
-            for context in contexts:
-                binding = RouteBinder(rib, guard_encoder, full_symbols).bind(context)
-                if binding.errors:
-                    details = "; ".join(
-                        f"{item.code}: {item.message}" for item in binding.errors
-                    )
-                    raise SymbolicSliceError(
-                        f"cannot derive slice requirements for "
-                        f"{context.current_entry.candidate_id}: {details}"
-                    )
-                binding_symbols = _binding_symbols(
-                    [constraint.expression for constraint in binding.constraints],
-                    full_symbols,
-                )
-                required_by_router[router].update(binding_symbols)
-                local_prefixes = (
-                    f"|0_{router}_",
-                    f"|0_CONTROL-FORWARDING_{router}_",
-                    f"|0_DATA-FORWARDING_{router}_",
-                )
-                local_roots_by_router[router].update(
-                    symbol
-                    for symbol in binding_symbols
-                    if symbol.startswith(local_prefixes)
-                )
-
-        if branch_count == 0 or not required_by_router[router]:
-            raise SymbolicSliceError(
-                f"symbolic scope produced no slice requirements for {router}"
-            )
-    return SymbolicSliceRequirements(
-        required_by_router=required_by_router,
-        local_roots_by_router=local_roots_by_router,
-    )
 
 def perform_device_slicing(
     work_dir: str,
     normalized_exprs: List[str],
     semantic_scopes: Dict[str, DeviceSemanticScope],
     requirements: SymbolicSliceRequirements,
+    *,
+    protocol: str = "bgp",
 ) -> Dict[str, float]:
     """Slice every device directly from one normalized full-encoding index."""
     logger = logging.getLogger(__name__)
@@ -1412,7 +915,7 @@ def perform_device_slicing(
     hostname_file = os.path.join(work_dir, '0_hostnames.txt')
     output_dir = os.path.join(work_dir, '1_sliced_device_smt_encoding')
     sliced_smt_encoding_file = os.path.join(output_dir, 'sliced_smt_encoding.smt2')
-    
+
     # Read router names
     routers = list(requirements.required_by_router)
 
@@ -1428,6 +931,7 @@ def perform_device_slicing(
         semantic_scopes=semantic_scopes,
         required_symbols=requirements.required_by_router,
         local_roots=requirements.local_roots_by_router,
+        protocol_adapter=get_protocol_adapter(protocol),
     )
     slicer.slice_from_expressions(normalized_exprs)
     slicer.write_audit_union(sliced_smt_encoding_file)
@@ -1464,6 +968,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("work_directory", type=Path)
     parser.add_argument("--k", required=True, type=_non_negative_integer)
     parser.add_argument("--vrf", default="default")
+    parser.add_argument("--slicing-protocol", default="bgp",
+                        help="slice adapter (default: bgp; IS-IS reserved, not implemented)")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument(
         "-d",
@@ -1499,16 +1005,19 @@ def main() -> int:
         return 0
 
     try:
-        InputValidator(str(work_dir))._validate_input_files()
+        # Resolve before touching outputs; unsupported adapters never fall back to BGP.
+        get_protocol_adapter(args.slicing_protocol)
+        InputValidator(str(work_dir), get_protocol_adapter(args.slicing_protocol))._validate_input_files()
         declarations, assertions = load_normalized_encoding(
             work_dir / "smt_encoding.smt2"
         )
-        semantic_scopes = build_device_semantic_scopes(work_dir, declarations)
+        semantic_scopes = build_device_semantic_scopes(work_dir, declarations, protocol=args.slicing_protocol)
         requirements = build_symbolic_device_requirements(
             work_dir,
             declarations,
             k=args.k,
             vrf=args.vrf,
+            protocol=args.slicing_protocol,
         )
         output_dir.mkdir(parents=True, exist_ok=True)
         timing = perform_device_slicing(
@@ -1516,6 +1025,7 @@ def main() -> int:
             [*declarations, *assertions],
             semantic_scopes,
             requirements,
+            protocol=args.slicing_protocol,
         )
     except (OSError, ValueError, SymbolicSliceError) as error:
         active_logger.error("%s", error)
