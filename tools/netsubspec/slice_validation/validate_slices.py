@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+from observable import Observables
 
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('validation_slicer', ROOT / '1_smt_slicer.py')
@@ -128,14 +129,37 @@ def main():
         extra_decl = mod.extract_declare_fun_expressions(text.splitlines())
         extra_decl = [d for d in extra_decl if not (mod._declared_symbol_set([d]) & declared)]
         seeds.append((path, extra_decl, guard, bridges, expected))
+    observable = Observables(args.work_dir)
     report = {'historical_seeds': args.allow_historical_seeds, 'scope': 'fixed configuration, destination, at-most-k physical link failures; MAIN/BGP',
-              'k': args.k, 'source_sha256': hashlib.sha256((args.work_dir / 'smt_encoding.smt2').read_bytes()).hexdigest(), 'slice_sizes': sizes, 'scenarios': [], 'branch_checks': [], 'slice_checks': [], 'coverage_checks': []}
+              'k': args.k, 'source_sha256': hashlib.sha256((args.work_dir / 'smt_encoding.smt2').read_bytes()).hexdigest(), 'slice_sizes': sizes, 'scenarios': [], 'branch_checks': [], 'slice_checks': [], 'coverage_checks': [], 'observable_checks': [], 'local_abstraction_checks': []}
     for count in range(min(args.k, len(edges)) + 1):
         for failed in itertools.combinations(edges, count):
             pins = [f'(assert (= {e} {int(e in failed)}))' for e in edges]
             base = network + pins
             status = solve(declarations, base)
             report['scenarios'].append({'failed': list(failed), 'baseline': status})
+            for router in scopes:
+                vector, description = observable.expected(router, set(failed), declared)
+                disagreement = '(assert (not (and ' + ' '.join(map(body, vector)) + ')))'
+                forward = solve(declarations, base + [disagreement])
+                reverse = solve(declarations, base + vector)
+                record = {'router': router, 'failed': list(failed), 'expected': description,
+                          'minesweeper_outside_symbolic': forward,
+                          'symbolic_realizable_in_minesweeper': reverse}
+                if forward == 'sat' or reverse == 'unsat':
+                    name = f'observable_{len(report["observable_checks"]):04d}.smt2'
+                    query = base + ([disagreement] if forward == 'sat' else vector)
+                    (args.output / name).write_text('\n'.join([*declarations, *query, '(check-sat)', '(get-model)']))
+                    record['artifact'] = name
+                report['observable_checks'].append(record)
+                local = solve(declarations, legacy[router] + pins + [disagreement])
+                classification = ('ABSTRACTION_ONLY' if local == 'sat' and forward == 'unsat'
+                                  else 'REAL_COUNTEREXAMPLE' if forward == 'sat'
+                                  else 'NO_LOCAL_COUNTEREXAMPLE' if local == 'unsat'
+                                  else 'INCONCLUSIVE')
+                report['local_abstraction_checks'].append({
+                    'router': router, 'failed': list(failed), 'local_counterexample': local,
+                    'full_counterexample': forward, 'classification': classification})
             for router in scopes:
                 omitted = [a for a in network if a not in set(closed[router])]
                 # Closure makes omitted constraints symbol-disjoint from the slice.
@@ -157,6 +181,7 @@ def main():
                 domain = base + bridges + guard
                 feasible = solve(declarations + extra, domain)
                 record = {'seed': str(path.relative_to(args.work_dir)), 'failed': list(failed), 'feasible': feasible}
+                record['symbolic_guard_feasible'] = solve(declarations + extra, pins + bridges + guard)
                 if feasible == 'sat':
                     record['compatible'] = solve(declarations + extra, domain + expected)
                     negation = '(assert (not (and ' + ' '.join(map(body, expected)) + ')))'
@@ -167,13 +192,18 @@ def main():
                         record['artifact'] = name
                 report['branch_checks'].append(record)
     report['passed'] = (all(s['baseline'] == 'sat' for s in report['scenarios']) and
+        all(r['classification'] not in ('INCONCLUSIVE', 'REAL_COUNTEREXAMPLE') for r in report['local_abstraction_checks']) and
+        all(r['minesweeper_outside_symbolic'] == 'unsat' and r['symbolic_realizable_in_minesweeper'] == 'sat' for r in report['observable_checks']) and
         all(r['uncovered_valid_route'] == 'unsat' for r in report['coverage_checks']) and
         all(r['omitted_component'] == 'sat' and r['full_violates_legacy'] == 'unsat' for r in report['slice_checks']) and
-        all(r['feasible'] in ('sat', 'unsat') and (r['feasible'] == 'unsat' or
+        all(r['symbolic_guard_feasible'] in ('sat', 'unsat') and r['symbolic_guard_feasible'] == r['feasible'] and r['feasible'] in ('sat', 'unsat') and (r['feasible'] == 'unsat' or
             (r.get('compatible') == 'sat' and r.get('counterexample') == 'unsat')) for r in report['branch_checks']))
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps({'passed': report['passed'], 'scenarios': len(report['scenarios']),
                       'branch_checks': len(report['branch_checks']), 'slice_sizes': sizes,
+                      'observable_checks': len(report['observable_checks']),
+                      'no_route_checks': sum(not r['expected']['has_route'] for r in report['observable_checks']),
+                      'abstraction_only': sum(r['classification'] == 'ABSTRACTION_ONLY' for r in report['local_abstraction_checks']),
                       'counterexamples': sum(r.get('counterexample') == 'sat' for r in report['branch_checks'])}, indent=2))
     return 0 if report['passed'] else 1
 

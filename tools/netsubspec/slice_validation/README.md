@@ -76,3 +76,27 @@ Stage 1：4设备通过；Stage 2：10/10分支SAT。
 ```sh
 python3 slice_validation/validate_slices.py --work-dir slice_validation/generated/smt_output_0001 --output slice_validation/results/bgp_only_0001
 ```
+
+## 双向观察层验收
+
+后续实现以本仓库 `tools/netsubspec/slice_validation/` 为主，见
+[BIDIRECTIONAL_VALIDATION.md](BIDIRECTIONAL_VALIDATION.md)。独立 JSON 观察适配不复用
+RouteBinder，检查路由存在性与完整 CONTROL/DATA 出口集合，覆盖无路由与本地交付。
+最新结果：29个场景，116组设备观察向量双向通过，其中2组无路由；290次分支
+适用性检查未发现虚假可行分支。未绑定边界的局部切片有85组允许全网无法实现的
+偏差，记录为 ABSTRACTION_ONLY，不能把局部裸切片单独视为全网等价模型。
+新增5项观察层测试，加上原有32项相关测试均通过。
+报告为 results/bgp_only_bidirectional/report.json。
+
+## 以 seed 为目标的正向/反向检查
+
+当前 seed 验收入口为 `check_seed_contracts.py`，见
+[SEED_ASSUME_GUARANTEE.md](SEED_ASSUME_GUARANTEE.md)。按设备局部模型、共同域、邻居假设、本机保证
+明确拆分查询。正向判定允许性，反向提供更强的边界条件保证，二者分开报告。
+当前114组guard内场景均正向SAT/反向UNSAT，176组guard外不适用。
+结果见 results/seed_contracts/report.json。先前完整网络观察基准保留为辅助审计，不替代该seed检查。
+
+
+默认验收已调整为逐份完整seed：`check_seed_contracts.py` 不再默认按场景分类或跳过seed。
+结果见 results/constructed_seeds/report.json：10份原始seed SAT、正向SAT、反向UNSAT、环境SAT。
+逐场景统计仅在显式传入 `--per-scenario` 时启用。目标是验证构造的seed，而非单独验证guard。
