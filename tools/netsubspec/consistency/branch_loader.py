@@ -9,6 +9,7 @@ state described by the paper's seed encoding.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import ipaddress
 import json
 from pathlib import Path
@@ -380,6 +381,9 @@ class BranchContext:
 class SymbolicRib:
     """Validated, indexed representation of ``symbolic_route.json``."""
 
+    _QUERY_CACHE_NAMES = ('entries', 'predecessors', 'context_ribs', 'forwarding',
+                          'scope_prefixes', 'route_network', 'destination')
+
     SCHEMA_NAME = "batfish-minesweeper-symbolic-control-plane"
     SUPPORTED_SCHEMA_VERSIONS = {2}
 
@@ -433,6 +437,27 @@ class SymbolicRib:
             key: tuple(sorted(value, key=lambda item: item.candidate_id))
             for key, value in by_message.items()
         }
+
+        # Stable posting lists preserve all entries, including multiple routes
+        # for the same prefix. Loading validates guards exactly as before.
+        self._ordered_entries = tuple(sorted(self.entries_all, key=lambda item: item.candidate_id))
+        indexes = {field: {} for field in ('router', 'vrf', 'prefix', 'plane', 'protocol')}
+        for entry in self._ordered_entries:
+            for field, buckets in indexes.items():
+                buckets.setdefault(getattr(entry, field), []).append(entry)
+        self._entry_indexes = MappingProxyType({
+            field: MappingProxyType({key: tuple(bucket) for key, bucket in buckets.items()})
+            for field, buckets in indexes.items()})
+        # Per-instance bounded caches avoid process-wide RIB retention and
+        # unbounded growth as prefix/query counts increase.
+        self._cached_entries = lru_cache(maxsize=2048)(self._query_entries)
+        self._cached_predecessors = lru_cache(maxsize=2048)(self._query_predecessors)
+        self._cached_context_ribs = lru_cache(maxsize=2048)(self._query_context_ribs)
+        self._cached_forwarding = lru_cache(maxsize=2048)(self._query_forwarding)
+        self._cached_scope_prefixes = lru_cache(maxsize=512)(self._query_scope_prefixes)
+        self._cached_route_network = lru_cache(maxsize=4096)(
+            lambda prefix: ipaddress.ip_network(prefix, strict=False))
+        self._cached_destination = lru_cache(maxsize=1024)(self._destination_network)
 
     @classmethod
     def load(
@@ -686,104 +711,76 @@ class SymbolicRib:
             )
 
     def entries(
-        self,
-        *,
-        router: Optional[str] = None,
-        vrf: Optional[str] = None,
-        prefix: Optional[str] = None,
-        plane: Optional[str] = None,
+        self, *, router: Optional[str] = None, vrf: Optional[str] = None,
+        prefix: Optional[str] = None, plane: Optional[str] = None,
         protocol: Optional[str] = None,
     ) -> tuple[RouteEntry, ...]:
-        result: list[RouteEntry] = []
-        for entry in self.entries_all:
-            if router is not None and entry.router != router:
-                continue
-            if vrf is not None and entry.vrf != vrf:
-                continue
-            if prefix is not None and entry.prefix != prefix:
-                continue
-            if plane is not None and entry.plane != plane.upper():
-                continue
-            if protocol is not None and entry.protocol != protocol.upper():
-                continue
-            result.append(entry)
-        return tuple(sorted(result, key=lambda item: item.candidate_id))
+        """Exact filters over the smallest immutable posting list; no route pruning."""
+        return self._cached_entries(router, vrf, prefix,
+                                    plane.upper() if plane is not None else None,
+                                    protocol.upper() if protocol is not None else None)
+
+    def _query_entries(self, router, vrf, prefix, plane, protocol):
+        filters = dict(router=router, vrf=vrf, prefix=prefix, plane=plane, protocol=protocol)
+        buckets = [self._entry_indexes[field].get(value, ())
+                   for field, value in filters.items() if value is not None]
+        candidates = min(buckets, key=len) if buckets else self._ordered_entries
+        return tuple(entry for entry in candidates if all(
+            value is None or getattr(entry, field) == value
+            for field, value in filters.items()))
+
 
     def predecessor_entries(self, entry: RouteEntry) -> tuple[RouteEntry, ...]:
+        # Include parent ids in the key: callers may pass a replaced RouteEntry
+        # carrying the same candidate id but a different provenance snapshot.
+        return self._cached_predecessors(entry.candidate_id, entry.parent_message_ids)
+
+    def _query_predecessors(self, candidate_id, parent_message_ids):
         result: dict[str, RouteEntry] = {}
-        for message_id in entry.parent_message_ids:
+        for message_id in parent_message_ids:
             for owner in self._message_index.get(message_id, ()):
-                if owner.candidate_id != entry.candidate_id:
+                if owner.candidate_id != candidate_id:
                     result[owner.candidate_id] = owner
         return tuple(sorted(result.values(), key=lambda item: item.candidate_id))
+
 
     def context(
         self, entry: RouteEntry, *, destination: Optional[str] = None
     ) -> BranchContext:
-        """Build the complete symbolic context for one selected MAIN entry.
+        """Reuse complete device/peer RIB context; only current entry varies.
 
-        When ``destination`` is supplied, the context is property-scoped: the
-        current device and every direct peer contribute *all* final MAIN
-        selection entries whose prefixes cover that destination.  Their
-        exported ``selectionGuard`` values already encode route selection,
-        including failure-dependent prefix fallback, so a shorter-prefix entry
-        must not be discarded merely because a longer prefix exists elsewhere
-        in the symbolic inventory.
-
-        The destination-free form is retained for callers that inspect one
-        exact RIB prefix outside the property consistency pipeline.
+        Contexts retain every covering MAIN branch, including shorter-prefix
+        fallback routes and routes that forward back toward the current peer.
+        No guard, route attributes or competitive route set is changed.
         """
-
         if entry.candidate_id not in self.entry_index:
             raise SymbolicRouteFormatError(
-                f"candidate {entry.candidate_id!r} does not belong to this symbolic RIB"
-            )
-        if destination is None:
-            device_rib = self.entries(
-                router=entry.router,
-                vrf=entry.vrf,
-                prefix=entry.prefix,
-                plane=entry.plane,
-            )
-        else:
-            device_rib = self.forwarding_entries(
-                router=entry.router,
-                vrf=entry.vrf,
-                destination=destination,
-                plane=entry.plane,
-            )
-            if entry.candidate_id not in {
-                candidate.candidate_id for candidate in device_rib
-            }:
-                raise SymbolicRouteFormatError(
-                    f"candidate {entry.candidate_id} does not cover property "
-                    f"destination {destination!r}"
-                )
+                f"candidate {entry.candidate_id!r} does not belong to this symbolic RIB")
+        device_rib, candidate_ids, peer_ribs = self._cached_context_ribs(
+            entry.router, entry.vrf, entry.plane,
+            entry.prefix if destination is None else None,
+            destination, self.topology.peers(entry.router))
+        if destination is not None and entry.candidate_id not in candidate_ids:
+            raise SymbolicRouteFormatError(
+                f"candidate {entry.candidate_id} does not cover property destination {destination!r}")
+        return BranchContext(current_entry=entry, device_rib=device_rib,
+            predecessor_entries=self.predecessor_entries(entry), peer_ribs=peer_ribs)
 
-        peer_ribs: dict[str, tuple[RouteEntry, ...]] = {}
-        for peer in self.topology.peers(entry.router):
+    def _query_context_ribs(self, router, vrf, plane, prefix, destination, peers):
+        def selected(device, selected_plane):
             if destination is None:
-                peer_entries = self.entries(
-                    router=peer,
-                    vrf=entry.vrf,
-                    prefix=entry.prefix,
-                    plane="MAIN",
-                )
-            else:
-                peer_entries = self.forwarding_entries(
-                    router=peer,
-                    vrf=entry.vrf,
-                    destination=destination,
-                    plane="MAIN",
-                )
+                return self.entries(router=device, vrf=vrf, prefix=prefix, plane=selected_plane)
+            return self.forwarding_entries(router=device, vrf=vrf,
+                                           destination=destination, plane=selected_plane)
+        device_rib = selected(router, plane)
+        peer_ribs = {}
+        for peer in peers:
+            peer_entries = selected(peer, 'MAIN')
             if peer_entries:
                 peer_ribs[peer] = peer_entries
-        return BranchContext(
-            current_entry=entry,
-            device_rib=device_rib,
-            predecessor_entries=self.predecessor_entries(entry),
-            peer_ribs=MappingProxyType(peer_ribs),
-        )
+        return (device_rib, frozenset(e.candidate_id for e in device_rib),
+                MappingProxyType(peer_ribs))
+
 
     def branch_contexts(
         self,
@@ -821,63 +818,63 @@ class SymbolicRib:
         return tuple(result)
 
     def forwarding_entries(
-        self,
-        *,
-        router: str,
-        vrf: str,
-        destination: str,
-        plane: str = "MAIN",
+        self, *, router: str, vrf: str, destination: str, plane: str = "MAIN",
     ) -> tuple[RouteEntry, ...]:
-        """Return every non-LOCAL selected MAIN entry covering a destination.
+        """All non-LOCAL routes covering a destination, not only the longest.
 
-        ``0_dst_ips.txt`` may contain a host address, a host prefix, or a network
-        prefix.  Those values identify traffic/property destinations, not
-        necessarily an exact RIB prefix.  MAIN entries exported by Batfish are
-        already final route-selection branches: their ``selectionGuard`` says
-        exactly when that entry wins.  Consequently this method must retain
-        covering entries of every prefix length; applying a second, static
-        longest-prefix filter here would erase failure-dependent fallback
-        branches.
+        The index looks up every ancestor prefix of the destination network.
+        Distinct candidates at one prefix and shorter-prefix fallbacks are all
+        retained, with exactly the original candidate-id ordering.
         """
+        return self._cached_forwarding(router, vrf, destination, plane.upper())
 
-        try:
-            if "/" in destination:
-                destination_network = ipaddress.ip_network(destination, strict=False)
-            else:
-                address = ipaddress.ip_address(destination)
-                destination_network = ipaddress.ip_network(
-                    f"{address}/{address.max_prefixlen}", strict=False
-                )
-        except ValueError as error:
-            raise SymbolicRouteFormatError(
-                f"cannot parse property destination {destination!r}: {error}"
-            ) from error
+    def _query_forwarding(self, router, vrf, destination, plane):
+        destination_network = self._cached_destination(destination)
+        by_prefix = self._cached_scope_prefixes(router, vrf, plane)
+        address = int(destination_network.network_address)
+        width = destination_network.max_prefixlen
+        matches = []
+        for length in range(destination_network.prefixlen + 1):
+            shift = width - length
+            network_address = (address >> shift) << shift
+            matches.extend(by_prefix.get((destination_network.version, length, network_address), ()))
+        return tuple(sorted(matches, key=lambda item: item.candidate_id))
 
-        matches: list[RouteEntry] = []
+    def _query_scope_prefixes(self, router, vrf, plane):
+        by_prefix = {}
         for entry in self.entries(router=router, vrf=vrf, plane=plane):
-            if entry.protocol == "LOCAL":
+            if entry.protocol == 'LOCAL':
                 continue
             try:
-                route_network = ipaddress.ip_network(entry.prefix, strict=False)
+                network = self._cached_route_network(entry.prefix)
             except ValueError as error:
                 raise SymbolicRouteFormatError(
-                    f"candidate {entry.candidate_id} has invalid prefix "
-                    f"{entry.prefix!r}: {error}"
-                ) from error
-            if destination_network.version != route_network.version:
-                continue
-            if destination_network.version == 4:
-                destination_v4 = cast(ipaddress.IPv4Network, destination_network)
-                route_v4 = cast(ipaddress.IPv4Network, route_network)
-                matches_route = destination_v4.subnet_of(route_v4)
-            else:
-                destination_v6 = cast(ipaddress.IPv6Network, destination_network)
-                route_v6 = cast(ipaddress.IPv6Network, route_network)
-                matches_route = destination_v6.subnet_of(route_v6)
-            if matches_route:
-                matches.append(entry)
+                    f"candidate {entry.candidate_id} has invalid prefix {entry.prefix!r}: {error}") from error
+            key = network.version, network.prefixlen, int(network.network_address)
+            by_prefix.setdefault(key, []).append(entry)
+        return MappingProxyType({key: tuple(value) for key, value in by_prefix.items()})
 
-        return tuple(sorted(matches, key=lambda item: item.candidate_id))
+    @staticmethod
+    def _destination_network(destination):
+        try:
+            if '/' in destination:
+                return ipaddress.ip_network(destination, strict=False)
+            address = ipaddress.ip_address(destination)
+            return ipaddress.ip_network(f'{address}/{address.max_prefixlen}', strict=False)
+        except ValueError as error:
+            raise SymbolicRouteFormatError(
+                f"cannot parse property destination {destination!r}: {error}") from error
+
+    def query_cache_info(self) -> dict[str, dict[str, int]]:
+        """Bounded, per-RIB cache statistics for profiling (not solver semantics)."""
+        return {name: getattr(self, '_cached_' + name).cache_info()._asdict()
+                for name in self._QUERY_CACHE_NAMES}
+
+    def clear_query_caches(self) -> None:
+        """Release derived query results; preserve immutable source indexes."""
+        for name in self._QUERY_CACHE_NAMES:
+            getattr(self, '_cached_' + name).cache_clear()
+
 
     def forwarding_branch_contexts(
         self,

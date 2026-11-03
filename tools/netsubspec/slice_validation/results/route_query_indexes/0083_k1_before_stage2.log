@@ -1,0 +1,20 @@
+================================================================================
+SYMBOLIC ROUTE CONSISTENCY CHECK SUMMARY
+================================================================================
+
+Overall status: PASS
+Scope: global | VRF default | MAIN | at-most-1 link failures
+Routers: a, b, d, x
+Destinations: 5.5.5.5
+Branches: eligible=7/10 | checked=7
+Results: SAT 7 | UNSAT 0 | UNKNOWN 0 | ERROR 0
+
+Device results:
+  Device a        | Destination 5.5.5.5            | Eligible 2/3 | SAT 2/2 | Status PASS
+  Device b        | Destination 5.5.5.5            | Eligible 2/3 | SAT 2/2 | Status PASS
+  Device d        | Destination 5.5.5.5            | Eligible 1/1 | SAT 1/1 | Status PASS
+  Device x        | Destination 5.5.5.5            | Eligible 2/3 | SAT 2/2 | Status PASS
+
+All eligible branches are consistent. ✓
+Summary: /private/var/folders/mw/xc4_8x1s70j3y9mfbzkbvb140000gn/T/netsubspec_adapter_diff_kxnqeumq/0083_k1/before/2_consistency_check/consistency_report.txt
+Full details: /private/var/folders/mw/xc4_8x1s70j3y9mfbzkbvb140000gn/T/netsubspec_adapter_diff_kxnqeumq/0083_k1/before/2_consistency_check/consistency_report.json

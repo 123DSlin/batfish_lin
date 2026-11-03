@@ -201,3 +201,42 @@ the hash of the timestamped source report; formulas and seed hashes remain.
 Differential PASS means no regression, not that every old fixture is healthy.
 Historical 0009/0010 failures are marked PRE_EXISTING_FAILURE and both reports
 are retained. 0083 must actually pass semantic checks, not fail identically.
+
+
+## Symbolic RIB query indexes and bounded caches
+
+`consistency/branch_loader.py` now constructs immutable posting lists for router,
+VRF, exact prefix, plane and protocol. Exact queries inspect the smallest
+posting list, preserving the original candidate-id order. Destination queries
+look up every ancestor prefix in a per-scope network index (IPv4 and IPv6),
+including default routes, all same-prefix candidates and shorter fallbacks.
+This is a lookup optimization, not longest-prefix pruning or guard filtering.
+
+Per-RIB LRU caches reuse queries, parsed prefixes, predecessor lookup and the
+complete device/peer RIB context shared across branch seeds. They are bounded:
+entry/forwarding/context/predecessor queries 2048 each, scope indexes 512,
+parsed route prefixes 4096 and destination networks 1024. Eviction discards
+only derived results, never source routes. `query_cache_info()` exposes cache
+statistics; `clear_query_caches()` releases cached results. A new RIB instance
+must be loaded when source inputs change.
+
+Query-only measurement:
+
+```bash
+python3 slice_validation/benchmark_route_queries.py \
+  --baseline-root /absolute/path/to/pre-optimization/netsubspec \
+  --output slice_validation/results/route_query_indexes/query_benchmark.json
+```
+
+On the local synthetic fixture (32 routers, 128 prefixes/router, three branches
+per prefix, 12,352 entries), the first 1,024 destination lookups took about
+2.23 seconds before and 0.048 seconds after; a repeated cached pass took about
+0.001 seconds. Returned candidate hashes match exactly. Index construction
+cost rose from about 0.011 to 0.028 seconds. These are query microbenchmarks,
+not network convergence, end-to-end pipeline, solver or full multi-prefix
+validation measurements. The latter still needs its separate scope work.
+
+Differential cases and paired reports are in
+`slice_validation/results/route_query_indexes/`. Existing 0009/0010 failures
+remain separately marked, and 0083 stages 1–4 plus seed contracts must pass
+without changing route, seed, field or line formulas.

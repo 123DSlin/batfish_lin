@@ -1,0 +1,82 @@
+{
+  "before": {
+    "entries": 12352,
+    "routers": 32,
+    "prefixes_per_router": 128,
+    "branches_per_prefix": 3,
+    "queries_per_pass": 1024,
+    "build_seconds": 0.011112375184893608,
+    "query_pass_seconds": [
+      2.2297804593108594,
+      2.4758936669677496,
+      2.2401695833541453
+    ],
+    "median_query_seconds": 2.2401695833541453,
+    "result_sha256": "e664d5f9fddd4b04343568bda37a258d6be4f8493b9da72baee2ed3cb82cc860",
+    "cache_info": null,
+    "loader_sha256": "a3818d17845c68e9945fc51202cf5e643180557ed975b9b821aceeedf6016bf7"
+  },
+  "after": {
+    "entries": 12352,
+    "routers": 32,
+    "prefixes_per_router": 128,
+    "branches_per_prefix": 3,
+    "queries_per_pass": 1024,
+    "build_seconds": 0.028313583228737116,
+    "query_pass_seconds": [
+      0.04800858395174146,
+      0.0009675840847194195,
+      0.0010185004211962223
+    ],
+    "median_query_seconds": 0.0010185004211962223,
+    "result_sha256": "e664d5f9fddd4b04343568bda37a258d6be4f8493b9da72baee2ed3cb82cc860",
+    "cache_info": {
+      "entries": {
+        "hits": 0,
+        "misses": 32,
+        "maxsize": 2048,
+        "currsize": 32
+      },
+      "predecessors": {
+        "hits": 0,
+        "misses": 0,
+        "maxsize": 2048,
+        "currsize": 0
+      },
+      "context_ribs": {
+        "hits": 0,
+        "misses": 0,
+        "maxsize": 2048,
+        "currsize": 0
+      },
+      "forwarding": {
+        "hits": 2048,
+        "misses": 1024,
+        "maxsize": 2048,
+        "currsize": 1024
+      },
+      "scope_prefixes": {
+        "hits": 992,
+        "misses": 32,
+        "maxsize": 512,
+        "currsize": 32
+      },
+      "route_network": {
+        "hits": 8254,
+        "misses": 4098,
+        "maxsize": 4096,
+        "currsize": 4096
+      },
+      "destination": {
+        "hits": 0,
+        "misses": 1024,
+        "maxsize": 1024,
+        "currsize": 1024
+      }
+    },
+    "loader_sha256": "0d035982a825eeb7b96b533d107e642e2bd3076490fffad399874967509c784a"
+  },
+  "results_identical": true,
+  "median_lookup_speedup": 2199.4783082397553,
+  "scope": "synthetic query-only benchmark; excludes SMT generation, convergence and solving"
+}

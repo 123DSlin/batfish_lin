@@ -1,0 +1,23 @@
+Route-query optimization verification
+
+No-regression result: PASS
+Unit tests: 86 passed (9 new query/index correctness tests).
+
+Case | Differential result | Baseline health
+symbolic_output_0009_k1 | PASS | PRE_EXISTING_FAILURE
+symbolic_output_0009_k2 | PASS | PRE_EXISTING_FAILURE
+symbolic_output_0010_k1 | PASS | PRE_EXISTING_FAILURE
+symbolic_output_0010_k2 | PASS | PRE_EXISTING_FAILURE
+0083_k1 | PASS | EXPECTED_OUTCOME
+0083_k2 | PASS | EXPECTED_OUTCOME
+missing_json | PASS | EXPECTED_OUTCOME
+
+All device slices and all generated seed files are byte-identical.
+0083 complete stages 1-4: PASS; stage 3/4 semantic reports and formulas unchanged.
+0009/0010 pre-existing failures remain unchanged; differential PASS does not hide them.
+
+Synthetic lookup fixture: 12352 entries, 32 routers, 128 prefixes/router, 3 branches/prefix.
+First 1024 queries: before 2.229780s; after 0.048009s.
+Repeated cached queries: 0.001019s.
+Candidate result hashes identical. Query-only measurement, not end-to-end solver performance.
+No competitive routes, fallback prefixes, guards or route attributes were removed.
