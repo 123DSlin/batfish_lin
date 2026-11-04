@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Derive field- and line-level subspecifications per symbolic-route branch.
 
-This stage reuses AutoNetSubspec's configuration domains, target grouping,
-normalization, and report writers. Its solving semantics are intentionally
-different: symbolic failure and destination variables are universally
-quantified, device/control-plane state is existentially quantified, and only
-the selected configuration field or line remains free. Every subspecification
-formula is derived from this symbolic projection; no concrete candidate path is
-used.
+This stage adapts AutoNetSubspec's line-first scheduling, configuration domains,
+normalization, and report writers to symbolic branch seeds. Each target is
+solved once as a symbolic formula, equivalent to intersecting its subspecs over
+all legal concrete failure assignments. Field-from-line reuse requires an
+exact equivalence proof against the existing target-specific seed projection;
+otherwise the direct field calculation remains the fallback. No failure
+assignments are enumerated by this stage.
 """
 
 from __future__ import annotations
@@ -272,7 +272,7 @@ class SubspecificationReport:
             "Field projection: " + _format_method_counts(field_methods),
             "Line projection: " + _format_method_counts(line_methods),
             (
-                "Mode: forall guarded failure states, exists device state; "
+                "Mode: symbolic seed/target projection; concrete-F intersection semantics; "
                 "no failure enumeration"
             ),
             "",
@@ -833,13 +833,15 @@ class SymbolicSubspecifier:
                 f"{conditions.failure_budget_name}, expected {expected_budget_name}"
             )
 
-        field_batch = self._project_targets(
-            document, branch, branch_token, level="field"
+        # Follow the reference's line-first scheduling. Field reuse is only
+        # accepted after checking this seed's target-dependent snapshot release.
+        line_batch = self._project_targets(
+            document, branch, branch_token, level="line"
         )
-        line_batch = (
+        field_batch = (
             _TargetBatch((), 0, 0)
-            if field_batch.error is not None
-            else self._project_targets(document, branch, branch_token, level="line")
+            if line_batch.error is not None
+            else self._fields_from_lines(document, branch, branch_token, line_batch)
         )
         field_results = tuple(
             BranchFieldSubspec(
@@ -959,6 +961,69 @@ class SymbolicSubspecifier:
             targets=tuple(results),
             evaluations=evaluations,
             constrained_evaluations=constrained_evaluations,
+        )
+
+    def _fields_from_lines(
+        self, document: _SmtDocument, branch: dict[str, Any],
+        branch_token: str, line_batch: _TargetBatch,
+    ) -> _TargetBatch:
+        """Specialize line results, preserving the existing symbolic semantics.
+
+        Releasing an entire line may release more route snapshots than a field.
+        Therefore line specialization is a candidate, never an assumed identity.
+        An inconclusive or failed equivalence check falls back to direct field
+        projection; no candidate routes or fault conditions are removed.
+        """
+        by_config = {pin.name: line for line in line_batch.targets for pin in line.pins}
+        results: list[_ProjectedTarget] = []
+        evaluations = 0
+        for identifier, pins in _field_targets(document.config_pins):
+            evaluations += 1
+            started = time.monotonic()
+            try:
+                line = by_config[pins[0].name]
+                if any(by_config[pin.name] is not line for pin in pins):
+                    raise SubspecificationError("field pair crosses configuration lines")
+                targets = frozenset(pin.name for pin in pins)
+                constants = {
+                    pin.name: parse_smt2_sexpr(tokenize_smt2_sexpr(pin.original_value))
+                    for pin in line.pins if pin.name not in targets
+                }
+                expression = parse_smt2_sexpr(tokenize_smt2_sexpr(
+                    subspec_string_to_smt2_and(line.constraint) or "true"
+                ))
+                candidate = self.solver.simplify(
+                    document, _substitute_symbols(expression, constants)
+                )
+                problem = document.quantified_projection(pins, branch["destination"])
+                if self._is_exact_projection(document, problem, candidate):
+                    constraint = self._normalize_projected_constraint(
+                        document, document.metadata_source(pins), candidate, problem,
+                        device=branch["router"], identifier=identifier,
+                        level="field", is_pair=len(pins) == 2,
+                    )
+                    derivation = "symbolic-line-specialization"
+                    audit = self._projection_audit(problem, derivation)
+                    audit["field_source"] = "equivalent-line-specialization"
+                else:
+                    constraint, derivation, _, audit = self._project(
+                        document, pins, device=branch["router"],
+                        destination=branch["destination"], identifier=identifier,
+                        level="field", is_pair=len(pins) == 2,
+                    )
+                    audit["field_source"] = "direct-field-fallback"
+                audit["source_line_group"] = line.name
+                results.append(_ProjectedTarget(
+                    identifier, pins, constraint, derivation,
+                    time.monotonic() - started, audit,
+                ))
+            except (KeyError, OSError, SubspecificationError, subprocess.SubprocessError) as error:
+                return _TargetBatch(
+                    tuple(results), evaluations, sum(not r.unrestricted for r in results),
+                    f"{branch['router']} {branch_token} {identifier}: {error}",
+                )
+        return _TargetBatch(
+            tuple(results), evaluations, sum(not r.unrestricted for r in results)
         )
 
     def _load_and_validate_consistency_report(self) -> dict[str, Any]:
@@ -1733,6 +1798,7 @@ def _method_counts(methods: Any) -> dict[str, int]:
 
 def _format_method_counts(counts: dict[str, int]) -> str:
     labels = {
+        "symbolic-line-specialization": "field-from-line",
         "symbolic-domain-equivalent": "domain-equivalent",
         "symbolic-staged-projection": "staged-symbolic",
         "symbolic-quantified-projection": "quantified",

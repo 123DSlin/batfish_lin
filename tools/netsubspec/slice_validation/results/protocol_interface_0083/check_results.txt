@@ -1,0 +1,14 @@
+0083 protocol-interface fix: PASS
+
+Root cause: inline BGP entry and protocol-adapter modules were out of sync.
+Fix: restored the committed adapter entry; previous source preserved in slicer_before_fix.py.gz.
+
+Protocol interface tests: 8/8 PASS.
+Default BGP and explicit --slicing-protocol bgp: byte-identical slices.
+Pipeline stages 1-4: PASS (0083, k=2).
+Consistency: 10 seeds, 114 legal F/seed checks, all SAT.
+Before/after device slices and seeds: byte-identical.
+Before/after 138 field/line constraints and final semantic reports: unchanged.
+Symbolic versus 1316 concrete-F projections: all 138 intersection equivalence checks UNSAT.
+
+Network validation in this run uses only 0083.

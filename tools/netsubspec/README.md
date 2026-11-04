@@ -68,6 +68,9 @@ per-device files.
 
 Builds one seed for every property-relevant, k-pruned MAIN branch and requires
 all eligible branches to be `SAT` before subspecification calculation.
+This gate checks **every legal concrete F** represented by each seed, rather
+than accepting a single satisfying failure assignment. Its exhaustive check
+is separate from the symbolic subspecification solver in stage 3.
 
 ```text
 2_consistency_check/
@@ -78,9 +81,25 @@ all eligible branches to be `SAT` before subspecification calculation.
 
 ### 3. Branch simplifier
 
-Projects every checked symbolic branch directly to field- and line-level
-configuration constraints. Failure variables remain symbolic; no concrete
-failure assignments are enumerated and no branch intersection occurs here.
+Computes line-level constraints first, following the scheduling in
+`0_auto-netsubspec/4_subspec_simplifier.py`, then specializes each line by fixing
+its other configuration fields to their original values. IP and mask stay a
+paired field target. A specialization is reused only after proving it exactly
+equivalent to the existing field-specific symbolic projection; otherwise stage
+3 falls back to that direct field projection.
+
+Failure variables remain symbolic; no concrete failure assignments are
+enumerated and no intersection across different branches occurs here. For a
+branch `b`, configuration target `T`, and legal failures `F(b,k)`, the intended
+meaning is `S(b,T) = AND over f in F(b,k) of S(b,T,f)`. The universal failure
+quantifier expresses this intersection symbolically; it is not a concrete-F
+solver loop or an extra network-wide verification task.
+
+The symbolic adapter retains the existing destination scope, complete peer
+candidate context and target-dependent release of observed route attributes.
+Literal reuse of all old route-value observations would freeze a changed LP
+to its original value. These semantics therefore cannot be replaced with the
+reference's concrete-route input preparation unchanged.
 
 Use `--workers N` (or `-j N`) to cap concurrent branch calculations.
 
@@ -98,6 +117,21 @@ The projection reuses AutoNetSubspec's configuration domains, normalization,
 IP/mask grouping, and output format. A normalized result is accepted only after
 an exact symbolic equivalence check. Structured output retains branch guards,
 seed hashes, route-attribute bindings, and atom-level constraint provenance.
+Field audits include `source_line_group` and `field_source`, distinguishing
+proved line specialization from direct field fallback.
+
+An independent bounded regression oracle explicitly substitutes each legal F,
+solves the configuration target without a failure quantifier, intersects those
+constraints and checks disagreement with the symbolic result is `UNSAT`:
+
+```bash
+python3 slice_validation/validate_symbolic_intersection.py <work_directory> \
+  --output <report.json> --workers 4
+```
+
+This exhaustive oracle is test tooling and is never invoked by the production
+stage-3 pipeline. Its report preserves every concrete-F constraint so the
+intersection can be inspected.
 
 ### 4. Branch intersection
 

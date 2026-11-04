@@ -1,0 +1,2 @@
+✓ Symbolic device slicing PASS | devices=4 | required-symbols=152
+Output: /private/tmp/protocol_interface_0083/explicit_bgp/1_sliced_device_smt_encoding

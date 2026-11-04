@@ -1,0 +1,1692 @@
+{
+  "schema_name": "tolerance-symbolic-router-subspec-report",
+  "schema_version": 5,
+  "router": "b",
+  "branches": [
+    {
+      "candidate_id": "candidate-v1-742a82a72d6e9f7e3dfe54f8244be05f7a91bb9de6f124c36beb18ac2eaacfbc",
+      "router": "b",
+      "destination": "5.5.5.5",
+      "prefix": "5.5.5.5/32",
+      "protocol": "BGP",
+      "selected_peer": "d",
+      "selection_guard": "b_d",
+      "selection_guard_assertion": "branch_742a82a72d6e_selection_guard",
+      "selection_guard_smt": "(and true |LINK-UP-b_d|)",
+      "failure_budget_assertion": "branch_742a82a72d6e_at_most_2_failures",
+      "failure_budget_smt": "(<= (+ (ite (not |LINK-UP-a_d|) 1 0) (ite (not |LINK-UP-a_s|) 1 0) (ite (not |LINK-UP-a_x|) 1 0) (ite (not |LINK-UP-b_d|) 1 0) (ite (not |LINK-UP-b_s|) 1 0) (ite (not |LINK-UP-b_x|) 1 0) (ite (not |LINK-UP-d_x|) 1 0)) 2)",
+      "failure_variables": [
+        "|LINK-UP-a_d|",
+        "|LINK-UP-a_s|",
+        "|LINK-UP-a_x|",
+        "|LINK-UP-b_d|",
+        "|LINK-UP-b_s|",
+        "|LINK-UP-b_x|",
+        "|LINK-UP-d_x|"
+      ],
+      "seed_file": "seeds/b/seed_b-d.smt2",
+      "seed_sha256": "f9101c90c9bca677bf41a9b02e08e85416995ffab6682a2877068add1f0a931e",
+      "fields": [
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action"
+          ],
+          "sort": "Bool",
+          "original_value": "true",
+          "constraint": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.05088449968025088,
+          "constraint_ids": [
+            "constraint-v1-8e5d5864e31957e1"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable"
+          ],
+          "sort": "Bool",
+          "original_value": "true",
+          "constraint": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.0513987080194056,
+          "constraint_ids": [
+            "constraint-v1-799657847921bd0c"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask"
+          ],
+          "sort": "(_ BitVec 32)",
+          "original_value": "#x05050505",
+          "constraint": "(= (concat #b00000 ((_ extract 26 26) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 24 24) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 18 18) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 16 16) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 10 10) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 8 8) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 2 2) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 0 0) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask)) (bvand Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask))",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.07552374992519617,
+          "constraint_ids": [
+            "constraint-v1-2774380564eef864"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length"
+          ],
+          "sort": "Int",
+          "original_value": "32",
+          "constraint": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 32)",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.052061500027775764,
+          "constraint_ids": [
+            "constraint-v1-46e54f9fbcb8db22",
+            "constraint-v1-3713e4d9e3a49817"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end"
+          ],
+          "sort": "Int",
+          "original_value": "32",
+          "constraint": "(= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 32)",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.09292208310216665,
+          "constraint_ids": [
+            "constraint-v1-11074a70490eac5d"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start"
+          ],
+          "sort": "Int",
+          "original_value": "32",
+          "constraint": "(= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 32)",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.09815066587179899,
+          "constraint_ids": [
+            "constraint-v1-606fe1986dc86b81"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable",
+          "released_configs": [
+            "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable"
+          ],
+          "sort": "Bool",
+          "original_value": "true",
+          "constraint": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.003838042262941599,
+          "constraint_ids": [
+            "constraint-v1-3c9f29d1fff269a9"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1"
+          }
+        }
+      ],
+      "lines": [
+        {
+          "line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+          "configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start"
+          ],
+          "constraint": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 32) AND Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable AND (= 32 Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start) AND (= 32 Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end) AND (= (concat #b00000 ((_ extract 26 26) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 24 24) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 18 18) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 16 16) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 10 10) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 8 8) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 2 2) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 0 0) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask)) (bvand Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask)) AND Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+          "unrestricted": false,
+          "derivation": "symbolic-staged-projection",
+          "solver_seconds": 1.167746167164296,
+          "constraint_ids": [
+            "constraint-v1-cde92054663db06e",
+            "constraint-v1-233185f37228fc3f",
+            "constraint-v1-f2fd09dc157eb39c",
+            "constraint-v1-8121d6a51f461fa7",
+            "constraint-v1-53f761a079216a07",
+            "constraint-v1-7c603195b3fd28a5",
+            "constraint-v1-80fc19e876dea372"
+          ],
+          "projection": {
+            "method": "symbolic-staged-projection",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": []
+          }
+        },
+        {
+          "line_group": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1",
+          "configs": [
+            "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable"
+          ],
+          "constraint": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable",
+          "unrestricted": false,
+          "derivation": "symbolic-staged-projection",
+          "solver_seconds": 0.23773220786824822,
+          "constraint_ids": [
+            "constraint-v1-e96a356bbf894138"
+          ],
+          "projection": {
+            "method": "symbolic-staged-projection",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": []
+          }
+        }
+      ],
+      "branch_name": "b-d",
+      "provenance_id": "provenance-v1-206a33f4dff6d263"
+    },
+    {
+      "candidate_id": "candidate-v1-b310db54732feda0da5041cfc69075fe5cdf59d3128fc9f2b08366842488fef3",
+      "router": "b",
+      "destination": "5.5.5.5",
+      "prefix": "5.5.5.5/32",
+      "protocol": "BGP",
+      "selected_peer": "x",
+      "selection_guard": "(and (not b_d) (not d_x) a_d a_x b_x)",
+      "selection_guard_assertion": "branch_b310db54732f_selection_guard",
+      "selection_guard_smt": "(and (not (and true |LINK-UP-b_d|)) (not (and true |LINK-UP-b_x| |LINK-UP-d_x|)) (not (and true |LINK-UP-d_x|)) true |LINK-UP-a_d| |LINK-UP-a_x| |LINK-UP-b_x|)",
+      "failure_budget_assertion": "branch_b310db54732f_at_most_2_failures",
+      "failure_budget_smt": "(<= (+ (ite (not |LINK-UP-a_d|) 1 0) (ite (not |LINK-UP-a_s|) 1 0) (ite (not |LINK-UP-a_x|) 1 0) (ite (not |LINK-UP-b_d|) 1 0) (ite (not |LINK-UP-b_s|) 1 0) (ite (not |LINK-UP-b_x|) 1 0) (ite (not |LINK-UP-d_x|) 1 0)) 2)",
+      "failure_variables": [
+        "|LINK-UP-a_d|",
+        "|LINK-UP-a_s|",
+        "|LINK-UP-a_x|",
+        "|LINK-UP-b_d|",
+        "|LINK-UP-b_s|",
+        "|LINK-UP-b_x|",
+        "|LINK-UP-d_x|"
+      ],
+      "seed_file": "seeds/b/seed_b-x-a-d.smt2",
+      "seed_sha256": "5f97d57d708975b20db564710193ea3ab1d47661b4580a5014ebba50668ff959",
+      "fields": [
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action"
+          ],
+          "sort": "Bool",
+          "original_value": "true",
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.01962487492710352,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable"
+          ],
+          "sort": "Bool",
+          "original_value": "true",
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.01366495806723833,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask"
+          ],
+          "sort": "(_ BitVec 32)",
+          "original_value": "#x05050505",
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.012659791857004166,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length"
+          ],
+          "sort": "Int",
+          "original_value": "32",
+          "constraint": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 32)",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.04790029162541032,
+          "constraint_ids": [
+            "constraint-v1-46e54f9fbcb8db22",
+            "constraint-v1-3713e4d9e3a49817"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end"
+          ],
+          "sort": "Int",
+          "original_value": "32",
+          "constraint": "(= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 32)",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.03827549982815981,
+          "constraint_ids": [
+            "constraint-v1-11074a70490eac5d"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start"
+          ],
+          "sort": "Int",
+          "original_value": "32",
+          "constraint": "(= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 32)",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.03948233323171735,
+          "constraint_ids": [
+            "constraint-v1-606fe1986dc86b81"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable",
+          "released_configs": [
+            "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable"
+          ],
+          "sort": "Bool",
+          "original_value": "true",
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.0011993329972028732,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1"
+          }
+        }
+      ],
+      "lines": [
+        {
+          "line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+          "configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start"
+          ],
+          "constraint": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 32) AND (>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 32) AND (>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 32) AND (>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length) AND (>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length)",
+          "unrestricted": false,
+          "derivation": "symbolic-domain-equivalent",
+          "solver_seconds": 0.03675025003030896,
+          "constraint_ids": [
+            "constraint-v1-cde92054663db06e",
+            "constraint-v1-233185f37228fc3f",
+            "constraint-v1-8d45b091c07e4184",
+            "constraint-v1-f10a6927574a3eab",
+            "constraint-v1-2f5bc0ed5d799763",
+            "constraint-v1-5d8699866c842d8f",
+            "constraint-v1-39df6a0194274151",
+            "constraint-v1-c1ae020206933dca"
+          ],
+          "projection": {
+            "method": "symbolic-domain-equivalent",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": []
+          }
+        },
+        {
+          "line_group": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1",
+          "configs": [
+            "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable"
+          ],
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-domain-equivalent",
+          "solver_seconds": 0.024675333872437477,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-domain-equivalent",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": []
+          }
+        }
+      ],
+      "branch_name": "b-x-a-d",
+      "provenance_id": "provenance-v1-3345a54cc3afb9a6"
+    },
+    {
+      "candidate_id": "candidate-v1-f21349708f70feae2b4e8a07c46402e7f2c74a307cf1bf43a6da54451dbeba4b",
+      "router": "b",
+      "destination": "5.5.5.5",
+      "prefix": "5.5.5.5/32",
+      "protocol": "BGP",
+      "selected_peer": "x",
+      "selection_guard": "(and (not b_d) b_x d_x)",
+      "selection_guard_assertion": "branch_f21349708f70_selection_guard",
+      "selection_guard_smt": "(and (not (and true |LINK-UP-b_d|)) true |LINK-UP-b_x| |LINK-UP-d_x|)",
+      "failure_budget_assertion": "branch_f21349708f70_at_most_2_failures",
+      "failure_budget_smt": "(<= (+ (ite (not |LINK-UP-a_d|) 1 0) (ite (not |LINK-UP-a_s|) 1 0) (ite (not |LINK-UP-a_x|) 1 0) (ite (not |LINK-UP-b_d|) 1 0) (ite (not |LINK-UP-b_s|) 1 0) (ite (not |LINK-UP-b_x|) 1 0) (ite (not |LINK-UP-d_x|) 1 0)) 2)",
+      "failure_variables": [
+        "|LINK-UP-a_d|",
+        "|LINK-UP-a_s|",
+        "|LINK-UP-a_x|",
+        "|LINK-UP-b_d|",
+        "|LINK-UP-b_s|",
+        "|LINK-UP-b_x|",
+        "|LINK-UP-d_x|"
+      ],
+      "seed_file": "seeds/b/seed_b-x-d.smt2",
+      "seed_sha256": "20ac6ed663fd5cbefc18fe3b24c3450121cae14e1c811a1812785112f6f0b51b",
+      "fields": [
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action"
+          ],
+          "sort": "Bool",
+          "original_value": "true",
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.019135874696075916,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable"
+          ],
+          "sort": "Bool",
+          "original_value": "true",
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.01812833361327648,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask"
+          ],
+          "sort": "(_ BitVec 32)",
+          "original_value": "#x05050505",
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.014968208968639374,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length"
+          ],
+          "sort": "Int",
+          "original_value": "32",
+          "constraint": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 32)",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.049444417003542185,
+          "constraint_ids": [
+            "constraint-v1-46e54f9fbcb8db22",
+            "constraint-v1-3713e4d9e3a49817"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end"
+          ],
+          "sort": "Int",
+          "original_value": "32",
+          "constraint": "(= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 32)",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.050315999891608953,
+          "constraint_ids": [
+            "constraint-v1-11074a70490eac5d"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start",
+          "released_configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start"
+          ],
+          "sort": "Int",
+          "original_value": "32",
+          "constraint": "(= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 32)",
+          "unrestricted": false,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.05118358274921775,
+          "constraint_ids": [
+            "constraint-v1-606fe1986dc86b81"
+          ],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1"
+          }
+        },
+        {
+          "config": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable",
+          "released_configs": [
+            "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable"
+          ],
+          "sort": "Bool",
+          "original_value": "true",
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-line-specialization",
+          "solver_seconds": 0.0011775828897953033,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-line-specialization",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": [],
+            "field_source": "equivalent-line-specialization",
+            "source_line_group": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1"
+          }
+        }
+      ],
+      "lines": [
+        {
+          "line_group": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+          "configs": [
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end",
+            "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start"
+          ],
+          "constraint": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 32) AND (>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 32) AND (>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 0) AND (<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 32) AND (>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length) AND (>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length)",
+          "unrestricted": false,
+          "derivation": "symbolic-domain-equivalent",
+          "solver_seconds": 0.0387122081592679,
+          "constraint_ids": [
+            "constraint-v1-cde92054663db06e",
+            "constraint-v1-233185f37228fc3f",
+            "constraint-v1-8d45b091c07e4184",
+            "constraint-v1-f10a6927574a3eab",
+            "constraint-v1-2f5bc0ed5d799763",
+            "constraint-v1-5d8699866c842d8f",
+            "constraint-v1-39df6a0194274151",
+            "constraint-v1-c1ae020206933dca"
+          ],
+          "projection": {
+            "method": "symbolic-domain-equivalent",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": []
+          }
+        },
+        {
+          "line_group": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1",
+          "configs": [
+            "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable"
+          ],
+          "constraint": "true",
+          "unrestricted": true,
+          "derivation": "symbolic-domain-equivalent",
+          "solver_seconds": 0.01762095931917429,
+          "constraint_ids": [],
+          "projection": {
+            "method": "symbolic-domain-equivalent",
+            "semantics": "forall-branch-scenarios-exists-device-state",
+            "universal_variables": [
+              "|LINK-UP-a_d|",
+              "|LINK-UP-a_s|",
+              "|LINK-UP-a_x|",
+              "|LINK-UP-b_d|",
+              "|LINK-UP-b_s|",
+              "|LINK-UP-b_x|",
+              "|LINK-UP-d_x|",
+              "|0_dst-ip|"
+            ],
+            "existential_variable_count": 59,
+            "destination_quantified": true,
+            "failure_enumeration": false,
+            "equivalence_check": "UNSAT",
+            "residual_symbols": [],
+            "released_route_attribute_bindings": [],
+            "dependent_route_attribute_symbols": []
+          }
+        }
+      ],
+      "branch_name": "b-x-d",
+      "provenance_id": "provenance-v1-909677e62e2de810"
+    }
+  ],
+  "branch_provenance": [
+    {
+      "provenance_id": "provenance-v1-206a33f4dff6d263",
+      "candidate_id": "candidate-v1-742a82a72d6e9f7e3dfe54f8244be05f7a91bb9de6f124c36beb18ac2eaacfbc",
+      "branch_name": "b-d",
+      "router": "b",
+      "destination": "5.5.5.5",
+      "prefix": "5.5.5.5/32",
+      "protocol": "BGP",
+      "selected_peer": "d",
+      "scenario_set": {
+        "representation": "symbolic-guard",
+        "route_guard": "b_d",
+        "encoded_guard_assertion": "branch_742a82a72d6e_selection_guard",
+        "encoded_guard": "(and true |LINK-UP-b_d|)",
+        "failure_budget": {
+          "semantics": "at-most",
+          "k": 2,
+          "assertion": "branch_742a82a72d6e_at_most_2_failures",
+          "expression": "(<= (+ (ite (not |LINK-UP-a_d|) 1 0) (ite (not |LINK-UP-a_s|) 1 0) (ite (not |LINK-UP-a_x|) 1 0) (ite (not |LINK-UP-b_d|) 1 0) (ite (not |LINK-UP-b_s|) 1 0) (ite (not |LINK-UP-b_x|) 1 0) (ite (not |LINK-UP-d_x|) 1 0)) 2)"
+        },
+        "failure_variables": [
+          "|LINK-UP-a_d|",
+          "|LINK-UP-a_s|",
+          "|LINK-UP-a_x|",
+          "|LINK-UP-b_d|",
+          "|LINK-UP-b_s|",
+          "|LINK-UP-b_x|",
+          "|LINK-UP-d_x|"
+        ],
+        "enumerated": false
+      },
+      "seed_file": "seeds/b/seed_b-d.smt2",
+      "seed_sha256": "f9101c90c9bca677bf41a9b02e08e85416995ffab6682a2877068add1f0a931e",
+      "consistency_status": "SAT"
+    },
+    {
+      "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+      "candidate_id": "candidate-v1-b310db54732feda0da5041cfc69075fe5cdf59d3128fc9f2b08366842488fef3",
+      "branch_name": "b-x-a-d",
+      "router": "b",
+      "destination": "5.5.5.5",
+      "prefix": "5.5.5.5/32",
+      "protocol": "BGP",
+      "selected_peer": "x",
+      "scenario_set": {
+        "representation": "symbolic-guard",
+        "route_guard": "(and (not b_d) (not d_x) a_d a_x b_x)",
+        "encoded_guard_assertion": "branch_b310db54732f_selection_guard",
+        "encoded_guard": "(and (not (and true |LINK-UP-b_d|)) (not (and true |LINK-UP-b_x| |LINK-UP-d_x|)) (not (and true |LINK-UP-d_x|)) true |LINK-UP-a_d| |LINK-UP-a_x| |LINK-UP-b_x|)",
+        "failure_budget": {
+          "semantics": "at-most",
+          "k": 2,
+          "assertion": "branch_b310db54732f_at_most_2_failures",
+          "expression": "(<= (+ (ite (not |LINK-UP-a_d|) 1 0) (ite (not |LINK-UP-a_s|) 1 0) (ite (not |LINK-UP-a_x|) 1 0) (ite (not |LINK-UP-b_d|) 1 0) (ite (not |LINK-UP-b_s|) 1 0) (ite (not |LINK-UP-b_x|) 1 0) (ite (not |LINK-UP-d_x|) 1 0)) 2)"
+        },
+        "failure_variables": [
+          "|LINK-UP-a_d|",
+          "|LINK-UP-a_s|",
+          "|LINK-UP-a_x|",
+          "|LINK-UP-b_d|",
+          "|LINK-UP-b_s|",
+          "|LINK-UP-b_x|",
+          "|LINK-UP-d_x|"
+        ],
+        "enumerated": false
+      },
+      "seed_file": "seeds/b/seed_b-x-a-d.smt2",
+      "seed_sha256": "5f97d57d708975b20db564710193ea3ab1d47661b4580a5014ebba50668ff959",
+      "consistency_status": "SAT"
+    },
+    {
+      "provenance_id": "provenance-v1-909677e62e2de810",
+      "candidate_id": "candidate-v1-f21349708f70feae2b4e8a07c46402e7f2c74a307cf1bf43a6da54451dbeba4b",
+      "branch_name": "b-x-d",
+      "router": "b",
+      "destination": "5.5.5.5",
+      "prefix": "5.5.5.5/32",
+      "protocol": "BGP",
+      "selected_peer": "x",
+      "scenario_set": {
+        "representation": "symbolic-guard",
+        "route_guard": "(and (not b_d) b_x d_x)",
+        "encoded_guard_assertion": "branch_f21349708f70_selection_guard",
+        "encoded_guard": "(and (not (and true |LINK-UP-b_d|)) true |LINK-UP-b_x| |LINK-UP-d_x|)",
+        "failure_budget": {
+          "semantics": "at-most",
+          "k": 2,
+          "assertion": "branch_f21349708f70_at_most_2_failures",
+          "expression": "(<= (+ (ite (not |LINK-UP-a_d|) 1 0) (ite (not |LINK-UP-a_s|) 1 0) (ite (not |LINK-UP-a_x|) 1 0) (ite (not |LINK-UP-b_d|) 1 0) (ite (not |LINK-UP-b_s|) 1 0) (ite (not |LINK-UP-b_x|) 1 0) (ite (not |LINK-UP-d_x|) 1 0)) 2)"
+        },
+        "failure_variables": [
+          "|LINK-UP-a_d|",
+          "|LINK-UP-a_s|",
+          "|LINK-UP-a_x|",
+          "|LINK-UP-b_d|",
+          "|LINK-UP-b_s|",
+          "|LINK-UP-b_x|",
+          "|LINK-UP-d_x|"
+        ],
+        "enumerated": false
+      },
+      "seed_file": "seeds/b/seed_b-x-d.smt2",
+      "seed_sha256": "20ac6ed663fd5cbefc18fe3b24c3450121cae14e1c811a1812785112f6f0b51b",
+      "consistency_status": "SAT"
+    }
+  ],
+  "constraint_provenance": [
+    {
+      "constraint_id": "constraint-v1-8e5d5864e31957e1",
+      "level": "field",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+      "formula": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-line-specialization"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-799657847921bd0c",
+      "level": "field",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+      "formula": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-line-specialization"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-2774380564eef864",
+      "level": "field",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip",
+      "formula": "(= (concat #b00000 ((_ extract 26 26) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 24 24) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 18 18) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 16 16) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 10 10) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 8 8) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 2 2) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 0 0) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask)) (bvand Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask))",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-line-specialization"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-46e54f9fbcb8db22",
+      "level": "field",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length",
+      "formula": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 0)",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263",
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-line-specialization"
+        },
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-line-specialization"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-line-specialization"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-3713e4d9e3a49817",
+      "level": "field",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length",
+      "formula": "(<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 32)",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263",
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-line-specialization"
+        },
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-line-specialization"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-line-specialization"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-11074a70490eac5d",
+      "level": "field",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end",
+      "formula": "(= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 32)",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263",
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-line-specialization"
+        },
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-line-specialization"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-line-specialization"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-606fe1986dc86b81",
+      "level": "field",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start",
+      "formula": "(= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 32)",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263",
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-line-specialization"
+        },
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-line-specialization"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-line-specialization"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-3c9f29d1fff269a9",
+      "level": "field",
+      "target": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable",
+      "formula": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-line-specialization"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-cde92054663db06e",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 0)",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263",
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-staged-projection"
+        },
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-domain-equivalent"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-domain-equivalent"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-233185f37228fc3f",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length 32)",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263",
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-staged-projection"
+        },
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-domain-equivalent"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-domain-equivalent"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-f2fd09dc157eb39c",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__enable",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-staged-projection"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-8121d6a51f461fa7",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(= 32 Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start)",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-staged-projection"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-53f761a079216a07",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(= 32 Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end)",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-staged-projection"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-7c603195b3fd28a5",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(= (concat #b00000 ((_ extract 26 26) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 24 24) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 18 18) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 16 16) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 10 10) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 8 8) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b00000 ((_ extract 2 2) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask) #b0 ((_ extract 0 0) Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask)) (bvand Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__ip Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__mask))",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-staged-projection"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-80fc19e876dea372",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__action",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-staged-projection"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-e96a356bbf894138",
+      "level": "line",
+      "target": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1",
+      "formula": "Config_d_RoutingPolicy_BGP_ORIGINATE__Seq10__Line1__match_prefixlist_enable",
+      "provenance_ids": [
+        "provenance-v1-206a33f4dff6d263"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-206a33f4dff6d263",
+          "branch_name": "b-d",
+          "projection_method": "symbolic-staged-projection"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-8d45b091c07e4184",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 0)",
+      "provenance_ids": [
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-domain-equivalent"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-domain-equivalent"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-f10a6927574a3eab",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end 32)",
+      "provenance_ids": [
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-domain-equivalent"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-domain-equivalent"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-2f5bc0ed5d799763",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 0)",
+      "provenance_ids": [
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-domain-equivalent"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-domain-equivalent"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-5d8699866c842d8f",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(<= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start 32)",
+      "provenance_ids": [
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-domain-equivalent"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-domain-equivalent"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-39df6a0194274151",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_end Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length)",
+      "provenance_ids": [
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-domain-equivalent"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-domain-equivalent"
+        }
+      ]
+    },
+    {
+      "constraint_id": "constraint-v1-c1ae020206933dca",
+      "level": "line",
+      "target": "Config_d_RouteFilterList_D_LOOPBACK__Line1",
+      "formula": "(>= Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__prefix_range_start Config_d_RouteFilterList_D_LOOPBACK__Line1__5_5_5_5__length)",
+      "provenance_ids": [
+        "provenance-v1-3345a54cc3afb9a6",
+        "provenance-v1-909677e62e2de810"
+      ],
+      "derivations": [
+        {
+          "provenance_id": "provenance-v1-3345a54cc3afb9a6",
+          "branch_name": "b-x-a-d",
+          "projection_method": "symbolic-domain-equivalent"
+        },
+        {
+          "provenance_id": "provenance-v1-909677e62e2de810",
+          "branch_name": "b-x-d",
+          "projection_method": "symbolic-domain-equivalent"
+        }
+      ]
+    }
+  ]
+}

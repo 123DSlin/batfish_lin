@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+from consistency.guard_encoder import GuardEncoder
 
 from utils.util_file import (
     load_field_level_subspecs_from_file,
@@ -36,7 +38,10 @@ class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
         cls.temporary = tempfile.TemporaryDirectory()
         cls.output = Path(cls.temporary.name) / "stage3"
         cls.subspecifier = SymbolicSubspecifier(WORK_DIRECTORY)
-        cls.report = cls.subspecifier.run(output_directory=cls.output)
+        with patch.object(GuardEncoder, "satisfying_failure_assignments", side_effect=AssertionError("stage 3 must not enumerate F")), patch.object(
+            GuardEncoder, "concrete_assignment_expressions", side_effect=AssertionError("stage 3 must not pin F")
+        ):
+            cls.report = cls.subspecifier.run(output_directory=cls.output)
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -59,6 +64,7 @@ class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
             all(
                 field.derivation
                 in {
+                    "symbolic-line-specialization",
                     "symbolic-domain-equivalent",
                     "symbolic-staged-projection",
                     "symbolic-quantified-projection",
@@ -197,7 +203,10 @@ class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
                 "set_localpreference_50"
             )
         )
-        self.assertEqual(result.derivation, "symbolic-staged-projection")
+        self.assertEqual(result.derivation, "symbolic-line-specialization")
+        line = next(item for item in branch.lines if result.config in item.configs)
+        self.assertEqual(line.derivation, "symbolic-staged-projection")
+        self.assertEqual(result.projection["source_line_group"], line.line_group)
         self.assertIn(f"(<= {result.config} 200)", result.constraint)
 
     def test_symbolic_projection_survives_if_shared_normalizer_fails(self) -> None:
@@ -233,6 +242,29 @@ class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
             self.subspecifier._normalize_with_auto_netsubspec = original  # type: ignore[method-assign]
         self.assertEqual(method, "symbolic-domain-equivalent")
         self.assertIn(target[0].name, constraint)
+
+    def test_inequivalent_line_specialization_falls_back_to_direct_field(self) -> None:
+        branch = next(b for b in self.report.branches if b.branch_name == "r4-r2-r1")
+        seed = self.subspecifier._resolve_seed_path({"candidate_id": branch.candidate_id, "seed_file": branch.seed_file})
+        document = _SmtDocument.parse(seed.read_text())
+        target = next((name, pins) for name, pins in _field_targets(document.config_pins)
+                      if "R4_IN_FROM_R2" in name and "set_localpreference" in name)
+        line_results = []
+        for line in branch.lines:
+            pins = tuple(pin for pin in document.config_pins if pin.name in line.configs)
+            line_results.append(_branch_simplifier._ProjectedTarget(
+                line.line_group, pins, "false" if target[0] in line.configs else line.constraint,
+                line.derivation, 0.0, line.projection,
+            ))
+        batch = _branch_simplifier._TargetBatch(tuple(line_results), len(line_results), 0)
+        with patch.object(_branch_simplifier, "_field_targets", return_value=[target]):
+            result = self.subspecifier._fields_from_lines(document, {
+                "router": branch.router, "destination": branch.destination,
+            }, "test", batch)
+        self.assertIsNone(result.error)
+        self.assertEqual(result.targets[0].projection["field_source"], "direct-field-fallback")
+        expected = next(f.constraint for f in branch.fields if f.config == target[0])
+        self.assertEqual(result.targets[0].constraint, expected)
 
     def test_releases_only_the_target_config_pin(self) -> None:
         branch = self.report.branches[-1]

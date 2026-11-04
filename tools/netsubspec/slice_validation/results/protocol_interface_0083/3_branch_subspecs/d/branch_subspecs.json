@@ -1,0 +1,73 @@
+{
+  "schema_name": "tolerance-symbolic-router-subspec-report",
+  "schema_version": 5,
+  "router": "d",
+  "branches": [
+    {
+      "candidate_id": "candidate-v1-3dcfc72d12a763af0426449062ab9fe42cfc1540866421185ac45b521380f3b5",
+      "router": "d",
+      "destination": "5.5.5.5",
+      "prefix": "5.5.5.5/32",
+      "protocol": "CONNECTED",
+      "selected_peer": null,
+      "selection_guard": "true",
+      "selection_guard_assertion": "branch_3dcfc72d12a7_selection_guard",
+      "selection_guard_smt": "true",
+      "failure_budget_assertion": "branch_3dcfc72d12a7_at_most_2_failures",
+      "failure_budget_smt": "(<= (+ (ite (not |LINK-UP-a_d|) 1 0) (ite (not |LINK-UP-a_s|) 1 0) (ite (not |LINK-UP-a_x|) 1 0) (ite (not |LINK-UP-b_d|) 1 0) (ite (not |LINK-UP-b_s|) 1 0) (ite (not |LINK-UP-b_x|) 1 0) (ite (not |LINK-UP-d_x|) 1 0)) 2)",
+      "failure_variables": [
+        "|LINK-UP-a_d|",
+        "|LINK-UP-a_s|",
+        "|LINK-UP-a_x|",
+        "|LINK-UP-b_d|",
+        "|LINK-UP-b_s|",
+        "|LINK-UP-b_x|",
+        "|LINK-UP-d_x|"
+      ],
+      "seed_file": "seeds/d/seed_d.smt2",
+      "seed_sha256": "8360e883dec6727a09436bafa35d2286ed84a3588958f3e9a8d269fb2f1feca0",
+      "fields": [],
+      "lines": [],
+      "branch_name": "d",
+      "provenance_id": "provenance-v1-6a3e0ca276de1ec6"
+    }
+  ],
+  "branch_provenance": [
+    {
+      "provenance_id": "provenance-v1-6a3e0ca276de1ec6",
+      "candidate_id": "candidate-v1-3dcfc72d12a763af0426449062ab9fe42cfc1540866421185ac45b521380f3b5",
+      "branch_name": "d",
+      "router": "d",
+      "destination": "5.5.5.5",
+      "prefix": "5.5.5.5/32",
+      "protocol": "CONNECTED",
+      "selected_peer": null,
+      "scenario_set": {
+        "representation": "symbolic-guard",
+        "route_guard": "true",
+        "encoded_guard_assertion": "branch_3dcfc72d12a7_selection_guard",
+        "encoded_guard": "true",
+        "failure_budget": {
+          "semantics": "at-most",
+          "k": 2,
+          "assertion": "branch_3dcfc72d12a7_at_most_2_failures",
+          "expression": "(<= (+ (ite (not |LINK-UP-a_d|) 1 0) (ite (not |LINK-UP-a_s|) 1 0) (ite (not |LINK-UP-a_x|) 1 0) (ite (not |LINK-UP-b_d|) 1 0) (ite (not |LINK-UP-b_s|) 1 0) (ite (not |LINK-UP-b_x|) 1 0) (ite (not |LINK-UP-d_x|) 1 0)) 2)"
+        },
+        "failure_variables": [
+          "|LINK-UP-a_d|",
+          "|LINK-UP-a_s|",
+          "|LINK-UP-a_x|",
+          "|LINK-UP-b_d|",
+          "|LINK-UP-b_s|",
+          "|LINK-UP-b_x|",
+          "|LINK-UP-d_x|"
+        ],
+        "enumerated": false
+      },
+      "seed_file": "seeds/d/seed_d.smt2",
+      "seed_sha256": "8360e883dec6727a09436bafa35d2286ed84a3588958f3e9a8d269fb2f1feca0",
+      "consistency_status": "SAT"
+    }
+  ],
+  "constraint_provenance": []
+}

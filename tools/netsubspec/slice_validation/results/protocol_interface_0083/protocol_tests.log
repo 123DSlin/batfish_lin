@@ -1,0 +1,13 @@
+test_auxiliary_igp_slice_rules_preserved (test_protocol_slicing.ProtocolSlicingTest.test_auxiliary_igp_slice_rules_preserved) ... ok
+test_bgp_owner_precedence_and_export_boundary (test_protocol_slicing.ProtocolSlicingTest.test_bgp_owner_precedence_and_export_boundary) ... ok
+test_default_registry_and_no_shared_state (test_protocol_slicing.ProtocolSlicingTest.test_default_registry_and_no_shared_state) ... ok
+test_device_names_and_shared_export (test_protocol_slicing.ProtocolSlicingTest.test_device_names_and_shared_export) ... ok
+test_isis_cli_preserves_existing_output (test_protocol_slicing.ProtocolSlicingTest.test_isis_cli_preserves_existing_output) ... ok
+test_scope_adapter_mismatch_rejected (test_protocol_slicing.ProtocolSlicingTest.test_scope_adapter_mismatch_rejected) ... ok
+test_shared_engine_accepts_non_bgp_adapter (test_protocol_slicing.ProtocolSlicingTest.test_shared_engine_accepts_non_bgp_adapter) ... ok
+test_unsupported_and_mixed_protocols_never_fall_back (test_protocol_slicing.ProtocolSlicingTest.test_unsupported_and_mixed_protocols_never_fall_back) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.201s
+
+OK

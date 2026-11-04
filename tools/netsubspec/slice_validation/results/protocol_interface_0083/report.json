@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "network_fixture": "0083 only",
+  "k": 2,
+  "root_cause": "The entry file had reverted to the inline BGP implementation while slicing/ and the runner still used protocol adapters.",
+  "fix": "Restore the previously committed protocol-adapted entry; preserve the prior working copy as slicer_before_fix.py.gz.",
+  "entry_matches_committed_adapter": true,
+  "protocol_tests_passed": 8,
+  "pipeline_stages": {
+    "1": "PASS",
+    "2": "PASS",
+    "3": "PASS",
+    "4": "PASS"
+  },
+  "all_F_consistency_checks": 114,
+  "seed_count": 10,
+  "field_targets": 99,
+  "line_targets": 39,
+  "slices_byte_identical": true,
+  "seeds_byte_identical": true,
+  "stage3_constraints_identical": true,
+  "final_semantic_report_identical": true,
+  "explicit_BGP_equals_default": true,
+  "symbolic_vs_enumerated_intersection": "PASS",
+  "oracle_target_checks": 138,
+  "concrete_F_target_projections": 1316
+}
