@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """Derive field- and line-level subspecifications per symbolic-route branch.
 
-This stage adapts AutoNetSubspec's line-first scheduling, configuration domains,
-normalization, and report writers to symbolic branch seeds. Each target is
-solved once as a symbolic formula, equivalent to intersecting its subspecs over
-all legal concrete failure assignments. Field-from-line reuse requires an
-exact equivalence proof against the existing target-specific seed projection;
-otherwise the direct field calculation remains the fallback. No failure
-assignments are enumerated by this stage.
+This stage adapts AutoNetSubspec's line-first scheduling, configuration domains
+and simplifier to symbolic branch seeds. Exact scope reduction preserves all
+legal failures. Field specialization is reused when the line and field release
+the same route observations. Otherwise the field is solved directly.
 """
 
 from __future__ import annotations
@@ -25,7 +22,6 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from typing import Any, Optional
 
@@ -39,14 +35,9 @@ from utils.util_smt import (
     tokenize_smt2_sexpr,
 )
 from utils.util_file import (
-    find_metadata_file,
-    load_target_dst_ip,
     save_field_level_subspecs,
     save_line_level_subspecs,
-    save_synthesis_metadata,
 )
-from utils.util_norm import normalize_subspec
-from utils.util_reference_seed import conditional_value_view, ReferenceSeedAdaptationError
 from utils.util_symbolic import (
     ConfigPin,
     SmtDocument as _SharedSmtDocument,
@@ -512,12 +503,10 @@ class _SmtDocument(_SharedSmtDocument):
                 )
             )
 
-        bound_expressions: list[object] = []
         for bound in get_bounds_for_multiple_config_variables(sorted(target_names)):
             tree = parse_smt2_sexpr(tokenize_smt2_sexpr(bound))
             if not isinstance(tree, list) or len(tree) != 2 or tree[0] != "assert":
                 raise SubspecificationError(f"malformed configuration bound: {bound}")
-            bound_expressions.append(tree[1])
             body.append(tree[1])
 
         concrete_values = {
@@ -566,23 +555,70 @@ class _SmtDocument(_SharedSmtDocument):
         else:
             projection_expression = scenario_expression
 
-        domain_candidate = _and_expression(
-            _substitute_symbols(expression, concrete_values)
-            for expression in bound_expressions
-        )
         return _ProjectionProblem(
             expression=projection_expression,
             scenario_expression=scenario_expression,
-            domain_candidate=domain_candidate,
             target_names=target_names,
             universal_names=tuple(universal_names),
             existential_names=tuple(existential_names),
             destination_quantified=destination_symbol is not None,
             destination_symbol=destination_symbol,
-            destination_domain=(antecedent[-1] if destination_symbol is not None else None),
+            destination_domain=antecedent[-1] if destination_symbol is not None else None,
             released_route_attribute_bindings=released_snapshot_names,
             dependent_route_attribute_symbols=dependent_route_symbols,
         )
+
+    @cached_property
+    def _failure_aliases(self) -> dict[str, object]:
+        """Read the exact Boolean-to-binary-Integer link bridges in this seed."""
+        assertions = {
+            serialize_smt2_sexpr(expression) for expression in self.assertions
+        }
+        failure_variables = set(self.branch_conditions().failure_variables)
+        aliases = {}
+        for expression, name in zip(self.assertions, self.assertion_names):
+            if not name or "_link_bridge_" not in name:
+                continue
+            if not isinstance(expression, list) or len(expression) != 3:
+                continue
+            operation, link, equality = expression
+            if (operation != "=" or not isinstance(link, str) or link not in failure_variables
+                    or not isinstance(equality, list) or len(equality) != 3):
+                continue
+            comparison, edge, value = equality
+            if (comparison == "=" and isinstance(edge, str) and value == "0"
+                    and self.declarations.get(edge) == "Int"
+                    and f"(>= {edge} 0)" in assertions and f"(<= {edge} 1)" in assertions):
+                aliases[edge] = ["ite", link, "0", "1"]
+        return aliases
+
+    def reference_seed_expression(
+        self, problem: "_ProjectionProblem", destination: str, *, retain_destination: bool = False
+    ) -> object:
+        """Eliminate exact failure aliases and substitute a singleton destination."""
+        aliases = {name: self._failure_aliases[name] for name in problem.existential_names
+                   if name in self._failure_aliases}
+
+        def remove_alias_bindings(expression):
+            if not isinstance(expression, list):
+                return expression
+            if len(expression) == 3 and expression[0] == "exists":
+                bindings = [binding for binding in expression[1] if binding[0] not in aliases]
+                body = remove_alias_bindings(expression[2])
+                return ["exists", bindings, body] if bindings else body
+            return [remove_alias_bindings(child) for child in expression]
+
+        network = ipaddress.ip_network(destination, strict=False)
+        if retain_destination:
+            expression = problem.scenario_expression
+        elif problem.destination_symbol is not None and network.num_addresses == 1:
+            aliases[problem.destination_symbol] = [
+                "_", f"bv{int(network.network_address)}", str(network.max_prefixlen)
+            ]
+            expression = problem.scenario_expression
+        else:
+            expression = problem.expression
+        return _substitute_symbols(remove_alias_bindings(expression), aliases)
 
     def _target_dependent_route_snapshots(
         self, target_names: frozenset[str]
@@ -664,7 +700,6 @@ class _SmtDocument(_SharedSmtDocument):
 class _ProjectionProblem:
     expression: object
     scenario_expression: object
-    domain_candidate: object
     target_names: frozenset[str]
     universal_names: tuple[str, ...]
     existential_names: tuple[str, ...]
@@ -737,7 +772,6 @@ class SymbolicSubspecifier:
         self.solver = SmtSolver(
             z3_path=z3_path, timeout_seconds=timeout_seconds
         )
-        self.target_dst_ip = load_target_dst_ip(self.work_directory)
         self.last_worker_count = 1
 
     def run(
@@ -834,8 +868,8 @@ class SymbolicSubspecifier:
                 f"{conditions.failure_budget_name}, expected {expected_budget_name}"
             )
 
-        # Follow the reference's line-first scheduling. Field reuse is only
-        # accepted after checking this seed's target-dependent snapshot release.
+        # Match the reference's line-first scheduling. The field reuses a
+        # line result when pinning the other fields gives the same seed body.
         line_batch = self._project_targets(
             document, branch, branch_token, level="line"
         )
@@ -970,10 +1004,8 @@ class SymbolicSubspecifier:
     ) -> _TargetBatch:
         """Specialize line results, preserving the existing symbolic semantics.
 
-        Releasing an entire line may release more route snapshots than a field.
-        Therefore line specialization is a candidate, never an assumed identity.
-        An inconclusive or failed equivalence check falls back to direct field
-        projection; no candidate routes or fault conditions are removed.
+        Pinning other fields is exact when both targets release the same
+        route observations. A different release set requires a direct field solve.
         """
         by_config = {pin.name: line for line in line_batch.targets for pin in line.pins}
         results: list[_ProjectedTarget] = []
@@ -997,15 +1029,16 @@ class SymbolicSubspecifier:
                     document, _substitute_symbols(expression, constants)
                 )
                 problem = document.quantified_projection(pins, branch["destination"])
-                if self._is_exact_projection(document, problem, candidate):
-                    constraint = self._normalize_projected_constraint(
-                        document, document.metadata_source(pins), candidate, problem,
-                        device=branch["router"], identifier=identifier,
-                        level="field", is_pair=len(pins) == 2,
+                line_targets = frozenset(pin.name for pin in line.pins)
+                line_releases = document._target_dependent_route_snapshots(line_targets)[0]
+                field_releases = document._target_dependent_route_snapshots(targets)[0]
+                if line_releases == field_releases:
+                    constraint = _compact_integer_interval_unions(
+                        candidate, pins, document.declarations, document.config_pins
                     )
                     derivation = "symbolic-line-specialization"
                     audit = self._projection_audit(problem, derivation)
-                    audit["field_source"] = "equivalent-line-specialization"
+                    audit["field_source"] = "line-specialization"
                 else:
                     constraint, derivation, _, audit = self._project(
                         document, pins, device=branch["router"],
@@ -1107,211 +1140,28 @@ class SymbolicSubspecifier:
         if level not in {"field", "line"}:
             raise ValueError(f"unsupported subspecification level: {level}")
         started = time.monotonic()
-        metadata_source = document.metadata_source(pins)
         problem = document.quantified_projection(pins, destination)
-        reference_attempt: dict[str, Any] = {"attempted": False}
-
-        def finish(candidate: str, method: str) -> tuple[str, str, float, dict[str, Any]]:
-            constraint = self._normalize_projected_constraint(
-                document,
-                metadata_source,
-                candidate,
-                problem,
-                device=device,
-                identifier=identifier,
-                level=level,
-                is_pair=is_pair,
-            )
-            return (
-                constraint,
-                method,
-                time.monotonic() - started,
-                dict(self._projection_audit(problem, method),
-                     reference_simplification=dict(reference_attempt)),
-            )
-
-        domain_candidate = self.solver.simplify(
-            document, problem.domain_candidate
-        )
-        domain_candidate = _compact_integer_interval_unions(
-            domain_candidate, pins, document.declarations, document.config_pins
-        )
-        if self._is_exact_projection(document, problem, domain_candidate):
-            return finish(domain_candidate, "symbolic-domain-equivalent")
-
-        reference_started = time.monotonic()
-        reference_attempt["attempted"] = True
-        try:
-            reference_candidate = self._reference_simplification_candidate(
-                document, pins, problem, audit=reference_attempt
-            )
-            if reference_candidate is None:
-                reference_attempt.update(accepted=False, reason="empty-or-internal-state-result")
-            elif self._is_exact_projection(document, problem, reference_candidate):
-                reference_attempt.update(accepted=True, reason="proved-equivalent")
-                reference_attempt["seconds"] = time.monotonic() - reference_started
-                return finish(reference_candidate, "symbolic-reference-simplification")
-            else:
-                reference_attempt.update(accepted=False, reason="equivalence-not-proved")
-        except (OSError, SubspecificationError, subprocess.SubprocessError) as error:
-            reference_attempt.update(accepted=False, reason="reference-error", error=str(error))
-        reference_attempt["seconds"] = time.monotonic() - reference_started
-
-        try:
-            staged = self._staged_symbolic_projection(
-                document, pins, problem
-            )
-        except (OSError, SubspecificationError, subprocess.SubprocessError):
-            staged = None
-        if staged is not None:
-            staged = self.solver.simplify(
-                document,
-                parse_smt2_sexpr(
-                    tokenize_smt2_sexpr(
-                        subspec_string_to_smt2_and(staged) or "true"
-                    )
-                ),
-            )
-            staged = _compact_integer_interval_unions(
-                staged, pins, document.declarations, document.config_pins
-            )
-            if self._is_exact_projection(document, problem, staged):
-                return finish(staged, "symbolic-staged-projection")
-
-        projected = self.solver.project(
-            document, pins, problem.expression, "symbolic projection"
-        )
-        residual = _residual_declared_symbols(
-            projected, document.declarations, problem.target_names
-        )
-        if residual:
-            raise SubspecificationError(
-                "symbolic projection retained non-target symbols: "
-                + ", ".join(residual)
-            )
-        projected = _compact_integer_interval_unions(
-            projected, pins, document.declarations, document.config_pins
-        )
-        return finish(projected, "symbolic-quantified-projection")
-
-    def _reference_simplification_candidate(
-        self, document: _SmtDocument, pins: tuple[ConfigPin, ...],
-        problem: _ProjectionProblem,
-        *, audit: Optional[dict[str, Any]] = None,
-    ) -> Optional[str]:
-        """Use this seed's forward constraints for a reference-style candidate.
-
-        The ordinary constraint view is used only to suggest a candidate.
-        Acceptance still checks the full quantified symbolic problem, with
-        exactly the existing target-dependent route snapshot release.
-        """
-        scenario = problem.scenario_expression
-        if isinstance(scenario, list) and scenario and scenario[0] == "forall":
-            scenario = scenario[2]
-        if not isinstance(scenario, list) or len(scenario) != 3 or scenario[0] != "=>":
-            raise SubspecificationError("unsupported symbolic scenario shape")
-        antecedent, body = scenario[1:]
-        if isinstance(body, list) and body and body[0] == "exists":
-            body = body[2]
-        ordinary = _and_expression([antecedent, problem.destination_domain or "true", body])
-        candidate = self.solver.reference_simplify(document, pins, ordinary)
-        if candidate is not None and not _residual_declared_symbols(
-            candidate, document.declarations, problem.target_names
-        ):
-            if audit is not None: audit["adapter"] = "ordinary-reference-goal"
-            return candidate
-
-        released = document._target_dependent_route_snapshots(problem.target_names)[0]
-        snapshots = tuple(document.assertions[index] for index, _, _ in document._route_attribute_snapshots
-                          if index not in released)
-        try:
-            adapted, details = conditional_value_view(document, ordinary, snapshots)
-        except ReferenceSeedAdaptationError as error:
-            if audit is not None: audit["conditional_adapter_error"] = str(error)
-            return None
-        if audit is not None:
-            audit.update(adapter="conditional-seed-values", conditional_values=details)
-        candidate = self.solver.reference_simplify(document, pins, adapted)
-        if candidate is None:
-            return None
-        residual = _residual_declared_symbols(candidate, document.declarations, problem.target_names)
-        if not residual:
-            return candidate
-        environment = {name for name in document.declarations if name.strip("|").startswith(
-            ("LINK-UP-", "SR-LINK-", "0_FAILED-EDGE_", "0_FAILED-NODE_")
-        ) or name == problem.destination_symbol}
-        boolean_state = set(residual) - environment
-        if len(boolean_state) > 16 or any(document.declarations[name] != "Bool" for name in boolean_state):
-            return None
-        context = [problem.destination_domain or "true"]
-        for assertion in document.assertions:
-            names = _collect_declared_symbols(assertion, document.declarations)
-            if names and names <= environment:
-                context.append(assertion)
-        result = parse_smt2_sexpr(tokenize_smt2_sexpr(subspec_string_to_smt2_and(candidate)))
-        if boolean_state:
-            result = ["exists", document.quantifier_bindings(sorted(boolean_state)), result]
-        premise = _and_expression(context)
-        used_environment = _collect_declared_symbols(_and_expression([premise, result]), document.declarations) & environment
-        remaining = ["=>", premise, result]
-        if used_environment:
-            remaining = ["forall", document.quantifier_bindings(sorted(used_environment)), remaining]
-        if audit is not None:
-            audit["residual_boolean_state_count"] = len(boolean_state)
-            audit["residual_environment_count"] = len(used_environment)
-        candidate = self.solver.project(document, pins, remaining, "reference residual Boolean/environment reduction")
-        if _residual_declared_symbols(candidate, document.declarations, problem.target_names):
-            return None
-        return candidate
-
-    def _is_exact_projection(
-        self,
-        document: _SmtDocument,
-        problem: _ProjectionProblem,
-        candidate: str,
-    ) -> bool:
-        residual = _residual_declared_symbols(
-            candidate, document.declarations, problem.target_names
-        )
-        return not residual and self.solver.equivalent(
-            document, problem.expression, candidate
-        )[0]
-
-    def _staged_symbolic_projection(
-        self,
-        document: _SmtDocument,
-        pins: tuple[ConfigPin, ...],
-        problem: _ProjectionProblem,
-    ) -> str:
-        """Eliminate failure/device state before eliminating destination state."""
-
-        staged = self.solver.project(
-            document,
-            pins,
-            problem.scenario_expression,
-            "staged symbolic state projection",
-        )
-        staged = self.solver.remove_redundant_atoms(document, staged)
-        allowed = set(problem.target_names)
-        if problem.destination_symbol is not None:
-            allowed.add(problem.destination_symbol)
-        residual = _residual_declared_symbols(
-            staged, document.declarations, frozenset(allowed)
-        )
-        if residual:
-            raise SubspecificationError(
-                "staged symbolic projection retained internal symbols: "
-                + ", ".join(residual)
-            )
-        if (
+        wide_destination = (
             problem.destination_symbol is not None
-            and problem.destination_symbol
-            in _collect_constraint_symbols(staged, document.declarations)
-        ):
-            return self._lift_destination_projection(
-                document, pins, staged, problem
-            )
-        return staged
+            and ipaddress.ip_network(destination, strict=False).num_addresses > 1
+        )
+        expression = document.reference_seed_expression(
+            problem, destination, retain_destination=wide_destination
+        )
+        if wide_destination:
+            staged = self.solver.project(document, pins, expression, "symbolic seed scope reduction")
+            staged = self.solver.remove_redundant_atoms(document, staged)
+            reduced = self._lift_destination_projection(document, pins, staged, problem)
+            expression = parse_smt2_sexpr(tokenize_smt2_sexpr(subspec_string_to_smt2_and(reduced)))
+        constraint = self.solver.solve_reference_seed(document, pins, expression)
+        residual = _residual_declared_symbols(constraint, document.declarations, problem.target_names)
+        if residual:
+            raise SubspecificationError("symbolic seed retained internal symbols: " + ", ".join(residual))
+        constraint = _compact_integer_interval_unions(
+            constraint, pins, document.declarations, document.config_pins
+        )
+        method = "symbolic-reference-simplification"
+        return constraint, method, time.monotonic() - started, self._projection_audit(problem, method)
 
     def _lift_destination_projection(
         self,
@@ -1382,139 +1232,6 @@ class SymbolicSubspecifier:
             rewritten.extend(containment)
         return self.solver.simplify(document, _and_expression(rewritten))
 
-    def _normalize_projected_constraint(
-        self,
-        document: _SmtDocument,
-        metadata_query: str,
-        constraint: str,
-        problem: _ProjectionProblem,
-        *,
-        device: str,
-        identifier: str,
-        level: str,
-        is_pair: bool,
-    ) -> str:
-        readable_interval = self._proved_readable_value_interval(
-            document, problem
-        )
-        if readable_interval is not None:
-            return readable_interval
-        if constraint == "true":
-            return constraint
-        normalized: Optional[str]
-        try:
-            normalized = self._normalize_with_auto_netsubspec(
-                metadata_query,
-                constraint,
-                device=device,
-                identifier=identifier,
-                level=level,
-                is_pair=is_pair,
-            )
-            normalized = _compact_integer_interval_unions(
-                normalized,
-                tuple(
-                    pin
-                    for pin in document.config_pins
-                    if pin.name in problem.target_names
-                ),
-                document.declarations,
-                document.config_pins,
-            )
-        except (OSError, SubspecificationError, subprocess.SubprocessError):
-            normalized = None
-        if normalized is not None and self._is_exact_projection(
-            document, problem, normalized
-        ):
-            return normalized
-        if self._is_exact_projection(document, problem, constraint):
-            return constraint
-        raise SubspecificationError(
-            "projected constraint failed equivalence validation"
-        )
-
-    def _proved_readable_value_interval(
-        self,
-        document: _SmtDocument,
-        problem: _ProjectionProblem,
-    ) -> Optional[str]:
-        """Prefer a meaningful one-field interval after proving equivalence.
-
-        Quantifier elimination may spell an integer boundary as ``x >= 101``
-        or as a larger Boolean formula. For route-value setters, candidate
-        intervals are built only from legal-domain and original competing
-        values, and are accepted only by the same UNSAT equivalence proof used
-        for every other projection result.
-        """
-
-        if len(problem.target_names) != 1:
-            return None
-        target_name = next(iter(problem.target_names))
-        if _configuration_value_operation(target_name) is None:
-            return None
-        target_pin = next(
-            (pin for pin in document.config_pins if pin.name == target_name),
-            None,
-        )
-        if target_pin is None or target_pin.sort != "Int":
-            return None
-
-        bound_expressions: list[object] = []
-        for bound in get_bounds_for_multiple_config_variables([target_name]):
-            tree = parse_smt2_sexpr(tokenize_smt2_sexpr(bound))
-            if isinstance(tree, list) and len(tree) == 2 and tree[0] == "assert":
-                bound_expressions.append(tree[1])
-        domain = _integer_interval(
-            _and_expression(bound_expressions), target_name
-        )
-        if domain is None:
-            return None
-        domain_lower, domain_upper = domain
-        thresholds = _strict_lower_thresholds(target_pin, document.config_pins)
-
-        lower_candidates = {domain_lower}
-        upper_candidates = {domain_upper}
-        for value in thresholds:
-            if domain_lower is None or value >= domain_lower:
-                lower_candidates.add(value)
-            if domain_lower is None or value + 1 >= domain_lower:
-                lower_candidates.add(value + 1)
-            if domain_upper is None or value <= domain_upper:
-                upper_candidates.add(value)
-            if domain_upper is None or value - 1 <= domain_upper:
-                upper_candidates.add(value - 1)
-
-        def lower_key(value: Optional[int]) -> float:
-            return float("-inf") if value is None else value
-
-        def upper_key(value: Optional[int]) -> float:
-            return float("inf") if value is None else value
-
-        for lower in sorted(lower_candidates, key=lower_key):
-            for upper in sorted(upper_candidates, key=upper_key, reverse=True):
-                if lower is not None and upper is not None and lower > upper:
-                    continue
-                strict_lower = (
-                    lower - 1
-                    if lower is not None and lower - 1 in thresholds
-                    else None
-                )
-                strict_upper = (
-                    upper + 1
-                    if upper is not None and upper + 1 in thresholds
-                    else None
-                )
-                expression = _interval_expression(
-                    target_name, lower, upper, strict_lower, strict_upper
-                )
-                candidate = _serialize_subspec_expression(expression)
-                equivalent, _ = self.solver.equivalent(
-                    document, problem.expression, candidate
-                )
-                if equivalent:
-                    return candidate
-        return None
-
     @staticmethod
     def _projection_audit(
         problem: _ProjectionProblem, method: str
@@ -1526,7 +1243,7 @@ class SymbolicSubspecifier:
             "existential_variable_count": len(problem.existential_names),
             "destination_quantified": problem.destination_quantified,
             "failure_enumeration": False,
-            "equivalence_check": "UNSAT",
+            "equivalence_check": "not-run",
             "residual_symbols": [],
             "released_route_attribute_bindings": list(
                 problem.released_route_attribute_bindings
@@ -1535,51 +1252,6 @@ class SymbolicSubspecifier:
                 problem.dependent_route_attribute_symbols
             ),
         }
-
-    def _normalize_with_auto_netsubspec(
-        self,
-        query: str,
-        constraint: str,
-        *,
-        device: str,
-        identifier: str,
-        level: str,
-        is_pair: bool,
-    ) -> str:
-        """Run the existing metadata-driven AutoNetSubspec normalizer."""
-
-        with tempfile.TemporaryDirectory(prefix="symbolic_subspec_") as temporary:
-            directory = Path(temporary)
-            synthesis = directory / "compute_subspec.smt2"
-            synthesis.write_text(query, encoding="utf-8")
-            save_synthesis_metadata(
-                device,
-                identifier,
-                str(synthesis),
-                directory,
-                level,
-            )
-            metadata = find_metadata_file(identifier, device, level, directory)
-            if metadata is None:
-                raise SubspecificationError(
-                    f"AutoNetSubspec did not produce {level} metadata for {identifier}"
-                )
-            normalized = normalize_subspec(
-                constraint,
-                metadata,
-                identifier,
-                is_field_level=level == "field",
-                is_pair=is_pair,
-                target_dst_ip=self.target_dst_ip,
-                max_iterations=3,
-                verbose=False,
-                temp_dir=directory,
-            )
-        if not normalized.strip():
-            raise SubspecificationError(
-                f"AutoNetSubspec normalization returned an empty result for {identifier}"
-            )
-        return normalized.strip()
 
     @staticmethod
     def _short_id(candidate_id: str) -> str:
@@ -1871,15 +1543,6 @@ def _literal_bound_symbols(
     return result
 
 
-def _collect_constraint_symbols(
-    constraint: str, declarations: dict[str, str]
-) -> set[str]:
-    expression = parse_smt2_sexpr(
-        tokenize_smt2_sexpr(subspec_string_to_smt2_and(constraint) or "true")
-    )
-    return _collect_declared_symbols(expression, declarations)
-
-
 def _method_counts(methods: Any) -> dict[str, int]:
     counts: dict[str, int] = {}
     for method in methods:
@@ -1916,6 +1579,8 @@ def _compact_integer_interval_unions(
     whole = parse_smt2_sexpr(
         tokenize_smt2_sexpr(subspec_string_to_smt2_and(constraint) or "true")
     )
+    strict_thresholds = _strict_lower_thresholds(pins[0], all_pins)
+    whole = _compact_interval_expression(whole, target, strict_thresholds)
     whole_interval = _integer_interval(whole, target)
     if whole_interval is not None:
         strict_lower = _preferred_strict_lower_bound(
@@ -1929,33 +1594,7 @@ def _compact_integer_interval_unions(
                 target, *whole_interval, strict_lower, strict_upper
             )
         )
-    strict_thresholds = _strict_lower_thresholds(pins[0], all_pins)
-    compacted = []
-    for atom in subspec_string_to_list(constraint):
-        tree = parse_smt2_sexpr(tokenize_smt2_sexpr(atom))
-        atom_interval = _integer_interval(tree, target)
-        if atom_interval is not None:
-            strict_lower = (
-                atom_interval[0] - 1
-                if atom_interval[0] is not None
-                and atom_interval[0] - 1 in strict_thresholds
-                else None
-            )
-            strict_upper = (
-                atom_interval[1] + 1
-                if atom_interval[1] is not None
-                and atom_interval[1] + 1 in strict_thresholds
-                else None
-            )
-            tree = _interval_expression(
-                target, *atom_interval, strict_lower, strict_upper
-            )
-        else:
-            tree = _compact_interval_expression(tree, target, strict_thresholds)
-        compacted.append(
-            serialize_smt2_sexpr(tree)
-        )
-    return " AND ".join(compacted) if compacted else "true"
+    return _serialize_subspec_expression(whole)
 
 
 def _compact_interval_expression(
@@ -1963,6 +1602,13 @@ def _compact_interval_expression(
 ) -> object:
     if not isinstance(expression, list) or not expression:
         return expression
+    if expression[0] == "not" and len(expression) == 2 and isinstance(expression[1], list):
+        inner = expression[1]
+        if inner and inner[0] in ("and", "or"):
+            dual = "or" if inner[0] == "and" else "and"
+            return _compact_interval_expression(
+                [dual, *[["not", item] for item in inner[1:]]], target, strict_thresholds
+            )
     rewritten = [
         expression[0],
         *(

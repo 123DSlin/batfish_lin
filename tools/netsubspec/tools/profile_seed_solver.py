@@ -76,15 +76,9 @@ class Recorder:
                               ('remove_redundant_atoms','simplification'),
                               ('reference_simplify','reference_simplification')]:
             self.wrap(module.SmtSolver,name,category)
-        for name,category in [('_is_exact_projection','proof_preparation'),
-                              ('_reference_simplification_candidate','reference_candidate_preparation'),
-                              ('_normalize_with_auto_netsubspec','normalization'),
-                              ('_normalize_projected_constraint','normalization'),
-                              ('_proved_readable_value_interval','readable_candidate_generation'),
-                              ('_staged_symbolic_projection','staging_overhead'),
-                              ('_lift_destination_projection','destination_lifting')]:
-            self.wrap(module.SymbolicSubspecifier,name,category)
-        self.wrap(module._SmtDocument,'quantified_projection','formula_construction')
+        self.wrap(module.SmtSolver, 'solve_reference_seed', 'reference_simplification')
+        self.wrap(module._SmtDocument, 'quantified_projection', 'formula_construction')
+        self.wrap(module._SmtDocument, 'reference_seed_expression', 'scope_preparation')
         original_project = module.SymbolicSubspecifier._project
         @wraps(original_project)
         def target(*args,**kwargs):

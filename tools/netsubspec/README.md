@@ -165,72 +165,24 @@ is separate from the symbolic subspecification solver in stage 3.
 
 ### 3. Branch simplifier
 
-Computes line-level constraints first, following the scheduling in
-`tools/auto-netsubspec-Traverse/0_auto-netsubspec/4_subspec_simplifier.py`, then specializes each line by fixing
-its other configuration fields to their original values. IP and mask stay a
-paired field target. A specialization is reused only after proving it exactly
-equivalent to the existing field-specific symbolic projection; otherwise stage
-3 falls back to that direct field projection.
+Computes line-level constraints first and specializes each line by fixing its
+other fields to their original values. IP and mask stay a paired field target.
+A field is solved directly when its target-dependent route snapshot release
+differs from the line's release.
 
-Stage 3 uses the current seed/AG as the input to the reference-style main
-solver path. It reuses `simplify -> propagate-values -> solve-eqs ->
-ctx-solver-simplify` and the existing configuration/dependency extractor.
-Target-dependent route snapshot release is unchanged. Temporary unary parameter
-applications protect target fields from `solve-eqs` and are restored before proof.
-
-For guarded attribute assignments that ordinary propagation cannot eliminate,
-`utils/util_reference_seed.py` exposes the existing policy and route-candidate
-conditions as conditional value expressions. It retains the entire source
-constraint body and every candidate guard. Configurations are not substituted;
-released attribute observations are excluded. Inactive-value choices are only
-candidate witnesses: acceptance always requires exact equivalence against the
-unchanged symbolic problem. Cycles and oversized expansions are skipped safely.
-
-Residual integer route state rejects the candidate. A small residual problem
-with at most 16 internal Boolean state symbols may be reduced with its symbolic
-failure/destination environment; this does not enumerate concrete F or rerun
-full device-state QE. Errors, remaining state or unproved equivalence retain the
-original staged projection as a correctness fallback. Line audits expose the
-adapter, substituted-value count, residual sizes, acceptance and attempt time.
-Accepted results use derivation `symbolic-reference-simplification`.
-
-The 0083 seed-first run uses 22 existing domain proofs and 17 reference-derived
-line results, with no full-device staged-projection fallback. Its 166 branch/final
-results are equivalent to the previous implementation. Independent Traverse
-verification still reports the same two constraint differences and four residual
-state outputs; equivalence to Traverse is not claimed.
-
-Failure variables remain symbolic; no concrete failure assignments are
-enumerated and no intersection across different branches occurs here. For a
-branch `b`, configuration target `T`, and legal failures `F(b,k)`, the intended
-meaning is `S(b,T) = AND over f in F(b,k) of S(b,T,f)`. The universal failure
-quantifier expresses this intersection symbolically; it is not a concrete-F
-solver loop or an extra network-wide verification task.
-
-The symbolic adapter retains the existing destination scope, complete peer
-candidate context and target-dependent release of observed route attributes.
-Literal reuse of all old route-value observations would freeze a changed LP
-to its original value. These semantics therefore cannot be replaced with the
-reference's concrete-route input preparation unchanged.
+The solver takes one symbolic seed/AG per branch. It substitutes a singleton
+destination and eliminates redundant binary integer link variables using the
+seed's Boolean-to-integer bridge equalities and integer bounds. The remaining
+symbolic scope is eliminated exactly, without enumerating concrete failures,
+then AutoNetSubspec's `simplify -> propagate-values -> solve-eqs ->
+ctx-solver-simplify` chain simplifies the resulting configuration goal.
+Temporary unary applications preserve the released fields through `solve-eqs`.
+The stage keeps all competitors and fails if a result retains internal state.
+The optional Traverse comparison checks the final results independently.
 
 Use `--workers N` (or `-j N`) to cap concurrent branch calculations.
-
-```text
-3_branch_subspecs/
-  branch_subspecs.txt
-  branch_subspecs.json
-  <router>/
-    field_level_subspecs.txt
-    line_level_subspecs.txt
-    branch_subspecs.json
-```
-
-The projection reuses AutoNetSubspec's configuration domains, normalization,
-IP/mask grouping, and output format. A normalized result is accepted only after
-an exact symbolic equivalence check. Structured output retains branch guards,
-seed hashes, route-attribute bindings, and atom-level constraint provenance.
-Field audits include `source_line_group` and `field_source`, distinguishing
-proved line specialization from direct field fallback.
+The JSON and text reports in `3_branch_subspecs/` retain the seed hashes, guard,
+released route observations, and line/field provenance.
 
 The optional verifier now consumes the independent Traverse pipeline output:
 

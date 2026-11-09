@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run both 0083 BGP pipelines and write one timing report per comparison."""
+"""Compare both BGP pipelines on 0083 or generated router rings."""
 
 import argparse
 from datetime import datetime, timezone
@@ -11,6 +11,8 @@ import subprocess
 import sys
 import tempfile
 import time
+
+from router_ring import write_ring
 
 
 REPORT_DIRECTORY = Path(__file__).resolve().parent
@@ -26,21 +28,22 @@ def run(command, log):
     return time.perf_counter() - started
 
 
-def generate(work, skip_symbolic_routes, force_solver=False):
+def generate(work, skip_symbolic_routes, force_solver=False, *, network=NETWORK,
+             ingress="x", destination_router="d", k=2):
     work.mkdir()
     env = {
         "SMT_DIRECTORY_PREFIX": str(work),
-        "SMT_NETWORK": NETWORK,
+        "SMT_NETWORK": network,
         "SMT_SYMBOLIC": "false",
         "SMT_PROTOCOLS": "BGP",
         "SMT_ENUMERATE_FAILURES": "false",
         "SMT_SKIP_SYMBOLIC_ROUTES": str(skip_symbolic_routes).lower(),
         "SMT_PROFILE_GENERATION": "true",
         "SMT_GUARD_FORCE_SOLVER": str(force_solver).lower(),
-        "SMT_INGRESS": "x",
-        "SMT_FINAL": "d",
+        "SMT_INGRESS": ingress,
+        "SMT_FINAL": destination_router,
         "SMT_DST": "5.5.5.5/32",
-        "SMT_FAILURES": "2",
+        "SMT_FAILURES": str(k),
     }
     generation_log = work / "generation.log"
     generation_wall = run([
@@ -205,36 +208,62 @@ def main():
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--compare-guards", action="store_true",
                         help="compare generation with and without the guard equality fast path")
+    parser.add_argument("--ring-routers", type=int, nargs="+",
+                        help="generate and compare BGP rings of the given sizes with k=1")
     args = parser.parse_args()
     if args.workers < 1:
         parser.error("--workers must be positive")
-    workers = str(args.workers)
+    if args.ring_routers:
+        if args.compare_guards:
+            parser.error("--compare-guards is only supported for 0083")
+        if any(not 4 <= size <= 256 for size in args.ring_routers):
+            parser.error("ring sizes must be between 4 and 256")
+        for size in args.ring_routers:
+            write_ring(ROOT / "networks" / f"netsubspec_bgp_ring_{size}", size)
+        for size in args.ring_routers:
+            network = f"netsubspec_bgp_ring_{size}"
+            run_comparison(
+                args.workers, False, network=network, ingress=f"r{size // 2}",
+                destination_router="r0", k=1, devices=",".join(f"r{i}" for i in range(size)),
+                label=f"ring_{size}",
+            )
+    else:
+        run_comparison(args.workers, args.compare_guards)
+
+
+def run_comparison(worker_count, compare_guards, *, network=NETWORK, ingress="x",
+                   destination_router="d", k=2, devices="a,b,d,x", label="0083"):
+    workers = str(worker_count)
+    generation_args = dict(network=network, ingress=ingress, destination_router=destination_router, k=k)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
-    report = REPORT_DIRECTORY / f"0083_{stamp}.txt"
-    work = Path(tempfile.mkdtemp(prefix="netsubspec-0083-")).resolve()
-    lines = [f"0083 | BGP | k=2 | workers={workers}", f"Run artifacts: {work}", ""]
+    report = REPORT_DIRECTORY / f"{label}_{stamp}.txt"
+    work = Path(tempfile.mkdtemp(prefix=f"netsubspec-{label}-")).resolve()
+    router_count = len(devices.split(","))
+    lines = [f"{label} | BGP | k={k} | workers={workers} | scoped routers={router_count}",
+             f"Run artifacts: {work}", ""]
     try:
-        symbolic, generation_wall, log = generate(work / "symbolic", False)
+        symbolic, generation_wall, log = generate(work / "symbolic", False, **generation_args)
         route_seconds = float(re.findall(r"^CONFIG_TO_SYMBOLIC_ROUTE_SECONDS=(.+)$", log, re.M)[-1])
         lines.extend([
             f"Configuration input to symbolic_route.json: {route_seconds:.6f} s",
             f"Batfish symbolic generation + SMT command (including Bazel): {generation_wall:.6f} s",
         ])
 
-        baseline, baseline_generation_wall, baseline_log = generate(work / "traverse_input", True)
+        baseline, baseline_generation_wall, baseline_log = generate(work / "traverse_input", True, **generation_args)
         traverse = work / "traverse"
         traverse_wall = run([
             sys.executable, "tools/auto-netsubspec-Traverse/run_traverse_baseline.py",
-            "--source", str(baseline), "--network", NETWORK, "--output", str(traverse),
-            "--devices", "a,b,d,x", "--workers", workers, "--k", "2",
+            "--source", str(baseline), "--network", network, "--output", str(traverse),
+            "--devices", devices, "--workers", workers, "--k", str(k),
         ], work / "traverse.log")
+        lines.append(f"Traverse configuration to final subspec: {baseline_generation_wall + traverse_wall:.3f} s")
         run([
             sys.executable, "tools/netsubspec/tools/run.py", str(symbolic),
-            "--k", "2", "--workers", workers, "--consistency-workers", workers,
+            "--k", str(k), "--workers", workers, "--consistency-workers", workers,
             "--profile", "--check-failure-intersection", "--traverse-results", str(traverse),
         ], work / "symbolic.log")
         profile = next((symbolic / "runtime_profile").glob("*/runtime_report.json"))
-        guard_trials = guard_comparison(work, symbolic) if args.compare_guards else None
+        guard_trials = guard_comparison(work, symbolic) if compare_guards else None
         lines = lines[:3] + format_comparison(
             profile, traverse, route_seconds, generation_wall,
             baseline_generation_wall, traverse_wall,
@@ -243,6 +272,9 @@ def main():
 
     except (subprocess.CalledProcessError, OSError, ValueError, IndexError, StopIteration) as error:
         lines.extend(["", f"Comparison failed: {error}"])
+        for name in ("runtime_report.txt", "branch_subspecs.txt"):
+            for detail in sorted(work.glob(f"symbolic/*/*/**/{name}")):
+                lines.append(f"  {name}: {detail}")
         raise
     finally:
         report.write_text("\n".join(lines) + "\n")

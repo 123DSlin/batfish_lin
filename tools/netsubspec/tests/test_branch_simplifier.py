@@ -65,9 +65,7 @@ class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
                 field.derivation
                 in {
                     "symbolic-line-specialization",
-                    "symbolic-domain-equivalent",
-                    "symbolic-staged-projection",
-                    "symbolic-quantified-projection",
+                    "symbolic-reference-simplification",
                 }
                 for branch in self.report.branches
                 for field in branch.fields
@@ -96,7 +94,7 @@ class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
                     (),
                     msg=f"{branch.branch_name}: {result}",
                 )
-                self.assertEqual(result.projection["equivalence_check"], "UNSAT")
+                self.assertEqual(result.projection["equivalence_check"], "not-run")
                 self.assertEqual(result.projection["residual_symbols"], [])
                 self.assertFalse(result.projection["failure_enumeration"])
 
@@ -209,55 +207,31 @@ class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
         self.assertEqual(result.projection["source_line_group"], line.line_group)
         self.assertIn(f"(<= {result.config} 200)", result.constraint)
 
-    def test_symbolic_projection_survives_if_shared_normalizer_fails(self) -> None:
-        branch = next(
-            item for item in self.report.branches if item.branch_name == "r2-r4-r1"
-        )
+    def test_field_with_different_snapshot_release_is_solved_directly(self) -> None:
+        branch = next(b for b in self.report.branches if b.branch_name == "r4-r2-r1")
         seed = self.subspecifier._resolve_seed_path(
             {"candidate_id": branch.candidate_id, "seed_file": branch.seed_file}
         )
-        document = _SmtDocument.parse(seed.read_text(encoding="utf-8"))
-        target = next(
-            pins
-            for name, pins in _field_targets(document.config_pins)
-            if name.endswith("__length")
-        )
-        original = self.subspecifier._normalize_with_auto_netsubspec
-
-        def unavailable(*args: object, **kwargs: object) -> str:
-            raise SubspecificationError("concrete normalizer unavailable")
-
-        self.subspecifier._normalize_with_auto_netsubspec = unavailable  # type: ignore[method-assign]
-        try:
-            constraint, method, _, _ = self.subspecifier._project(
-                document,
-                target,
-                device=branch.router,
-                destination=branch.destination,
-                identifier=target[0].name,
-                level="field",
-                is_pair=False,
-            )
-        finally:
-            self.subspecifier._normalize_with_auto_netsubspec = original  # type: ignore[method-assign]
-        self.assertEqual(method, "symbolic-domain-equivalent")
-        self.assertIn(target[0].name, constraint)
-
-    def test_inequivalent_line_specialization_falls_back_to_direct_field(self) -> None:
-        branch = next(b for b in self.report.branches if b.branch_name == "r4-r2-r1")
-        seed = self.subspecifier._resolve_seed_path({"candidate_id": branch.candidate_id, "seed_file": branch.seed_file})
         document = _SmtDocument.parse(seed.read_text())
         target = next((name, pins) for name, pins in _field_targets(document.config_pins)
-                      if "R4_IN_FROM_R2" in name and "set_localpreference" in name)
+                      if name.endswith("__length"))
         line_results = []
         for line in branch.lines:
             pins = tuple(pin for pin in document.config_pins if pin.name in line.configs)
             line_results.append(_branch_simplifier._ProjectedTarget(
-                line.line_group, pins, "false" if target[0] in line.configs else line.constraint,
-                line.derivation, 0.0, line.projection,
+                line.line_group, pins, line.constraint, line.derivation, 0.0, line.projection,
             ))
         batch = _branch_simplifier._TargetBatch(tuple(line_results), len(line_results), 0)
-        with patch.object(_branch_simplifier, "_field_targets", return_value=[target]):
+        original = _SmtDocument._target_dependent_route_snapshots
+
+        def snapshots(doc, names):
+            if target[0] in names and len(names) > 1:
+                return frozenset({-1}), (), ()
+            return original(doc, names)
+
+        with patch.object(_branch_simplifier, "_field_targets", return_value=[target]), patch.object(
+            _SmtDocument, "_target_dependent_route_snapshots", snapshots
+        ):
             result = self.subspecifier._fields_from_lines(document, {
                 "router": branch.router, "destination": branch.destination,
             }, "test", batch)

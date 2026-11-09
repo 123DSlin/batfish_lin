@@ -20,6 +20,7 @@ import time
 from typing import Any, Optional
 
 from utils.util_smt import (
+    expand_let_ast,
     extract_config_constraints_from_z3_goal,
     parse_smt2_sexpr,
     serialize_smt2_sexpr,
@@ -218,6 +219,17 @@ class SmtSolver:
         expressions = self._run_goal(query, operation)
         return " AND ".join(expressions) if expressions else "true"
 
+    def solve_reference_seed(
+        self, document: SmtDocument, pins: tuple[ConfigPin, ...], expression: object
+    ) -> str:
+        """Resolve the symbolic scope and simplify the resulting configuration goal."""
+        reduced = self.project(document, pins, expression, "symbolic seed scope reduction")
+        goal = parse_smt2_sexpr(tokenize_smt2_sexpr(subspec_string_to_smt2_and(reduced) or "true"))
+        return self._reference_simplify(
+            document, pins, goal,
+            "simplify propagate-values solve-eqs ctx-solver-simplify", extract=False,
+        ) or "true"
+
     def reference_simplify(
         self, document: SmtDocument, pins: tuple[ConfigPin, ...], expression: object
     ) -> Optional[str]:
@@ -229,6 +241,15 @@ class SmtSolver:
         The caller must prove the candidate against the unchanged symbolic
         problem; this operation alone does not establish branch-wide validity.
         """
+        return self._reference_simplify(
+            document, pins, expression,
+            "simplify propagate-values solve-eqs ctx-solver-simplify", extract=True,
+        )
+
+    def _reference_simplify(
+        self, document: SmtDocument, pins: tuple[ConfigPin, ...], expression: object,
+        tactics: str, *, extract: bool,
+    ) -> Optional[str]:
         parameters: dict[str, str] = {}
         occupied = set(document.declarations)
         for pin in pins:
@@ -245,7 +266,7 @@ class SmtSolver:
         query = document.query(
             *(f"(declare-fun {parameters[pin.name]} (Bool) {pin.sort})" for pin in pins),
             f"(assert {serialize_smt2_sexpr(protected)})",
-            "(apply (then simplify propagate-values solve-eqs ctx-solver-simplify))",
+            f"(apply (then {tactics}))",
         )
         goals = self._run_goal(query, "AutoNetSubspec reference simplification")
 
@@ -262,8 +283,12 @@ class SmtSolver:
                 raise SubspecificationError("reference simplification retained a quantifier")
             return [restore(child) for child in tree]
 
-        restored = [serialize_smt2_sexpr(restore(parse_smt2_sexpr(tokenize_smt2_sexpr(goal))))
-                    for goal in goals]
+        restored = [
+            serialize_smt2_sexpr(restore(expand_let_ast(parse_smt2_sexpr(tokenize_smt2_sexpr(goal)), {})))
+            for goal in goals
+        ]
+        if not extract:
+            return " AND ".join(restored) or "true"
         # The shared reference extractor consumes goal output, including its
         # transitive variable dependencies. Do not discard competitors or
         # remaining internal-state constraints to manufacture a pure result.
@@ -276,7 +301,11 @@ class SmtSolver:
             "(apply simplify)",
         )
         expressions = self._run_goal(query, "candidate simplification")
-        return " AND ".join(expressions) if expressions else "true"
+        return " AND ".join(
+            serialize_smt2_sexpr(expand_let_ast(parse_smt2_sexpr(tokenize_smt2_sexpr(expr)), {}))
+            if "(let " in expr else expr
+            for expr in expressions
+        ) or "true"
 
     def entails(
         self, document: SmtDocument, context: object, expression: object

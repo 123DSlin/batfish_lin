@@ -50,3 +50,5 @@ __pycache__
 /smts/
 /MODULE.bazel
 /MODULE.bazel.lock
+
+/networks/netsubspec_bgp_ring_*/
