@@ -1,5 +1,0 @@
-Source input directory: batfish/smts/smt_output_0083 (relative to workspace root).
-The 54 MB symbolic_route.json is not duplicated in Git.
-For reproduction, copy it into this directory from the source output directory.
-Verify its SHA256 against pipeline_run.json before rerunning.
-Existing slices, seeds, stage reports, forward/reverse queries and stage 3/4 results are included.

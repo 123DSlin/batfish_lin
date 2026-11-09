@@ -18,6 +18,7 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("work_directory", type=Path)
+    parser.add_argument("--workers", type=int, default=1, help="parallel devices (default: 1)")
     parser.add_argument("--k", required=True, type=int, help="at-most-k link failures")
     parser.add_argument("--router", help="debug only: check one discovered device")
     parser.add_argument("--prefix", help="debug only: check one property destination")
@@ -38,6 +39,7 @@ def main() -> int:
         )
         report = checker.run(
             k=args.k,
+            max_workers=args.workers,
             router=args.router,
             prefix=args.prefix,
             vrf=args.vrf,

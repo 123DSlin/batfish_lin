@@ -1,2 +1,0 @@
-✓ Symbolic device slicing PASS | devices=4 | required-symbols=152
-Output: /Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/netsubspec/pipeline_runs/0083_k2/1_sliced_device_smt_encoding

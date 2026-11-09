@@ -20,6 +20,7 @@ import time
 from typing import Any, Optional
 
 from utils.util_smt import (
+    extract_config_constraints_from_z3_goal,
     parse_smt2_sexpr,
     serialize_smt2_sexpr,
     subspec_string_to_list,
@@ -216,6 +217,58 @@ class SmtSolver:
         )
         expressions = self._run_goal(query, operation)
         return " AND ".join(expressions) if expressions else "true"
+
+    def reference_simplify(
+        self, document: SmtDocument, pins: tuple[ConfigPin, ...], expression: object
+    ) -> Optional[str]:
+        """Adapt AutoNetSubspec's forward-goal simplification as a candidate.
+
+        solve-eqs may eliminate free target constants. Represent each target
+        as one fixed application of a fresh unary function while simplifying,
+        then restore it before using the original dependency-closure extractor.
+        The caller must prove the candidate against the unchanged symbolic
+        problem; this operation alone does not establish branch-wide validity.
+        """
+        parameters: dict[str, str] = {}
+        occupied = set(document.declarations)
+        for pin in pins:
+            base = "__netsubspec_reference_" + hashlib.sha256(pin.name.encode()).hexdigest()[:16]
+            name = base
+            while name in occupied or any(name in form for form in document.definition_forms):
+                name += "_"
+            occupied.add(name)
+            parameters[pin.name] = name
+        reverse = {name: target for target, name in parameters.items()}
+        protected = substitute_symbols(expression, {
+            target: [name, "true"] for target, name in parameters.items()
+        })
+        query = document.query(
+            *(f"(declare-fun {parameters[pin.name]} (Bool) {pin.sort})" for pin in pins),
+            f"(assert {serialize_smt2_sexpr(protected)})",
+            "(apply (then simplify propagate-values solve-eqs ctx-solver-simplify))",
+        )
+        goals = self._run_goal(query, "AutoNetSubspec reference simplification")
+
+        def restore(tree: object) -> object:
+            if isinstance(tree, str):
+                if tree in reverse:
+                    raise SubspecificationError("reference simplification retained a target helper")
+                return tree
+            if not isinstance(tree, list):
+                return tree
+            if len(tree) == 2 and isinstance(tree[0], str) and tree[0] in reverse and tree[1] == "true":
+                return reverse[tree[0]]
+            if tree and isinstance(tree[0], str) and tree[0] in {"forall", "exists"}:
+                raise SubspecificationError("reference simplification retained a quantifier")
+            return [restore(child) for child in tree]
+
+        restored = [serialize_smt2_sexpr(restore(parse_smt2_sexpr(tokenize_smt2_sexpr(goal))))
+                    for goal in goals]
+        # The shared reference extractor consumes goal output, including its
+        # transitive variable dependencies. Do not discard competitors or
+        # remaining internal-state constraints to manufacture a pure result.
+        output = "(goals\n(goal\n" + "\n".join(restored) + "\n:precision precise :depth 1)\n)"
+        return extract_config_constraints_from_z3_goal(output, set(parameters)) or None
 
     def simplify(self, document: SmtDocument, expression: object) -> str:
         query = document.query(

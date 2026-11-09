@@ -1,9 +1,0 @@
-{
-  "admissibility_pass": false,
-  "assume_guarantee_pass": false,
-  "statuses": {
-    "SEED_NOT_ADMISSIBLE_OR_INCONCLUSIVE": 1,
-    "FORWARD_AND_REVERSE_PASS": 4,
-    "INVALID_OR_INCONCLUSIVE_ENVIRONMENT": 2
-  }
-}

@@ -5,33 +5,117 @@ Minesweeper SMT encoding, structured symbolic RIB, and k-pruned symbolic routes.
 
 ## Pipeline
 
+### Runtime profiling
+
+```bash
+python3 tools/profile_runtime.py /tmp/netsubspec-0083/symbolic --k 2 \
+  --workers 4 --consistency-workers 4 --check-failure-intersection \
+  --traverse-results /tmp/netsubspec-0083/traverse
+```
+
+Alternatively add `--profile` to `tools/run.py`. Omit
+`--check-failure-intersection` to profile only the official pipeline.
+Each run is retained under `runtime_profile/<run-id>/`, with
+`runtime_report.txt`, `runtime_report.json`, `runtime_events.csv` and stage
+detail files. `runtime_profile/latest.json` points to the latest run.
+
+`pipeline_wall_seconds` sums official symbolic stages, excluding optional validation.
+Traverse is an independent pipeline. Its saved report separately records concrete
+export, input preparation/AG, constraint solving, and intersection time.
+`baseline_solve_and_intersection_wall_seconds` is Traverse solving plus intersection;
+input preparation/AG and optional output comparison are excluded.
+The optional check only reads completed outputs and runs equivalence queries.
+It never enumerates failures or solves subspecs again.
+
+The reports retain per-device consistency scopes, each seed's elapsed time,
+each field/line's recorded duration, and Traverse per-F solver durations.
+Times are elapsed wall time, not CPU time. Parallel task sums may exceed the
+stage wall time; nested scopes, seeds and queries must not be added together.
+
+Stage 1 remains serial because its shared SSA fixed-point closure needs a
+separate independence audit before parallelization. Its per-device attribution
+counts dependency-pass work and device audit/assembly/writing, while shared
+parsing, indexing, root preparation, binding audit and process startup remain
+explicitly shared/unattributed. No arbitrary division of shared cost is used.
+Stage 2 supports device-level parallelism through `--consistency-workers`;
+Stage 3 uses branch workers through `--workers`. Traverse uses F-level workers;
+the optional output comparison parallelizes target equivalence queries.
+Workers are configured upper bounds. Single runs are observations, not a
+controlled scalability study or a direct full-pipeline speedup measurement.
+
+From `tools/netsubspec`, prepare a fresh work directory with the 0083 exports.
+The runner writes all stages into that directory.
+
+```bash
+mkdir -p /tmp/netsubspec-0083/symbolic
+find ../../smts/smt_output_0083 -maxdepth 1 -type f -exec cp {} /tmp/netsubspec-0083/symbolic/ \;
+```
+
 Run the four stages in order:
 
 ```bash
-python3 1_smt_slicer.py symbolic_output_0010 --k 1
-python3 2_consistency_checker.py symbolic_output_0010 --k 1
-python3 3_branch_simplifier.py symbolic_output_0010
-python3 4_branch_intersection.py symbolic_output_0010
+python3 1_smt_slicer.py /tmp/netsubspec-0083/symbolic --k 2
+python3 2_consistency_checker.py /tmp/netsubspec-0083/symbolic --k 2
+python3 3_branch_simplifier.py /tmp/netsubspec-0083/symbolic
+python3 4_branch_intersection.py /tmp/netsubspec-0083/symbolic
 ```
 
 Or run the complete pipeline with the sequential symbolic runner:
 
 ```bash
-python3 tools/run.py symbolic_output_0010 --k 1 --workers 4
+python3 tools/run.py /tmp/netsubspec-0083/symbolic --k 2 --workers 4
 ```
+
+The two independent pipelines for the validated 0083 BGP-only fixture are:
+
+```bash
+# From the Batfish repository root: inject each F, recompute iBDP, run the
+# original Traverse scripts for line/field subspecs, then intersect across F.
+python3 tools/auto-netsubspec-Traverse/run_traverse_baseline.py \
+  --source smts/smt_output_0083 --network tolerance_sr_te_demo_bgp_x_b \
+  --output /tmp/netsubspec-0083/traverse \
+  --devices a,b,d,x --workers 4 --k 2
+
+# From tools/netsubspec: existing symbolic-route pipeline (verification OFF).
+python3 tools/run.py /tmp/netsubspec-0083/symbolic --k 2 --workers 4
+
+# ON: after Stage 4, compare saved Traverse intersections with symbolic final outputs.
+python3 tools/run.py /tmp/netsubspec-0083/symbolic --k 2 --workers 4 \
+  --check-failure-intersection --traverse-results <absolute-traverse-run-directory>
+```
+
+The Traverse runner defaults to `tools/auto-netsubspec-Traverse/0_auto-netsubspec` for route analysis,
+slicing, AG, and subspec solving. Cross-F aggregation uses the existing
+`tools/auto-netsubspec-Traverse/intersect_failure_subspecs.py`.
+
+The symbolic input remains the existing no-failure dataplane/symbolic-route export.
+Stage 2 still checks all legal F; this consistency check is independent of the
+optional subspec-output verification.
+
+The optional check writes English `failure_intersection_check/report.txt` and
+`report.json`. It compares every field/line target, grouped by configuration owner,
+and references the original per-F constraints and failed links. Comparison reuses
+the existing target bounds, keeps other fields fixed, and releases the target fields;
+it does not assume the target fields retain their original values. Input hashes,
+protocol/device scope, failure budget, and Traverse intersection hashes must match.
+Missing targets, mismatches, errors/timeouts and residual route-state variables
+cannot produce PASS. Completed symbolic Stage 4 outputs are retained on a failed
+comparison. Validation time is excluded from both pipelines.
+`failure_intersection_check_status.json` records whether this run enabled the check;
+stale reports do not imply a check ran when the switch is off.
 
 When the work directory also contains `smt_traffic_encoding.smt2`, derive the
 failure-aware traffic-engineering subspecification after the control-plane
 pipeline:
 
 ```bash
-python3 tools/run.py symbolic_output_0010 --k 1 --workers 4 --traffic
+python3 tools/run.py /tmp/netsubspec-0083/symbolic --k 2 --workers 4 --traffic
 ```
 
 The traffic stage can also be run independently:
 
 ```bash
-python3 5_traffic_subspecification.py symbolic_output_0010
+python3 5_traffic_subspecification.py /tmp/netsubspec-0083/symbolic
 ```
 
 The runner stops immediately if any stage fails. In particular, stages 3 and 4
@@ -82,11 +166,39 @@ is separate from the symbolic subspecification solver in stage 3.
 ### 3. Branch simplifier
 
 Computes line-level constraints first, following the scheduling in
-`0_auto-netsubspec/4_subspec_simplifier.py`, then specializes each line by fixing
+`tools/auto-netsubspec-Traverse/0_auto-netsubspec/4_subspec_simplifier.py`, then specializes each line by fixing
 its other configuration fields to their original values. IP and mask stay a
 paired field target. A specialization is reused only after proving it exactly
 equivalent to the existing field-specific symbolic projection; otherwise stage
 3 falls back to that direct field projection.
+
+Stage 3 uses the current seed/AG as the input to the reference-style main
+solver path. It reuses `simplify -> propagate-values -> solve-eqs ->
+ctx-solver-simplify` and the existing configuration/dependency extractor.
+Target-dependent route snapshot release is unchanged. Temporary unary parameter
+applications protect target fields from `solve-eqs` and are restored before proof.
+
+For guarded attribute assignments that ordinary propagation cannot eliminate,
+`utils/util_reference_seed.py` exposes the existing policy and route-candidate
+conditions as conditional value expressions. It retains the entire source
+constraint body and every candidate guard. Configurations are not substituted;
+released attribute observations are excluded. Inactive-value choices are only
+candidate witnesses: acceptance always requires exact equivalence against the
+unchanged symbolic problem. Cycles and oversized expansions are skipped safely.
+
+Residual integer route state rejects the candidate. A small residual problem
+with at most 16 internal Boolean state symbols may be reduced with its symbolic
+failure/destination environment; this does not enumerate concrete F or rerun
+full device-state QE. Errors, remaining state or unproved equivalence retain the
+original staged projection as a correctness fallback. Line audits expose the
+adapter, substituted-value count, residual sizes, acceptance and attempt time.
+Accepted results use derivation `symbolic-reference-simplification`.
+
+The 0083 seed-first run uses 22 existing domain proofs and 17 reference-derived
+line results, with no full-device staged-projection fallback. Its 166 branch/final
+results are equivalent to the previous implementation. Independent Traverse
+verification still reports the same two constraint differences and four residual
+state outputs; equivalence to Traverse is not claimed.
 
 Failure variables remain symbolic; no concrete failure assignments are
 enumerated and no intersection across different branches occurs here. For a
@@ -120,18 +232,16 @@ seed hashes, route-attribute bindings, and atom-level constraint provenance.
 Field audits include `source_line_group` and `field_source`, distinguishing
 proved line specialization from direct field fallback.
 
-An independent bounded regression oracle explicitly substitutes each legal F,
-solves the configuration target without a failure quantifier, intersects those
-constraints and checks disagreement with the symbolic result is `UNSAT`:
+The optional verifier now consumes the independent Traverse pipeline output:
 
 ```bash
-python3 slice_validation/validate_symbolic_intersection.py <work_directory> \
-  --output <report.json> --workers 4
+python3 ../auto-netsubspec-Traverse/compare_traverse_results.py <symbolic-work-directory> \
+  --traverse-results <traverse-run-directory> \
+  --output <symbolic-work-directory>/failure_intersection_check/report.json
 ```
 
-This exhaustive oracle is test tooling and is never invoked by the production
-stage-3 pipeline. Its report preserves every concrete-F constraint so the
-intersection can be inspected.
+This performs only output equivalence checks. It does not generate additional
+concrete-F subspecs. The old projection oracle is no longer in the pipeline.
 
 ### 4. Branch intersection
 
@@ -213,30 +323,6 @@ distances, ECMP, recursive dependencies and MAIN-RIB boundaries before enabling.
 existing slices. A test-only protocol confirms that the shared engine accepts
 non-BGP equation roots and inputs; it is not an IS-IS approximation.
 
-`slice_validation/1_smt_slicer.py` now imports this production implementation;
-there is no second copy of BGP slicing logic to maintain.
-
-Differential validation against an immutable pre-refactor source directory:
-
-```bash
-python3 slice_validation/differential_slicing.py \
-  --baseline-root /absolute/path/to/pre-refactor/netsubspec \
-  --output slice_validation/results/protocol_adapter_refactor
-cd slice_validation
-python3 -m unittest discover -s tests
-```
-
-The comparison covers 0009/0010/0083 at k=1/2, default/explicit BGP selection,
-missing-input rejection, seeds, local forward/reverse contracts and full
-0083 k=2 stages 1–4. Device SMT and seeds are compared byte-for-byte. JSON
-comparison removes only timestamps, solver timing, work directory paths and
-the hash of the timestamped source report; formulas and seed hashes remain.
-
-Differential PASS means no regression, not that every old fixture is healthy.
-Historical 0009/0010 failures are marked PRE_EXISTING_FAILURE and both reports
-are retained. 0083 must actually pass semantic checks, not fail identically.
-
-
 ## Symbolic RIB query indexes and bounded caches
 
 `consistency/branch_loader.py` now constructs immutable posting lists for router,
@@ -254,23 +340,15 @@ only derived results, never source routes. `query_cache_info()` exposes cache
 statistics; `clear_query_caches()` releases cached results. A new RIB instance
 must be loaded when source inputs change.
 
-Query-only measurement:
+## Tests
+
+From `tools/netsubspec`:
 
 ```bash
-python3 slice_validation/benchmark_route_queries.py \
-  --baseline-root /absolute/path/to/pre-optimization/netsubspec \
-  --output slice_validation/results/route_query_indexes/query_benchmark.json
+python3 -m unittest discover -s tests
 ```
 
-On the local synthetic fixture (32 routers, 128 prefixes/router, three branches
-per prefix, 12,352 entries), the first 1,024 destination lookups took about
-2.23 seconds before and 0.048 seconds after; a repeated cached pass took about
-0.001 seconds. Returned candidate hashes match exactly. Index construction
-cost rose from about 0.011 to 0.028 seconds. These are query microbenchmarks,
-not network convergence, end-to-end pipeline, solver or full multi-prefix
-validation measurements. The latter still needs its separate scope work.
-
-Differential cases and paired reports are in
-`slice_validation/results/route_query_indexes/`. Existing 0009/0010 failures
-remain separately marked, and 0083 stages 1–4 plus seed contracts must pass
-without changing route, seed, field or line formulas.
+Set `NETSUBSPEC_RUN_0083` to the directory containing completed `symbolic` and
+`traverse` runs to exercise their integration tests. Set
+`NETSUBSPEC_CONCRETE_0083` to the exported `failures_AT_MOST_K_k2` directory to
+exercise exact failure coverage and SMT pinning.

@@ -19,7 +19,7 @@ from consistency import (
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-WORK_DIRECTORY = REPOSITORY / "symbolic_output_0010"
+WORK_DIRECTORY = REPOSITORY / "tests" / "fixtures" / "symbolic_output_0010"
 
 
 class GuardEncoderTest(unittest.TestCase):

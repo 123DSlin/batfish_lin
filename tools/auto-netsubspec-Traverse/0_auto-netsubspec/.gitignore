@@ -1,0 +1,5 @@
+smt_outputs_fattrees
+smt_outputs_lines
+smt_outputs_benchmarks
+__pycache__
+/tmp

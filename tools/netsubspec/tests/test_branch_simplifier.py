@@ -24,7 +24,7 @@ SymbolicSubspecifier = _branch_simplifier.SymbolicSubspecifier
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-WORK_DIRECTORY = REPOSITORY / "symbolic_output_0010"
+WORK_DIRECTORY = REPOSITORY / "tests" / "fixtures" / "symbolic_output_0010"
 
 
 class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
@@ -191,7 +191,7 @@ class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
             f"(>= {upper_result.config} 0) AND (< {upper_result.config} 200)",
         )
 
-    def test_nontrivial_result_comes_from_staged_symbolic_projection(self) -> None:
+    def test_nontrivial_result_specializes_the_reference_simplified_line(self) -> None:
         branch = next(
             item for item in self.report.branches if item.branch_name == "r4-r2-r1"
         )
@@ -205,7 +205,7 @@ class SymbolicSubspecifierIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(result.derivation, "symbolic-line-specialization")
         line = next(item for item in branch.lines if result.config in item.configs)
-        self.assertEqual(line.derivation, "symbolic-staged-projection")
+        self.assertEqual(line.derivation, "symbolic-reference-simplification")
         self.assertEqual(result.projection["source_line_group"], line.line_group)
         self.assertIn(f"(<= {result.config} 200)", result.constraint)
 

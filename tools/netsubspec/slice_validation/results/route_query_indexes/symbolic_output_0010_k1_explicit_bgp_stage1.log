@@ -1,2 +1,0 @@
-✓ Symbolic device slicing PASS | devices=4 | required-symbols=135
-Output: /private/var/folders/mw/xc4_8x1s70j3y9mfbzkbvb140000gn/T/netsubspec_adapter_diff_kxnqeumq/symbolic_output_0010_k1/explicit_bgp/1_sliced_device_smt_encoding

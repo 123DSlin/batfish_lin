@@ -332,6 +332,7 @@ class SmtSlicer:
         self.logger = logger if logger is not None else logging.getLogger(__name__)
         self.routers = routers
         self.output_dir = output_dir
+        self.device_timing = defaultdict(float)
         self.model_igp = model_igp
         self.protocol_adapter = protocol_adapter or get_protocol_adapter("bgp")
         self.protocol_adapter.ensure_supported()
@@ -624,6 +625,7 @@ class SmtSlicer:
             self.logger.info(f"  -> Dependency resolution pass {pass_number}...")
             changed = False
             for router in self.routers:
+                router_started = time.perf_counter()
                 referenced_vars = set()
                 for line in self.router_data[router]:
                     referenced_vars.update(_get_vars_cached(line))
@@ -639,6 +641,7 @@ class SmtSlicer:
                 self._resolve_ssa_orphans_for_router(
                     router, ssa_to_routers, _var_cache
                 )
+                self.device_timing[router] += time.perf_counter() - router_started
                 if len(self.router_data[router]) != initial_size:
                     changed = True
             if not changed:
@@ -649,6 +652,7 @@ class SmtSlicer:
         """Assembles the final content for each router and writes it to a file."""
         self.logger.info("Step 4: Assembling and writing final files...")
         for router in self.routers:
+            router_started = time.perf_counter()
             scope = self.semantic_scopes[router]
             # New: Combine this router's specific data with the common assertions
             final_assert_set = self.router_data[router] | self.common_asserts
@@ -745,6 +749,7 @@ class SmtSlicer:
                     f.write(assert_line + "\n")
 
             self.logger.info(f"  -> Wrote file for '{router}' with {len(final_declarations)} declarations and {len(final_asserts)} asserts.")
+            self.device_timing[router] += time.perf_counter() - router_started
 
     def write_audit_union(self, output_path: Path | str) -> None:
         """Write the deduplicated union of all validated device slices."""

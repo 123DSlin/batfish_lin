@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import re
 import shutil
@@ -80,11 +81,14 @@ class ConsistencyChecker:
         self,
         *,
         k: int,
+        max_workers: int = 1,
         router: Optional[str] = None,
         prefix: Optional[str] = None,
         vrf: str = "default",
         output_directory: Optional[Path | str] = None,
     ) -> ConsistencyReport:
+        if max_workers < 1:
+            raise ValueError("max_workers must be positive")
         if k < 0:
             raise ValueError("k must be non-negative")
         if router is not None and not router:
@@ -139,17 +143,23 @@ class ConsistencyChecker:
 
         scope_results: list[ScopeCheckResult] = []
         branch_results: list[BranchCheckResult] = []
-        seed_name_counts: dict[tuple[str, str], int] = {}
-        for selected_router in routers:
+        def check_device(selected_router):
+            # Each device owns its output directory and filename counters.
+            seed_name_counts: dict[tuple[str, str], int] = {}
+            device_results = []
             for selected_destination in prefixes:
-                scope_result, results = self._check_scope(
-                    router=selected_router,
-                    vrf=vrf,
-                    destination=selected_destination,
-                    k=k,
-                    seeds_directory=seeds_directory,
-                    seed_name_counts=seed_name_counts,
-                )
+                device_results.append(self._check_scope(
+                    router=selected_router, vrf=vrf, destination=selected_destination,
+                    k=k, seeds_directory=seeds_directory, seed_name_counts=seed_name_counts,
+                ))
+            return device_results
+        if max_workers == 1:
+            devices = [check_device(r) for r in routers]
+        else:
+            with ThreadPoolExecutor(max_workers=min(max_workers, max(1, len(routers)))) as executor:
+                devices = list(executor.map(check_device, routers))
+        for device in devices:
+            for scope_result, results in device:
                 scope_results.append(scope_result)
                 branch_results.extend(results)
 

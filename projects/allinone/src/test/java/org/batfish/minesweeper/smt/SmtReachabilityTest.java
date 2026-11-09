@@ -33,6 +33,7 @@ import org.batfish.datamodel.IpWildcard;
 import org.batfish.datamodel.Prefix;
 import org.batfish.datamodel.answers.AnswerElement;
 import org.batfish.datamodel.isis.IsisTopology;
+import org.batfish.dataplane.ibdp.FailureDataplaneEnumerator;
 import org.batfish.main.Batfish;
 import org.batfish.main.BatfishTestUtils;
 import org.batfish.main.TestrigText;
@@ -94,7 +95,8 @@ public class SmtReachabilityTest {
         (SYMBOLIC ? "SYMBOLIC_OUTPUT_DIRECTORY=" : "SMT_OUTPUT_DIRECTORY=") + _outputDir);
     String outputBgpRouteFileName = _outputDir + "/0_ebgp_routes.txt";
     String outputDataPlaneFileName = _outputDir + "/0_data_plane.txt";
-    if (!SYMBOLIC) {
+    if (!SYMBOLIC
+        && !Boolean.parseBoolean(System.getenv().getOrDefault("SMT_ENUMERATE_FAILURES", "false"))) {
       File outputBgpRouteFile = new File(outputBgpRouteFileName);
       File outputDataPlaneFile = new File(outputDataPlaneFileName);
       try {
@@ -156,6 +158,9 @@ public class SmtReachabilityTest {
     TestrigText _testrig = loadConfigurations(configPath);
     _batfish = BatfishTestUtils.getBatfishFromTestrigText(_testrig, _temp);
 
+    if (Boolean.parseBoolean(System.getenv().getOrDefault("SMT_ENUMERATE_FAILURES", "false"))) {
+      return;
+    }
     long start = System.currentTimeMillis();
     // compute data plane for printing RIBs before
     if (SYMBOLIC) {
@@ -178,6 +183,58 @@ public class SmtReachabilityTest {
     long end = System.currentTimeMillis();
     System.out.println(
         "[Time taken to compute data plane and print RIBs: " + (end - start) + " ms]");
+  }
+
+  /** Optional concrete traversal export. Separate from the symbolic production pipeline. */
+  @Test
+  public void testFailureDataplaneEnumeration() throws IOException {
+    if (!Boolean.parseBoolean(System.getenv().getOrDefault("SMT_ENUMERATE_FAILURES", "false"))) {
+      return;
+    }
+    SortedMap<String, org.batfish.datamodel.Configuration> configurations =
+        _batfish.loadConfigurations(_batfish.getSnapshot());
+    Set<SmtProtocolSelection.Family> protocols = SmtProtocolSelection.fromRuntime();
+    configurations
+        .values()
+        .forEach(
+            c ->
+                c.getVrfs()
+                    .values()
+                    .forEach(
+                        v -> {
+                          if (!protocols.contains(SmtProtocolSelection.Family.ISIS)) {
+                            v.setIsisProcess(null);
+                          }
+                          if (!protocols.contains(SmtProtocolSelection.Family.OSPF)) {
+                            v.setOspfProcesses(new java.util.TreeMap<>());
+                          }
+                          if (!protocols.contains(SmtProtocolSelection.Family.BGP)) {
+                            v.setBgpProcess(null);
+                          }
+                        }));
+    int k = Integer.parseInt(System.getenv().getOrDefault("FAIL_K", "2"));
+    FailureDataplaneEnumerator.FailureMode mode =
+        FailureDataplaneEnumerator.FailureMode.valueOf(
+            System.getenv().getOrDefault("FAIL_MODE", "AT_MOST_K"));
+    long started = System.nanoTime();
+    int count =
+        FailureDataplaneEnumerator.enumerateAndDumpMainRibs(
+                configurations, k, mode, Set.of(), Paths.get(_outputDir, "failure_enumeration"))
+            .size();
+    Files.writeString(
+        Paths.get(_outputDir, "failure_export_summary.txt"),
+        "Protocols: "
+            + protocols
+            + "\nMode: "
+            + mode
+            + "\nK: "
+            + k
+            + "\nScenarios: "
+            + count
+            + "\nExport wall seconds: "
+            + (System.nanoTime() - started) / 1e9
+            + "\n");
+    System.out.println("CONCRETE_FAILURE_OUTPUT_DIRECTORY=" + _outputDir);
   }
 
   private static boolean selectedOutputProtocol(String protocolName) {

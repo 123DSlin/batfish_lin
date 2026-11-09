@@ -46,6 +46,7 @@ from utils.util_file import (
     save_synthesis_metadata,
 )
 from utils.util_norm import normalize_subspec
+from utils.util_reference_seed import conditional_value_view, ReferenceSeedAdaptationError
 from utils.util_symbolic import (
     ConfigPin,
     SmtDocument as _SharedSmtDocument,
@@ -1108,6 +1109,7 @@ class SymbolicSubspecifier:
         started = time.monotonic()
         metadata_source = document.metadata_source(pins)
         problem = document.quantified_projection(pins, destination)
+        reference_attempt: dict[str, Any] = {"attempted": False}
 
         def finish(candidate: str, method: str) -> tuple[str, str, float, dict[str, Any]]:
             constraint = self._normalize_projected_constraint(
@@ -1124,7 +1126,8 @@ class SymbolicSubspecifier:
                 constraint,
                 method,
                 time.monotonic() - started,
-                self._projection_audit(problem, method),
+                dict(self._projection_audit(problem, method),
+                     reference_simplification=dict(reference_attempt)),
             )
 
         domain_candidate = self.solver.simplify(
@@ -1135,6 +1138,24 @@ class SymbolicSubspecifier:
         )
         if self._is_exact_projection(document, problem, domain_candidate):
             return finish(domain_candidate, "symbolic-domain-equivalent")
+
+        reference_started = time.monotonic()
+        reference_attempt["attempted"] = True
+        try:
+            reference_candidate = self._reference_simplification_candidate(
+                document, pins, problem, audit=reference_attempt
+            )
+            if reference_candidate is None:
+                reference_attempt.update(accepted=False, reason="empty-or-internal-state-result")
+            elif self._is_exact_projection(document, problem, reference_candidate):
+                reference_attempt.update(accepted=True, reason="proved-equivalent")
+                reference_attempt["seconds"] = time.monotonic() - reference_started
+                return finish(reference_candidate, "symbolic-reference-simplification")
+            else:
+                reference_attempt.update(accepted=False, reason="equivalence-not-proved")
+        except (OSError, SubspecificationError, subprocess.SubprocessError) as error:
+            reference_attempt.update(accepted=False, reason="reference-error", error=str(error))
+        reference_attempt["seconds"] = time.monotonic() - reference_started
 
         try:
             staged = self._staged_symbolic_projection(
@@ -1172,6 +1193,76 @@ class SymbolicSubspecifier:
             projected, pins, document.declarations, document.config_pins
         )
         return finish(projected, "symbolic-quantified-projection")
+
+    def _reference_simplification_candidate(
+        self, document: _SmtDocument, pins: tuple[ConfigPin, ...],
+        problem: _ProjectionProblem,
+        *, audit: Optional[dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """Use this seed's forward constraints for a reference-style candidate.
+
+        The ordinary constraint view is used only to suggest a candidate.
+        Acceptance still checks the full quantified symbolic problem, with
+        exactly the existing target-dependent route snapshot release.
+        """
+        scenario = problem.scenario_expression
+        if isinstance(scenario, list) and scenario and scenario[0] == "forall":
+            scenario = scenario[2]
+        if not isinstance(scenario, list) or len(scenario) != 3 or scenario[0] != "=>":
+            raise SubspecificationError("unsupported symbolic scenario shape")
+        antecedent, body = scenario[1:]
+        if isinstance(body, list) and body and body[0] == "exists":
+            body = body[2]
+        ordinary = _and_expression([antecedent, problem.destination_domain or "true", body])
+        candidate = self.solver.reference_simplify(document, pins, ordinary)
+        if candidate is not None and not _residual_declared_symbols(
+            candidate, document.declarations, problem.target_names
+        ):
+            if audit is not None: audit["adapter"] = "ordinary-reference-goal"
+            return candidate
+
+        released = document._target_dependent_route_snapshots(problem.target_names)[0]
+        snapshots = tuple(document.assertions[index] for index, _, _ in document._route_attribute_snapshots
+                          if index not in released)
+        try:
+            adapted, details = conditional_value_view(document, ordinary, snapshots)
+        except ReferenceSeedAdaptationError as error:
+            if audit is not None: audit["conditional_adapter_error"] = str(error)
+            return None
+        if audit is not None:
+            audit.update(adapter="conditional-seed-values", conditional_values=details)
+        candidate = self.solver.reference_simplify(document, pins, adapted)
+        if candidate is None:
+            return None
+        residual = _residual_declared_symbols(candidate, document.declarations, problem.target_names)
+        if not residual:
+            return candidate
+        environment = {name for name in document.declarations if name.strip("|").startswith(
+            ("LINK-UP-", "SR-LINK-", "0_FAILED-EDGE_", "0_FAILED-NODE_")
+        ) or name == problem.destination_symbol}
+        boolean_state = set(residual) - environment
+        if len(boolean_state) > 16 or any(document.declarations[name] != "Bool" for name in boolean_state):
+            return None
+        context = [problem.destination_domain or "true"]
+        for assertion in document.assertions:
+            names = _collect_declared_symbols(assertion, document.declarations)
+            if names and names <= environment:
+                context.append(assertion)
+        result = parse_smt2_sexpr(tokenize_smt2_sexpr(subspec_string_to_smt2_and(candidate)))
+        if boolean_state:
+            result = ["exists", document.quantifier_bindings(sorted(boolean_state)), result]
+        premise = _and_expression(context)
+        used_environment = _collect_declared_symbols(_and_expression([premise, result]), document.declarations) & environment
+        remaining = ["=>", premise, result]
+        if used_environment:
+            remaining = ["forall", document.quantifier_bindings(sorted(used_environment)), remaining]
+        if audit is not None:
+            audit["residual_boolean_state_count"] = len(boolean_state)
+            audit["residual_environment_count"] = len(used_environment)
+        candidate = self.solver.project(document, pins, remaining, "reference residual Boolean/environment reduction")
+        if _residual_declared_symbols(candidate, document.declarations, problem.target_names):
+            return None
+        return candidate
 
     def _is_exact_projection(
         self,
