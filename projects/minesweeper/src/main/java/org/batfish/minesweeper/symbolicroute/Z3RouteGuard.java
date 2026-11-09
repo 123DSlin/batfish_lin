@@ -14,6 +14,7 @@ import java.util.BitSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.LongAdder;
 import javax.annotation.Nonnull;
 
 /** A {@link RouteGuard} backed by a Z3 Boolean expression. */
@@ -21,6 +22,16 @@ public final class Z3RouteGuard implements RouteGuard {
 
   /** Keep exact display minimization bounded; larger guards retain the solver simplification. */
   private static final int DISPLAY_MINIMIZATION_MAX_VARIABLES = 10;
+
+  private static final boolean PROFILE = Boolean.getBoolean("batfish.guard.profile");
+  private static final boolean FAST_EQUIVALENCE =
+      !Boolean.getBoolean("batfish.guard.forceSolver");
+  private static final LongAdder STRUCTURAL_MATCHES = new LongAdder();
+  private static final LongAdder EQUIVALENCE_QUERIES = new LongAdder();
+
+  public static String equivalenceProfile() {
+    return STRUCTURAL_MATCHES.sum() + "," + EQUIVALENCE_QUERIES.sum();
+  }
 
   @Nonnull private final Context _context;
   @Nonnull private final BoolExpr _expression;
@@ -300,6 +311,17 @@ public final class Z3RouteGuard implements RouteGuard {
   @Override
   public boolean isEquivalentTo(RouteGuard other) {
     Z3RouteGuard z3Other = checked(other);
+    if ((FAST_EQUIVALENCE || PROFILE) && _expression.equals(z3Other._expression)) {
+      if (PROFILE) {
+        STRUCTURAL_MATCHES.increment();
+      }
+      if (FAST_EQUIVALENCE) {
+        return true;
+      }
+    }
+    if (PROFILE) {
+      EQUIVALENCE_QUERIES.increment();
+    }
     Solver solver = _context.mkSolver();
     solver.add(_context.mkXor(_expression, z3Other._expression));
     return solver.check() == Status.UNSATISFIABLE;

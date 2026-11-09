@@ -63,6 +63,28 @@ def prepare(source, concrete, output, devices):
     return failed
 
 
+def wall_breakdown(results, stages, started, ended):
+    """Partition wall time by the set of worker stages active at each instant."""
+    events = []
+    for result in results:
+        for stage in stages:
+            interval = (result if stage == 'prepare' else result['stages'].get(stage))
+            if interval is not None:
+                events.append((interval['started'], stage, 1))
+                events.append((interval['ended'], stage, -1))
+    active = dict.fromkeys(stages, 0)
+    buckets = {**dict.fromkeys(stages, 0.0), 'overlap': 0.0, 'overhead': 0.0}
+    previous = started
+    for timestamp, stage, delta in sorted(events + [(ended, '', 0)]):
+        running = [name for name, count in active.items() if count]
+        bucket = running[0] if len(running) == 1 else 'overlap' if running else 'overhead'
+        buckets[bucket] += timestamp - previous
+        if stage:
+            active[stage] += delta
+        previous = timestamp
+    return buckets
+
+
 def run_case(case, args, solve_only=False, previous=None):
     work = args.output / 'cases' / case.name
     if solve_only:
@@ -72,7 +94,8 @@ def run_case(case, args, solve_only=False, previous=None):
         started = time.perf_counter()
         failed = prepare(args.source, case, work, args.devices)
         result = {'scenario': case.name, 'failed_links': failed, 'status': 'ERROR', 'stages': {}}
-        result['preparation_seconds'] = time.perf_counter() - started
+        ended = time.perf_counter()
+        result.update(started=started, ended=ended, preparation_seconds=ended - started)
     commands = [('route_analysis', '1_route_analyzer.py', []),
                 ('slicing', '2_smt_slicer.py', []),
                 ('assume_guarantee', '3_assume_guarantee_tester.py', [])]
@@ -86,7 +109,10 @@ def run_case(case, args, solve_only=False, previous=None):
         with (work / f'{name}.log').open('w') as log:
             proc = subprocess.run([sys.executable, str(args.scripts / script), *flags, str(work)],
                                   stdout=log, stderr=subprocess.STDOUT)
-        result['stages'][name] = {'seconds': time.perf_counter() - start, 'exit_code': proc.returncode}
+        ended = time.perf_counter()
+        result['stages'][name] = {
+            'seconds': ended - start, 'exit_code': proc.returncode, 'started': start, 'ended': ended
+        }
         if proc.returncode:
             result['error'] = f'{name} returned {proc.returncode}'
             return result
@@ -195,13 +221,20 @@ def main():
     start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         results = list(executor.map(lambda case: run_case(case, args), selected))
-    preparation_ag_wall = time.perf_counter() - start
+    ended = time.perf_counter()
+    preparation_ag_wall = ended - start
+    preparation_breakdown = wall_breakdown(
+        results, ('prepare', 'route_analysis', 'slicing', 'assume_guarantee'), start, ended
+    )
     solve_wall = None
+    solve_breakdown = None
     if all(r['status'] == 'AG_PASS' for r in results):
         start = time.perf_counter()
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
             results = list(executor.map(lambda item: run_case(item[0], args, True, item[1]), zip(selected, results)))
-        solve_wall = time.perf_counter() - start
+        ended = time.perf_counter()
+        solve_wall = ended - start
+        solve_breakdown = wall_breakdown(results, ('line_solving', 'field_solving'), start, ended)
     complete = len(selected) == len(cases) and all(r['status'] == 'PASS' for r in results)
     intersection_seconds = None
     if complete:
@@ -224,6 +257,8 @@ def main():
               'workers': args.workers, 'parallel_unit': 'failure scenario', 'results': results,
               'preparation_and_AG_wall_seconds': preparation_ag_wall,
               'constraint_solving_wall_seconds': solve_wall,
+              'preparation_and_AG_wall_breakdown': preparation_breakdown,
+              'constraint_solving_wall_breakdown': solve_breakdown,
               'baseline_solve_and_intersection_wall_seconds': solve_wall + intersection_seconds if complete else None,
               'constraint_solver_task_seconds': sum(s['seconds'] for r in results for n,s in r['stages'].items() if n in ['line_solving','field_solving']),
               'intersection_seconds': intersection_seconds,

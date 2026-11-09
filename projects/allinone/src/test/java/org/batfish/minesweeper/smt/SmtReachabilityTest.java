@@ -41,7 +41,9 @@ import org.batfish.minesweeper.answers.SmtReachabilityAnswerElement;
 import org.batfish.minesweeper.question.SmtReachabilityQuestionPlugin.ReachabilityQuestion;
 import org.batfish.minesweeper.symbolicroute.BatfishParsedSnapshotPipelineInputBuilder;
 import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipeline;
+import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipelineInput;
 import org.batfish.minesweeper.symbolicroute.BatfishSymbolicRoutePipelineResult;
+import org.batfish.minesweeper.symbolicroute.Z3RouteGuard;
 import org.batfish.minesweeper.symbolicroute.Z3RouteGuardFactory;
 import org.batfish.minesweeper.symbolictraffic.execution.SymbolicTrafficPipeline;
 import org.batfish.minesweeper.symbolictraffic.execution.TrafficSmtEncoder;
@@ -70,6 +72,7 @@ public class SmtReachabilityTest {
   private PrintWriter _bgpRouteWriter;
   private PrintWriter _dataPlaneWriter;
   private String _outputDir;
+  private long _configurationInputStarted;
 
   @Before
   public void setup() throws IOException {
@@ -155,12 +158,20 @@ public class SmtReachabilityTest {
 
     // -------------------------------------------------------------
 
+    if (Boolean.parseBoolean(System.getenv("SMT_PROFILE_GENERATION"))) {
+      System.setProperty("batfish.guard.profile", "true");
+      System.setProperty(
+          "batfish.guard.forceSolver",
+          Boolean.toString(Boolean.parseBoolean(System.getenv("SMT_GUARD_FORCE_SOLVER"))));
+    }
+    _configurationInputStarted = System.nanoTime();
     TestrigText _testrig = loadConfigurations(configPath);
     _batfish = BatfishTestUtils.getBatfishFromTestrigText(_testrig, _temp);
 
     if (Boolean.parseBoolean(System.getenv().getOrDefault("SMT_ENUMERATE_FAILURES", "false"))) {
       return;
     }
+    long phase = recordGenerationPhase("configuration_load", _configurationInputStarted);
     long start = System.currentTimeMillis();
     // compute data plane for printing RIBs before
     if (SYMBOLIC) {
@@ -169,16 +180,21 @@ public class SmtReachabilityTest {
       _batfish.computeDataPlane(_batfish.getSnapshot(), _bgpRouteWriter);
     }
     DataPlane dataPlane = _batfish.loadDataPlane(_batfish.getSnapshot());
+    phase = recordGenerationPhase("no_failure_dataplane", phase);
     // print MAIN RIB (forwarding table) of the data plane: one best route per prefix per node.
     RoutesQuestion routesQuestion = new RoutesQuestion();
     RoutesAnswerer routesAnswerer = new RoutesAnswerer(routesQuestion, _batfish);
     AnswerElement routesAnswer = routesAnswerer.answer(_batfish.getSnapshot());
     if (SYMBOLIC) {
+      recordGenerationPhase("concrete_rib_export", phase);
       writeToleranceSymbolicRoutes(dataPlane);
     } else {
       RibPrinter.printRouteTable(
           routesAnswer, _dataPlaneWriter, SmtReachabilityTest::selectedOutputProtocol);
-      writeSnapshotSymbolicRoutes(dataPlane, configPath);
+      recordGenerationPhase("concrete_rib_export", phase);
+      if (!Boolean.parseBoolean(System.getenv("SMT_SKIP_SYMBOLIC_ROUTES"))) {
+        writeSnapshotSymbolicRoutes(dataPlane, configPath);
+      }
     }
     long end = System.currentTimeMillis();
     System.out.println(
@@ -367,20 +383,33 @@ public class SmtReachabilityTest {
     return result;
   }
 
+  private static long recordGenerationPhase(String name, long started) {
+    long ended = System.nanoTime();
+    if (Boolean.parseBoolean(System.getenv("SMT_PROFILE_GENERATION"))) {
+      System.out.println("GENERATION_PHASE=" + name + "," + (ended - started) / 1e9);
+    }
+    return ended;
+  }
+
   private BatfishSymbolicRoutePipelineResult runSymbolicRoutePipeline(
       DataPlane dataPlane, Context context) {
+    long phase = System.nanoTime();
     SortedMap<String, org.batfish.datamodel.Configuration> configurations =
         _batfish.loadConfigurations(_batfish.getSnapshot());
     IsisTopology isisTopology =
         IsisTopology.initIsisTopology(configurations, synthesizeL3Topology(configurations));
-    return BatfishSymbolicRoutePipeline.run(
+    BatfishSymbolicRoutePipelineInput input =
         BatfishParsedSnapshotPipelineInputBuilder.buildSelected(
             configurations,
             dataPlane.getRibs(),
             _batfish.getTopologyProvider().getBgpTopology(_batfish.getSnapshot()).getGraph(),
             isisTopology,
             new Z3RouteGuardFactory(context),
-            SmtProtocolSelection.fromRuntime()));
+            SmtProtocolSelection.fromRuntime());
+    phase = recordGenerationPhase("symbolic_input_build", phase);
+    BatfishSymbolicRoutePipelineResult result = BatfishSymbolicRoutePipeline.run(input);
+    recordGenerationPhase("symbolic_convergence", phase);
+    return result;
   }
 
   private void writeSymbolicRouteFiles(BatfishSymbolicRoutePipelineResult result)
@@ -390,6 +419,7 @@ public class SmtReachabilityTest {
 
   private void writeSymbolicRouteFiles(
       BatfishSymbolicRoutePipelineResult result, Set<Prefix> destinations) throws IOException {
+    long phase = System.nanoTime();
     Files.write(
         Paths.get(_outputDir, "0_symbolic_routes_init.txt"),
         result.toRawReadableText().getBytes(StandardCharsets.UTF_8));
@@ -399,9 +429,17 @@ public class SmtReachabilityTest {
                 ? result.toReadableText()
                 : result.toReadableTextForDestinations(destinations))
             .getBytes(StandardCharsets.UTF_8));
+    phase = recordGenerationPhase("symbolic_text_export", phase);
     byte[] controlPlaneJson = result.toControlPlaneJson().getBytes(StandardCharsets.UTF_8);
     Files.write(Paths.get(_outputDir, "0_symbolic_control_plane.json"), controlPlaneJson);
     Files.write(Paths.get(_outputDir, "symbolic_route.json"), controlPlaneJson);
+    recordGenerationPhase("symbolic_json_export", phase);
+    if (Boolean.parseBoolean(System.getenv("SMT_PROFILE_GENERATION"))) {
+      System.out.println("GUARD_EQUIVALENCE=" + Z3RouteGuard.equivalenceProfile());
+    }
+    System.out.println(
+        "CONFIG_TO_SYMBOLIC_ROUTE_SECONDS="
+            + (System.nanoTime() - _configurationInputStarted) / 1e9);
     Files.write(
         Paths.get(_outputDir, "0_symbolic_sr_policies.json"),
         result.toSrPolicyExportJson().getBytes(StandardCharsets.UTF_8));
@@ -821,7 +859,9 @@ public class SmtReachabilityTest {
     // IpWildcard ipWildcard = IpWildcard.parse("63.164.11.0/24");
     // question.setDstIps(Set.of(ipWildcard));
 
+    long encodingStarted = System.nanoTime();
     final AnswerElement answer = Answerer.create(question, _batfish).answer(_batfish.getSnapshot());
+    recordGenerationPhase("minesweeper_encode_and_verify", encodingStarted);
     assertThat(answer, instanceOf(SmtReachabilityAnswerElement.class));
 
     final SmtReachabilityAnswerElement smtAnswer = (SmtReachabilityAnswerElement) answer;
