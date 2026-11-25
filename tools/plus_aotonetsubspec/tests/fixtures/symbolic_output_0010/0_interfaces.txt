@@ -1,0 +1,11 @@
+r1,Loopback0
+r4,Ethernet41
+r1,Ethernet12
+r4,Ethernet43
+r3,Ethernet34
+r2,Ethernet21
+r4,Ethernet42
+r1,Ethernet13
+r2,Ethernet24
+r1,Ethernet14
+r3,Ethernet31

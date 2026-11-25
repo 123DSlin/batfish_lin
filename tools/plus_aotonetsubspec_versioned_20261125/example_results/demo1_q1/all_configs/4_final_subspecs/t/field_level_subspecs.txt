@@ -1,0 +1,63 @@
+Field-Level Subspecs
+====================
+
+Config Variable: Config_t_CommunityList_LOWTRUST__Line1__65050_10__community
+Subspecs (1):
+  1. (or (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x1) (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x2))
+--------------------------------------------------
+
+Config Variable: Config_t_CommunityList_LOWTRUST__Line1__action
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Config Variable: Config_t_CommunityList_LOWTRUST__Line1__enable
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Config Variable: Config_t_CommunityList_QUARANTINE__Line1__65050_99__community
+Subspecs (1):
+  1. (or (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x1) (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x2))
+--------------------------------------------------
+
+Config Variable: Config_t_CommunityList_QUARANTINE__Line1__action
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Config Variable: Config_t_CommunityList_QUARANTINE__Line1__enable
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Config Variable: Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10
+Subspecs (1):
+  1. (or (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10 0) (and (<= 9 Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10) (<= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10 11)) (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10 4294967295))
+--------------------------------------------------
+
+Config Variable: Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10enable
+Subspecs (1):
+  1. (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10enable true)
+--------------------------------------------------
+
+Config Variable: Config_t_RoutingPolicy_FROM_ISP__Seq10__Line1__match_community_list_enable
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Config Variable: Config_t_RoutingPolicy_FROM_ISP__Seq20__Line1__match_community_list_enable
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Config Variable: Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost
+Subspecs (1):
+  1. (<= 0 Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost) AND (<= Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost 3)
+--------------------------------------------------
+
+Config Variable: Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_enable
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+

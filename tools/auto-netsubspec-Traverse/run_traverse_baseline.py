@@ -36,11 +36,22 @@ def prepare(source, concrete, output, devices):
     pins = []
     represented = set()
     nodes = source.joinpath('0_hostnames.txt').read_text().split()
+    interfaces = source / '0_interfaces.txt'
+    discard_interfaces = {
+        line.split(',', 1)[0].strip() + '_null_interface'
+        for line in (interfaces.read_text().splitlines() if interfaces.exists() else [])
+        if ',' in line and line.split(',', 1)[1].strip() == 'null_interface'
+    }
     for variable in variables:
         suffix = variable.split('FAILED-EDGE_', 1)[1]
         matching = [(a,b) for a in nodes for b in nodes if a != b and suffix == f'{a}_{b}']
         if not matching:
             if 'Loopback' in suffix:
+                continue
+            if suffix in discard_interfaces and re.search(
+                    r'\(assert\s+\(=\s+\|' + re.escape(variable) + r'\|\s+0\)\)', encoding):
+                # An inventoried, fixed-up Null0 interface is local state,
+                # not a physical inter-router link in the failure universe.
                 continue
             raise ValueError(f'Unrecognized physical failure variable: {variable}')
         if len(matching) != 1:
@@ -164,9 +175,16 @@ def export_concrete(args):
                '--test_output=all',
                '--test_filter=org.batfish.minesweeper.smt.SmtReachabilityTest#testFailureDataplaneEnumeration',
                '--strategy=TestRunner=standalone', '--spawn_strategy=local']
-    env = {'SMT_DIRECTORY_PREFIX': str(destination), 'SMT_NETWORK': args.network,
+    env = {'SMT_DIRECTORY_PREFIX': str(destination),
            'SMT_SYMBOLIC': 'false', 'SMT_PROTOCOLS': 'BGP',
            'SMT_ENUMERATE_FAILURES': 'true', 'FAIL_K': str(args.k), 'FAIL_MODE': 'AT_MOST_K'}
+    if args.config_directory is not None:
+        # Keep the Bazel JVM and test inside the benchmark's monitored process group.
+        command.insert(1, '--batch')
+        command[command.index('--test_output=all')] = '--test_output=streamed'
+        env['SMT_CONFIG_DIRECTORY'] = str(args.config_directory.resolve())
+    else:
+        env['SMT_NETWORK'] = args.network
     command.extend(f'--test_env={key}={value}' for key,value in env.items())
     start = time.perf_counter()
     with log_path.open('w') as log:
@@ -188,6 +206,8 @@ def main():
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--concrete', type=Path, help='Reuse exported failures_AT_MOST_K_kN inputs')
     mode.add_argument('--network', help='Run Batfish failure injection and export for this network first')
+    mode.add_argument('--config-directory', type=Path,
+                      help='Run failure injection for a directory containing configs/')
     parser.add_argument('--scripts', type=Path, default=ORIGINAL_SCRIPTS,
                         help='Script directory (default: %(default)s)')
     parser.add_argument('--output', type=Path, required=True, help='New output directory')
@@ -213,7 +233,7 @@ def main():
     if args.output.exists(): parser.error('Output directory already exists; choose a new directory')
     if args.k < 0: parser.error('--k must be nonnegative')
     args.output.mkdir(parents=True)
-    export = export_concrete(args) if args.network else {'reused_concrete': str(args.concrete)}
+    export = export_concrete(args) if args.concrete is None else {'reused_concrete': str(args.concrete)}
     cases = sorted(p for p in args.concrete.glob('fail*') if p.is_dir() and (p / '0_dataplane.txt').exists())
     if not cases: parser.error('No exported concrete failure scenarios found')
     link_count = validate_failure_universe(args.source, cases, args.k)

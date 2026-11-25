@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 from pathlib import Path
 import re
 import shutil
@@ -249,13 +250,13 @@ class ConsistencyChecker:
             errors.append(f"missing device encoding: {device_encoding}")
 
         try:
-            total_entries = self.rib.forwarding_entries(
+            total_entries = self.rib.forwarding_state_contexts(
                 router=router,
                 vrf=vrf,
                 destination=destination,
                 plane=self._PLANE,
             )
-            contexts = self.rib.forwarding_branch_contexts(
+            contexts = self.rib.forwarding_state_contexts(
                 router=router,
                 vrf=vrf,
                 destination=destination,
@@ -268,13 +269,13 @@ class ConsistencyChecker:
             contexts = ()
         if not total_entries and not errors:
             errors.append(
-                "scope contains no non-LOCAL selected MAIN route branch covering "
+                "scope contains no MAIN forwarding state covering "
                 "the property destination; "
                 "refusing to pass an empty seed set"
             )
         elif not contexts:
             errors.append(
-                "no MAIN branch is feasible within the failure budget; "
+                "no MAIN forwarding state is feasible within the failure budget; "
                 "refusing to pass an empty seed set"
             )
 
@@ -286,6 +287,12 @@ class ConsistencyChecker:
                 seed_name_counts[name_key] = seed_name_counts.get(name_key, 0) + 1
                 occurrence = seed_name_counts[name_key]
                 seed_name = base_name if occurrence == 1 else f"{base_name}_{occurrence}"
+                # Include the temporary suffix in the filesystem component limit.
+                stem_limit = 255 - len(".smt2.tmp")
+                if len(seed_name) > stem_limit:
+                    digest = hashlib.sha256(seed_name.encode("ascii")).hexdigest()
+                    suffix = f"--{digest}"
+                    seed_name = seed_name[:stem_limit - len(suffix)] + suffix
                 results.append(
                     self._check_branch(
                         context,
@@ -479,6 +486,8 @@ class ConsistencyChecker:
     @classmethod
     def _branch_path_token(cls, context: BranchContext) -> str:
         entry = context.current_entry
+        if entry.branch_kind == "NO_ROUTE":
+            return f"{cls._file_token(entry.router)}-no-route"
         forwarding_paths: set[tuple[str, ...]] = set()
         for path in entry.router_paths:
             if not path:
@@ -526,6 +535,7 @@ class ConsistencyChecker:
             diagnostics=diagnostics,
             unsat_core=unsat_core,
             error=error,
+            branch_kind=entry.branch_kind,
         )
 
     @staticmethod

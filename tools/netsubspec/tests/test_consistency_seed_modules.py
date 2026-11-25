@@ -455,6 +455,21 @@ class FormalConsistencyCheckerTest(unittest.TestCase):
         if not cls.z3.is_file():
             raise unittest.SkipTest("Z3 executable is unavailable")
 
+    def test_long_seed_path_names_fit_with_atomic_write_suffix(self) -> None:
+        checker = ConsistencyChecker(WORK_DIRECTORY, z3_path=self.z3)
+        long_path = "-".join(f"r{i}" for i in range(128))
+        with tempfile.TemporaryDirectory() as output, mock.patch.object(
+            checker, "_branch_path_token", return_value=long_path
+        ):
+            report = checker.run(k=1, output_directory=output, max_workers=2)
+            self.assertEqual(report.status, "PASS")
+            seed_files = [branch.seed_file for branch in report.branches]
+            self.assertEqual(len(set(seed_files)), 7)
+            for name in seed_files:
+                path = Path(output) / name
+                self.assertTrue(path.is_file())
+                self.assertLessEqual(len(path.name + ".tmp"), 255)
+
     def test_global_scope_discovers_all_devices_and_property_prefixes(self) -> None:
         checker = ConsistencyChecker(WORK_DIRECTORY, z3_path=self.z3)
         with tempfile.TemporaryDirectory() as temporary:
@@ -464,7 +479,9 @@ class FormalConsistencyCheckerTest(unittest.TestCase):
             self.assertEqual(report.scope.destinations, ("10.0.0.0/24",))
             self.assertEqual(report.status, "PASS")
             self.assertEqual(len(report.scope_results), 4)
-            self.assertEqual(report.total_scope_branches, 10)
+            # Includes each device's potential no-route complement; all four
+            # complements are infeasible under this fixture's k=1 budget.
+            self.assertEqual(report.total_scope_branches, 14)
             self.assertEqual(report.eligible_branches, 7)
             self.assertEqual(report.checked_branches, 7)
             self.assertEqual(report.sat_branches, 7)
@@ -505,7 +522,7 @@ class FormalConsistencyCheckerTest(unittest.TestCase):
             readable = report.to_readable_text()
             self.assertIn("SYMBOLIC ROUTE CONSISTENCY CHECK SUMMARY", readable)
             self.assertIn("Overall status: PASS", readable)
-            self.assertIn("Eligible 1/1 | SAT 1/1 | Status PASS", readable)
+            self.assertIn("Eligible 1/2 | SAT 1/1 | Status PASS", readable)
             self.assertIn("Local CONNECTED origins normalized: 1", readable)
             self.assertIn("All eligible branches are consistent. ✓", readable)
             self.assertNotIn("candidate-v1-018e885404f47225", readable)
@@ -524,7 +541,7 @@ class FormalConsistencyCheckerTest(unittest.TestCase):
             self.assertEqual(report.scope.routers, ("r4",))
             self.assertEqual(report.scope.destinations, ("10.0.0.0/24",))
             self.assertEqual(report.status, "PASS")
-            self.assertEqual(report.total_scope_branches, 3)
+            self.assertEqual(report.total_scope_branches, 4)
             self.assertEqual(report.eligible_branches, 2)
             self.assertEqual(report.checked_branches, 2)
             self.assertEqual(report.sat_branches, 2)

@@ -1,0 +1,18 @@
+Line-Level Subspecs
+==================
+
+Line Group: Config_c_RouteFilterList_TARGET__Line1
+Subspecs (1):
+  1. (or (and (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__action true) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__enable true) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__ip #x05050505) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__length 32) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__mask #xffffffff) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__prefix_range_end 32) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__prefix_range_start 32)) (and (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__action true) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__enable true) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__ip #x05050504) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__length 31) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__mask #xfffffffe) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__prefix_range_end 32) (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__prefix_range_start 32)))
+--------------------------------------------------
+
+Line Group: Config_c_RoutingPolicy_BLOCK_REIMPORT__Seq10__Line1
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Line Group: Config_c_RoutingPolicy_ORIGINATE__Seq10__Line1
+Subspecs (1):
+  1. (= Config_c_RoutingPolicy_ORIGINATE__Seq10__Line1__match_prefixlist_enable true)
+--------------------------------------------------
+

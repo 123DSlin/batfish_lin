@@ -152,9 +152,30 @@ per-device files.
 
 Builds one seed for every property-relevant, k-pruned MAIN branch and requires
 all eligible branches to be `SAT` before subspecification calculation.
+Forwarding states include selected `ROUTE` entries and an explicit `NO_ROUTE`
+complement: the negation of the union of all covering MAIN selection guards,
+computed before failure-budget pruning. A known device with no covering route
+therefore has a no-route state with a true guard. It is checked with
+`OVERALL_BEST.permitted=false`, the complete peer RIB boundaries (including
+empty peer RIBs), and the original import/export and forwarding equations.
+No selected import, predecessor, or invented route attributes are bound for
+this state. Missing inputs or boundary declarations remain errors.
+
 This gate checks **every legal concrete F** represented by each seed, rather
 than accepting a single satisfying failure assignment. Its exhaustive check
 is separate from the symbolic subspecification solver in stage 3.
+Reports retain `branch_kind` (`ROUTE` or `NO_ROUTE`) through branch projection
+and final intersection provenance. `NO_ROUTE` seeds are projected normally;
+their configuration constraints are not automatically treated as unrestricted.
+The total branch count includes each device's potential no-route complement;
+eligible counts exclude complements infeasible under the selected budget.
+
+A selected static Null0 route is a `ROUTE` state, not `NO_ROUTE`. Its
+`CONTROL-FORWARDING_<router>_null_interface` selection marker is bound to the
+route guard; the original data-forwarding equations still discard the packet.
+The independent Traverse input adapter preserves an inventoried Null0 failure
+variable pinned to zero as local interface state rather than enumerating it
+as an inter-router physical link.
 
 ```text
 2_consistency_check/
@@ -165,10 +186,61 @@ is separate from the symbolic subspecification solver in stage 3.
 
 ### 3. Branch simplifier
 
-Computes line-level constraints first and specializes each line by fixing its
-other fields to their original values. IP and mask stay a paired field target.
-A field is solved directly when its target-dependent route snapshot release
-differs from the line's release.
+The CLI uses source-command granularity by default, following the paper's
+Table 3 and section 5.3. Supply the original Cisco configuration directory:
+
+```bash
+python3 tools/run.py INPUT --k 2 --source-configs CONFIG_DIRECTORY
+# Or run stage 3 alone:
+python3 3_branch_simplifier.py INPUT --source-configs CONFIG_DIRECTORY
+```
+
+Without the option, stage 3 searches `INPUT/configs`, `INPUT/../configs`, and
+`reference_snapshot/configs` at those same two levels. Missing source syntax
+is an error; it is never inferred from equal encoded endpoint values.
+Use `--encoded-granularity` explicitly for historical diagnostics. The Python
+`SymbolicSubspecifier` API retains its legacy default for existing callers;
+pass `source_configs=...` to select source contracts.
+
+A CIDR is one compound field (address and prefix length). Its mask is derived.
+Explicit `ge`/`le` arguments are separate fields. Implicit endpoints are compiled
+from the CIDR and command syntax: with no modifiers both equal the prefix
+length; with only `le`, the lower endpoint follows the length; with only `ge`,
+the upper endpoint is 32. Thus `/32` and `/32 le 32` have different field
+structures despite equal original encoded endpoints. Legal source domains
+require canonical CIDRs and ordered length bounds.
+
+Line contracts jointly vary represented source arguments, preserving the command,
+its existence, list name, sequence and modifier structure. Internal `enable`
+flags stay true. Preserved prepend statements require at least one repetition.
+The compiler currently supports the encoded Cisco policy commands, not arbitrary
+configuration rewriting. Referenced list names and replacement ASNs are not
+symbolic in these exports; reports explicitly retain these limitations and
+source hashes, including commands with no represented editable arguments.
+Such a line has a singleton represented domain (the unchanged command), an
+empty released-config list, and an explicit limitation; `empty` on that line
+does not authorize changing an unencoded list name.
+Community values retain the export's standard-community index abstraction.
+
+Following the original AutoNetSubspec algorithm, the solver computes an encoded
+joint line region first. It then substitutes the deterministic source compiler
+and intersects with the legal source domain. Field contracts fix the other source
+arguments. If the field releases different route observations, the solver
+projects its affected encoding coordinates separately before compilation. Each
+source simplification has an SMT equivalence check. Source contracts retain
+branch-state-preserving semantics, not Plus's property-preserving semantics.
+
+Source CIDR mode requires regenerated exports whose `0_encoding_semantics.json`
+declares `symbolic_prefix_length_ranges=variable-inclusive-bounds`. Legacy
+exports selected comparisons from the original rule and cannot safely describe
+all changes of CIDR and explicit bounds. Unsupported syntax or mismatched source
+values fails closed. Output `empty` means the full represented legal domain;
+source formulas may retain legal-domain constraints even when behavior adds no
+restriction.
+
+In legacy diagnostic mode, IP and mask remain a paired field target. Line
+specialization is reused only when field and line route-observation releases
+coincide; otherwise the field is solved directly.
 
 The solver takes one symbolic seed/AG per branch. It substitutes a singleton
 destination and eliminates redundant binary integer link variables using the

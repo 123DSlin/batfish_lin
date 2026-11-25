@@ -54,6 +54,9 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("work_directory", type=Path)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--source-configs', type=Path, help='original Cisco configs for paper-level fields/lines')
+    mode.add_argument('--encoded-granularity', action='store_true', help='legacy encoded-variable diagnostic output')
     parser.add_argument("--profile", action="store_true", help="write detailed wall/task timings")
     parser.add_argument("--consistency-workers", type=positive_integer, default=1, help="parallel consistency devices (default: 1)")
     parser.add_argument("--check-failure-intersection", action="store_true",
@@ -119,6 +122,11 @@ def stage_command(
         command.extend(("--k", str(args.k)))
     if stage == 2:
         command.extend(("--workers", str(getattr(args, "consistency_workers", 1))))
+    if stage == 3:
+        if getattr(args, 'source_configs', None) is not None:
+            command.extend(('--source-configs', str(args.source_configs.resolve())))
+        if getattr(args, 'encoded_granularity', False):
+            command.append('--encoded-granularity')
     if stage == 3 and args.workers is not None:
         command.extend(("--workers", str(args.workers)))
     if stage >= 2:

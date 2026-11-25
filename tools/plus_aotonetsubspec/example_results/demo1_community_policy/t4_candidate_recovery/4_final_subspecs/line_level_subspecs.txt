@@ -1,0 +1,8 @@
+Line-Level Subspecs
+==================
+
+Line Group: Config_t_CommunityList_QUARANTINE__Line1
+Subspecs (1):
+  1. (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x1) AND (= Config_t_CommunityList_QUARANTINE__Line1__action true) AND (= Config_t_CommunityList_QUARANTINE__Line1__enable true)
+--------------------------------------------------
+

@@ -1,0 +1,40 @@
+Preserved original route-subspecification implementations
+Client date: 2026-11-25
+
+1. Original symbolic/non-deterministic route-branch pipeline
+   Entry: tools/netsubspec/tools/run.py
+   Stages: Symbolic Route -> device SMT slice -> original branch seed and
+   consistency -> branch simplification -> branch intersection.
+   This is the original branch-contract method, not the new regions backend.
+
+2. Original concrete-failure Traverse comparison pipeline
+   Entry: tools/auto-netsubspec-Traverse/run_traverse_baseline.py
+   Its original 0_auto-netsubspec scripts and intersection/comparison tools
+   are included separately; it does not substitute for method 1.
+
+The original directories remain in place and were not modified for this
+preservation. original_sources.tar.gz freezes their current working-tree
+contents, including fixtures and pre-existing uncommitted edits. It also
+captures the shared Java symbolicroute/smt sources, build files and export
+entry point listed in manifest.json. It is not a snapshot of clean git HEAD.
+The manifest records the base revision, every archived file hash, archive
+checksum and Python/Z3 versions. Bytecode caches are excluded.
+
+Verify preservation from the repository root:
+  python3 -B tools/baselines/non_deterministic_routes_20261125/verify.py
+If current sources intentionally change later, verify the preserved archive:
+  python3 -B tools/baselines/non_deterministic_routes_20261125/verify.py --archive-only
+
+Run the original branch method using a separate, fresh work directory that
+contains the exported input files:
+  python3 -B tools/netsubspec/tools/run.py /absolute/baseline-work --k 2 --workers 4
+Do not add --property-preserving; that selects a different implementation in Plus.
+Use --help on the Traverse entry point for its concrete-export arguments.
+
+For later replay, unpack the archive into an isolated checkout with the same
+repository layout and dependencies. Do not extract it over an active checkout.
+The archive is source/fixture preservation, not a standalone binary distribution.
+
+For correctness comparisons retain input hashes, property, fault budget,
+configuration domains and solver version alongside each result. Do not silently
+replace original guards, bounds or traversal logic with the optimized versions.

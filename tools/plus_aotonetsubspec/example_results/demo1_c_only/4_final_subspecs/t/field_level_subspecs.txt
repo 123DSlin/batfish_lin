@@ -1,0 +1,13 @@
+Field-Level Subspecs
+====================
+
+Config Variable: Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost
+Subspecs (1):
+  1. (<= 1 Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost) AND (<= Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost 3)
+--------------------------------------------------
+
+Config Variable: Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_enable
+Subspecs (1):
+  1. (= Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_enable true)
+--------------------------------------------------
+

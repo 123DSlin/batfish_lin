@@ -47,6 +47,8 @@ public abstract class SymbolicRouteBase {
 
   protected ArithExpr _metric;
 
+  @Nullable protected Long _metricUpperBound;
+
   protected ArithExpr _med;
 
   protected ArithExpr _localPref;
@@ -76,6 +78,7 @@ public abstract class SymbolicRouteBase {
     _isExport = false;
     _prefixLength = null;
     _metric = null;
+    _metricUpperBound = RouteMetricDomain.exclusiveUpperBound(proto, List.of(proto), false);
     _adminDist = null;
     _med = null;
     _localPref = null;
@@ -103,6 +106,7 @@ public abstract class SymbolicRouteBase {
     _isExport = other._isExport;
     _prefixLength = other._prefixLength;
     _metric = other._metric;
+    _metricUpperBound = other._metricUpperBound;
     _adminDist = other._adminDist;
     _med = other._med;
     _localPref = other._localPref;
@@ -138,6 +142,8 @@ public abstract class SymbolicRouteBase {
 
     boolean hasOspf = slice.getProtocols().get(router).contains(Protocol.OSPF);
     boolean hasBgp = slice.getProtocols().get(router).contains(Protocol.BGP);
+    _metricUpperBound =
+        RouteMetricDomain.exclusiveUpperBound(proto, slice.getProtocols().get(router), _isEnv);
     boolean multipleProtos = slice.getProtocols().get(router).size() > 1;
     boolean modelAd = !_isEnv && ((_isBestOverall && multipleProtos) || opts.getKeepAdminDist());
     boolean modelIbgp = slice.isMainSlice() && opts.getNeedBgpInternal().contains(router);
@@ -322,6 +328,10 @@ public abstract class SymbolicRouteBase {
 
   ArithExpr getMetric() {
     return _metric;
+  }
+
+  @Nullable Long getMetricUpperBound() {
+    return _metricUpperBound;
   }
 
   public void setMetric(ArithExpr metric) {

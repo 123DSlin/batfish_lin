@@ -40,6 +40,7 @@ class BranchCheckResult:
     diagnostics: tuple[dict[str, str], ...] = ()
     unsat_core: tuple[str, ...] = ()
     error: Optional[str] = None
+    branch_kind: str = "ROUTE"
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
@@ -124,6 +125,9 @@ class ConsistencyReport:
             ),
             f"Routers: {', '.join(self.scope.routers) or 'none'}",
             f"Destinations: {', '.join(self.scope.destinations) or 'none'}",
+            ("Forwarding states: "
+             f"ROUTE {sum(b.branch_kind == 'ROUTE' for b in self.branches)} | "
+             f"NO_ROUTE {sum(b.branch_kind == 'NO_ROUTE' for b in self.branches)}"),
             (
                 "Branches: "
                 f"eligible={self.eligible_branches}/{self.total_scope_branches} | "

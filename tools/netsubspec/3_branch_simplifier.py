@@ -114,6 +114,8 @@ class BranchSubspec:
     seed_sha256: str
     fields: tuple[BranchFieldSubspec, ...]
     lines: tuple[BranchLineSubspec, ...]
+    branch_kind: str = "ROUTE"
+    source_commands: tuple[dict[str, Any], ...] = ()
 
     @property
     def branch_name(self) -> str:
@@ -184,6 +186,7 @@ class SubspecificationReport:
                     "destination": branch.destination,
                     "prefix": branch.prefix,
                     "protocol": branch.protocol,
+                    "branch_kind": branch.branch_kind,
                     "selected_peer": branch.selected_peer,
                     "scenario_set": {
                         "representation": "symbolic-guard",
@@ -383,6 +386,11 @@ class SubspecificationReport:
 class _SmtDocument(_SharedSmtDocument):
     """Stage-3 view over the shared parsed SMT seed."""
 
+    def config_bounds(self, pins):
+        if hasattr(self, 'source_domain'):
+            return ['(assert ' + serialize_smt2_sexpr(self.source_domain) + ')']
+        return get_bounds_for_multiple_config_variables([pin.name for pin in pins])
+
     @cached_property
     def _value_dependencies(self) -> dict[str, set[str]]:
         return _device_value_dependencies(
@@ -421,9 +429,7 @@ class _SmtDocument(_SharedSmtDocument):
             for index, expression in enumerate(self.assertions)
             if index not in assertion_indices
         ]
-        for bound in get_bounds_for_multiple_config_variables(
-            [pin.name for pin in targets]
-        ):
+        for bound in self.config_bounds(targets):
             tree = parse_smt2_sexpr(tokenize_smt2_sexpr(bound))
             if isinstance(tree, list) and len(tree) == 2 and tree[0] == "assert":
                 assertions.append(tree[1])
@@ -503,7 +509,7 @@ class _SmtDocument(_SharedSmtDocument):
                 )
             )
 
-        for bound in get_bounds_for_multiple_config_variables(sorted(target_names)):
+        for bound in self.config_bounds(pins):
             tree = parse_smt2_sexpr(tokenize_smt2_sexpr(bound))
             if not isinstance(tree, list) or len(tree) != 2 or tree[0] != "assert":
                 raise SubspecificationError(f"malformed configuration bound: {bound}")
@@ -763,6 +769,7 @@ class SymbolicSubspecifier:
         *,
         z3_path: Optional[Path | str] = None,
         timeout_seconds: float = 30.0,
+        source_configs: Optional[Path | str] = None,
     ) -> None:
         self.work_directory = Path(work_directory).resolve()
         self.consistency_directory = (
@@ -772,6 +779,7 @@ class SymbolicSubspecifier:
         self.solver = SmtSolver(
             z3_path=z3_path, timeout_seconds=timeout_seconds
         )
+        self.source_configs = Path(source_configs).resolve() if source_configs is not None else None
         self.last_worker_count = 1
 
     def run(
@@ -815,7 +823,11 @@ class SymbolicSubspecifier:
             status="PASS" if not errors else "FAIL",
             generated_at=datetime.now(timezone.utc).isoformat(),
             source_consistency_report=str(self.report_path),
-            scope=dict(consistency["scope"]),
+            scope=dict(consistency["scope"], granularity="source-commands" if self.source_configs else "encoded-variables",
+                       source_configs=str(self.source_configs) if self.source_configs else None,
+                       source_contract_scope='represented-source-arguments' if self.source_configs else None,
+                       source_limitations=[command for branch in branches for command in branch.source_commands
+                                           if command['limitations']]),
             branch_count=len(branches),
             field_evaluations=field_evaluations,
             constrained_field_evaluations=constrained_field_evaluations,
@@ -851,6 +863,15 @@ class SymbolicSubspecifier:
         seed_path = self._resolve_seed_path(branch)
         seed_bytes = seed_path.read_bytes()
         document = _SmtDocument.parse(seed_bytes.decode("utf-8"))
+        native = document
+        if self.source_configs is not None:
+            from utils.source_commands import compile_document
+            document = compile_document(document, _group_config_pins, self.source_configs)
+            if any(plan.source.kind == 'prefix' for plan in document.source_plans.values()):
+                metadata_path = self.work_directory / '0_encoding_semantics.json'
+                metadata = json.loads(metadata_path.read_text()) if metadata_path.is_file() else {}
+                if metadata.get('symbolic_prefix_length_ranges') != 'variable-inclusive-bounds':
+                    raise SubspecificationError('source CIDR solving requires regenerated input with symbolic_prefix_length_ranges=variable-inclusive-bounds')
         conditions = document.branch_conditions()
         branch_token = self._short_id(branch["candidate_id"])
         expected_guard_name = f"branch_{branch_token}_selection_guard"
@@ -868,16 +889,13 @@ class SymbolicSubspecifier:
                 f"{conditions.failure_budget_name}, expected {expected_budget_name}"
             )
 
-        # Match the reference's line-first scheduling. The field reuses a
-        # line result when pinning the other fields gives the same seed body.
-        line_batch = self._project_targets(
-            document, branch, branch_token, level="line"
-        )
-        field_batch = (
-            _TargetBatch((), 0, 0)
-            if line_batch.error is not None
-            else self._fields_from_lines(document, branch, branch_token, line_batch)
-        )
+        if self.source_configs is not None:
+            line_batch, field_batch = self._source_batches(native, document, branch, branch_token)
+        else:
+            # Original encoded-variable scheduling remains available for diagnostics.
+            line_batch = self._project_targets(document, branch, branch_token, level='line')
+            field_batch = (_TargetBatch((), 0, 0) if line_batch.error is not None else
+                           self._fields_from_lines(document, branch, branch_token, line_batch))
         field_results = tuple(
             BranchFieldSubspec(
                 config=item.name,
@@ -924,6 +942,9 @@ class SymbolicSubspecifier:
             seed_sha256=hashlib.sha256(seed_bytes).hexdigest(),
             fields=field_results,
             lines=line_results,
+            branch_kind=branch.get("branch_kind", "ROUTE"),
+            source_commands=tuple(plan.metadata() for plan in document.source_plans.values())
+                            if hasattr(document, 'source_plans') else (),
         )
         return _BranchComputation(
             branch=result,
@@ -938,6 +959,71 @@ class SymbolicSubspecifier:
             ),
         )
 
+    def _source_batches(self, native, document, branch, branch_token):
+        """Project encoded commands, then take their deterministic inverse image.
+
+        Substitution commutes with quantification of route/failure state. Reuse
+        a joint line only when fixing the other source fields releases exactly
+        the same route observations; otherwise project the affected encoding
+        coordinates directly. Never merge independent scalar safe ranges.
+        """
+        from utils.source_commands import source_targets
+        raw = self._project_targets(native, branch, branch_token, level='line')
+        by_line = {item.name: item for item in raw.targets}
+        raw_pins = {pin.name: pin for pin in native.config_pins}
+        fields, lines = [], []
+        try:
+            for level, destination in (('line', lines), ('field', fields)):
+                for identifier, pins in source_targets(document, level):
+                    started = time.monotonic()
+                    plan = next(plan for line, plan in document.source_plans.items()
+                                if identifier == line or any(f['id'] == identifier for f in plan.fields))
+                    if plan.line not in by_line:
+                        continue  # The raw batch records its fail-closed error.
+                    joint = by_line[plan.line]
+                    selected = frozenset(pin.name for pin in pins)
+                    replacements = plan.replacements()
+                    affected = frozenset(name for name, expression in replacements.items()
+                                         if _collect_declared_symbols(expression, native.declarations).intersection(selected))
+                    line_names = frozenset(pin.name for pin in joint.pins)
+                    if native._target_dependent_route_snapshots(affected)[0] == native._target_dependent_route_snapshots(line_names)[0]:
+                        formula, audit = joint.constraint, dict(joint.projection)
+                        method = 'source-command-line-pullback' if level == 'line' else 'source-field-line-specialization'
+                    else:
+                        affected_pins = tuple(raw_pins[name] for name in sorted(affected))
+                        formula, _, _, audit = self._project(
+                            native, affected_pins, device=branch['router'], destination=branch['destination'],
+                            identifier=identifier, level=level, is_pair=False)
+                        method = 'source-field-direct-pullback'
+                    expression = parse_smt2_sexpr(tokenize_smt2_sexpr(subspec_string_to_smt2_and(formula) or 'true'))
+                    expression = _substitute_symbols(expression, replacements)
+                    expression = _and_expression([expression, document.source_domain])
+                    fixed = {pin.name: parse_smt2_sexpr(tokenize_smt2_sexpr(pin.original_value))
+                             for pin in document.config_pins if pin.name not in selected}
+                    expression = _substitute_symbols(expression, fixed)
+                    constraint = self.solver.simplify(document, expression)
+                    equivalent, _ = self.solver.equivalent(document, expression, constraint)
+                    if not equivalent:
+                        raise SubspecificationError('source compiler simplification failed equivalence checking')
+                    residual = _residual_declared_symbols(constraint, document.declarations, selected)
+                    if residual:
+                        raise SubspecificationError('source contract retained non-target symbols: ' + ', '.join(residual))
+                    audit.update(method=method, granularity='source-commands',
+                                 source=plan.source.metadata(),
+                                 source_fields=[f for f in plan.fields if level == 'line' or f['id'] == identifier],
+                                 limitations=plan.limitations,
+                                 compilation={name: serialize_smt2_sexpr(expr) for name, expr in plan.compilation.items()},
+                                 source_equivalence_check='UNSAT', source_line_group=plan.line,
+                                 released_configs=[pin.name for pin in pins])
+                    destination.append(_ProjectedTarget(identifier, pins, constraint, method,
+                                                        time.monotonic() - started, audit))
+        except (OSError, SubspecificationError, subprocess.SubprocessError) as error:
+            message = f"{branch['router']} {branch_token} source command projection: {error}"
+            return (_TargetBatch(tuple(lines), len(lines), sum(not r.unrestricted for r in lines), message),
+                    _TargetBatch(tuple(fields), len(fields), sum(not r.unrestricted for r in fields), message))
+        return (_TargetBatch(tuple(lines), len(lines), sum(not r.unrestricted for r in lines), raw.error),
+                _TargetBatch(tuple(fields), len(fields), sum(not r.unrestricted for r in fields), raw.error))
+
     def _project_targets(
         self,
         document: _SmtDocument,
@@ -949,9 +1035,7 @@ class SymbolicSubspecifier:
         if level not in {"field", "line"}:
             raise ValueError(f"unsupported subspecification level: {level}")
         targets = (
-            _field_targets(document.config_pins)
-            if level == "field"
-            else _group_config_pins(document.config_pins)
+            _document_targets(document, level)
         )
         results: list[_ProjectedTarget] = []
         evaluations = 0
@@ -1010,7 +1094,7 @@ class SymbolicSubspecifier:
         by_config = {pin.name: line for line in line_batch.targets for pin in line.pins}
         results: list[_ProjectedTarget] = []
         evaluations = 0
-        for identifier, pins in _field_targets(document.config_pins):
+        for identifier, pins in _document_targets(document, "field"):
             evaluations += 1
             started = time.monotonic()
             try:
@@ -1285,6 +1369,13 @@ def _group_config_pins(
         (line_group, tuple(sorted(values, key=lambda item: item.name)))
         for line_group, values in sorted(grouped.items())
     )
+
+
+def _document_targets(document, level):
+    if hasattr(document, 'source_plans'):
+        from utils.source_commands import source_targets
+        return source_targets(document, level)
+    return _field_targets(document.config_pins) if level == 'field' else _group_config_pins(document.config_pins)
 
 
 def _field_targets(
@@ -1709,6 +1800,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("work_directory", type=Path)
     parser.add_argument("--output", type=Path)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--source-configs', type=Path, help='original Cisco configuration directory')
+    mode.add_argument('--encoded-granularity', action='store_true', help='legacy encoded-variable diagnostic mode')
     parser.add_argument("--z3", type=Path)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument(
@@ -1723,10 +1817,19 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
+        source_configs = args.source_configs
+        if not args.encoded_granularity and source_configs is None:
+            candidates = [args.work_directory / 'configs', args.work_directory.parent / 'configs',
+                          args.work_directory / 'reference_snapshot/configs',
+                          args.work_directory.parent / 'reference_snapshot/configs']
+            source_configs = next((p for p in candidates if p.is_dir()), None)
+            if source_configs is None:
+                raise SubspecificationError('source-command mode requires --source-configs; use --encoded-granularity only for legacy diagnostics')
         subspecifier = SymbolicSubspecifier(
             args.work_directory,
             z3_path=args.z3,
             timeout_seconds=args.timeout,
+            source_configs=source_configs,
         )
         report = subspecifier.run(
             output_directory=args.output,

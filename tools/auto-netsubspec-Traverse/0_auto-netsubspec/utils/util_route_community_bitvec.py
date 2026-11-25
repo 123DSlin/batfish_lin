@@ -117,6 +117,13 @@ class BitVecCommunityEncoder:
                 return f"(not (= {var_name} {zero_bv}))"
             return {var_name: zero_bv}
 
+        # MAIN can select a connected/static/IGP route while a BGP route for
+        # the same prefix carries communities added during redistribution.
+        if not any(self._host._is_bgp_family(route.protocol) for route in ecmp_routes):
+            if negated_mode:
+                return f"(not (= {var_name} {zero_bv}))"
+            return {var_name: zero_bv}
+
         all_bgp_routes = (
             self._host.get_all_bgp_info(device, ecmp_routes[0].network) if ecmp_routes else []
         )

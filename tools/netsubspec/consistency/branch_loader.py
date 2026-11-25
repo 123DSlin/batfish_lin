@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+import hashlib
 import ipaddress
 import json
 from pathlib import Path
@@ -190,6 +191,10 @@ class RouteEntry:
     availability_guard: JsonObject
     contributions: tuple[JsonObject, ...]
 
+    @property
+    def branch_kind(self) -> str:
+        return "ROUTE"
+
     @classmethod
     def from_json(cls, raw: JsonObject, index: int) -> "RouteEntry":
         location = f"candidates[{index}]"
@@ -369,10 +374,47 @@ class RouteEntry:
 
 
 @dataclass(frozen=True)
+class NoRouteState:
+    """The guarded absence of a route covering one property destination.
+
+    This is a forwarding state, not an invented RIB route. It has no route
+    attributes, import, predecessor or selected peer.
+    """
+
+    candidate_id: str
+    router: str
+    vrf: str
+    prefix: str
+    selection_guard: JsonObject
+    plane: str = "MAIN"
+    protocol: str = "NO_ROUTE"
+
+    @property
+    def branch_kind(self) -> str:
+        return "NO_ROUTE"
+
+    @property
+    def guard_ast(self) -> JsonObject:
+        return _require_mapping(self.selection_guard.get("ast"), "no-route guard")
+
+    @property
+    def selected_peer(self) -> None:
+        return None
+
+    @property
+    def router_paths(self) -> tuple[tuple[str, ...], ...]:
+        return ()
+
+    @property
+    def local_connected_origin_interface(self) -> None:
+        return None
+
+
+@dataclass(frozen=True)
 class BranchContext:
     """All symbolic-RIB information required to build one branch seed."""
 
-    current_entry: RouteEntry
+    current_entry: RouteEntry | NoRouteState
     device_rib: tuple[RouteEntry, ...]
     predecessor_entries: tuple[RouteEntry, ...]
     peer_ribs: Mapping[str, tuple[RouteEntry, ...]]
@@ -673,7 +715,7 @@ class SymbolicRib:
             for router, device_interfaces in interfaces.items()
         }
 
-    def local_connected_origin_interface(self, entry: RouteEntry) -> Optional[str]:
+    def local_connected_origin_interface(self, entry: RouteEntry | NoRouteState) -> Optional[str]:
         """Validate a local CONNECTED origin against the device inventory."""
 
         interface = entry.local_connected_origin_interface
@@ -776,8 +818,7 @@ class SymbolicRib:
         peer_ribs = {}
         for peer in peers:
             peer_entries = selected(peer, 'MAIN')
-            if peer_entries:
-                peer_ribs[peer] = peer_entries
+            peer_ribs[peer] = peer_entries
         return (device_rib, frozenset(e.candidate_id for e in device_rib),
                 MappingProxyType(peer_ribs))
 
@@ -907,6 +948,54 @@ class SymbolicRib:
                     continue
             result.append(self.context(entry, destination=destination))
         return tuple(result)
+
+    def forwarding_state_contexts(
+        self,
+        *,
+        router: str,
+        vrf: str,
+        destination: str,
+        plane: str = "MAIN",
+        k: Optional[int] = None,
+        guard_encoder: Optional["GuardEncoder"] = None,
+    ) -> tuple[BranchContext, ...]:
+        """Selected routes plus their guarded no-route complement.
+
+        The complement uses every covering selected route before k pruning.
+        Empty route sets are valid only for a known, inventoried device; input
+        and topology errors must not silently become no-route states. With no
+        budget, return all potential states, including an infeasible complement.
+        """
+        if plane.upper() != "MAIN":
+            raise ValueError("forwarding states require the MAIN plane")
+        if router not in self.topology.routers() or router not in self.interfaces:
+            raise SymbolicRouteFormatError(
+                f"forwarding-state scope has no inventoried BGP device {router!r}")
+        if guard_encoder is None:
+            from .guard_encoder import GuardEncoder
+            guard_encoder = GuardEncoder(self.guard_variables)
+        routes = self.forwarding_entries(
+            router=router, vrf=vrf, destination=destination, plane="MAIN")
+        contexts = list(self.forwarding_branch_contexts(
+            router=router, vrf=vrf, destination=destination, plane="MAIN",
+            k=k, guard_encoder=guard_encoder))
+        ast = {"operator": "NOT", "children": [
+            {"operator": "OR", "children": [dict(entry.guard_ast) for entry in routes]}]}
+        if k is None or guard_encoder.is_feasible_within_k(ast, k):
+            prefix = str(self._cached_destination(destination))
+            identity = f"NO_ROUTE\0{router}\0{vrf}\0{prefix}"
+            encoded = guard_encoder.encode(ast)
+            state = NoRouteState(
+                candidate_id="candidate-v1-" + hashlib.sha256(identity.encode()).hexdigest(),
+                router=router, vrf=vrf, prefix=prefix,
+                selection_guard=MappingProxyType({
+                    "ast": ast, "raw": encoded, "simplified": encoded}))
+            device_rib, _, peer_ribs = self._cached_context_ribs(
+                router, vrf, "MAIN", None, destination, self.topology.peers(router))
+            contexts.append(BranchContext(
+                current_entry=state, device_rib=device_rib,
+                predecessor_entries=(), peer_ribs=peer_ribs))
+        return tuple(contexts)
 
     def __iter__(self) -> Iterator[RouteEntry]:
         return iter(self.entries_all)

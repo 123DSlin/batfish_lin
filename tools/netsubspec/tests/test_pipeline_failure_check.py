@@ -61,6 +61,14 @@ class PipelineFailureCheckTest(unittest.TestCase):
         self.assertTrue(calls[3][1].endswith("4_branch_intersection.py"))
         self.assertEqual(state["status"], "FAIL")
 
+    def test_source_configs_and_legacy_mode_are_forwarded_only_to_stage_three(self):
+        for option in (['--source-configs', '/tmp/source-configs'], ['--encoded-granularity']):
+            with patch.object(sys, 'argv', ['run.py', '/tmp/input', '--k', '2', *option]):
+                args = runner.parse_args()
+            for stage in (1, 2, 3, 4):
+                command = runner.stage_command(stage, Path('/tmp/stage.py'), Path('/tmp/input'), args)
+                self.assertEqual(option[0] in command, stage == 3)
+
     def test_enabled_without_reference_fails_before_any_pipeline_stage(self):
         with tempfile.TemporaryDirectory() as temp:
             with patch.object(sys, "argv", ["run.py", temp, "--k", "2", "--check-failure-intersection"]), patch.object(runner.subprocess, "run") as invoke, contextlib.redirect_stderr(io.StringIO()):

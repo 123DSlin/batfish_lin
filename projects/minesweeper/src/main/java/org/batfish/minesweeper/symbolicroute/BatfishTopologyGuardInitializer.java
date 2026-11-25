@@ -44,6 +44,10 @@ public final class BatfishTopologyGuardInitializer {
     Map<Prefix, List<String>> endpointsByPrefix = new LinkedHashMap<>();
     for (Configuration configuration : configurations.values()) {
       for (Interface iface : configuration.getAllInterfaces().values()) {
+        // Shared loopback prefixes are local origins, not physical adjacencies.
+        if (iface.isLoopback()) {
+          continue;
+        }
         for (ConcreteInterfaceAddress address : iface.getAllConcreteAddresses()) {
           endpointsByPrefix
               .computeIfAbsent(address.getPrefix(), unused -> new ArrayList<>())

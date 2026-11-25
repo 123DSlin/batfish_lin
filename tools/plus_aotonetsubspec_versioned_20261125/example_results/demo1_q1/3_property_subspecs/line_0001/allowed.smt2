@@ -1,0 +1,4 @@
+(declare-const Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost Int)
+(declare-const Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_enable Bool)
+(assert (and (<= 0 Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost) (<= Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost 3)))
+(check-sat)

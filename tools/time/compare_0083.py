@@ -29,7 +29,7 @@ def run(command, log):
 
 
 def generate(work, skip_symbolic_routes, force_solver=False, *, network=NETWORK,
-             ingress="x", destination_router="d", k=2):
+             ingress="x", destination_router="d", k=2, runner=run, config_directory=None):
     work.mkdir()
     env = {
         "SMT_DIRECTORY_PREFIX": str(work),
@@ -45,8 +45,10 @@ def generate(work, skip_symbolic_routes, force_solver=False, *, network=NETWORK,
         "SMT_DST": "5.5.5.5/32",
         "SMT_FAILURES": str(k),
     }
+    if config_directory is not None:
+        env["SMT_CONFIG_DIRECTORY"] = str(config_directory.resolve())
     generation_log = work / "generation.log"
-    generation_wall = run([
+    generation_wall = runner([
         "bazel", "test", "//projects/allinone:smt_tests", "--nocache_test_results",
         "--test_output=all", f"--test_filter={TEST}#testReachability",
         "--strategy=TestRunner=standalone", "--spawn_strategy=local",

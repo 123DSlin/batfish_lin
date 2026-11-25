@@ -499,20 +499,17 @@ class EncoderSlice {
       BitVecExpr configVarMask = p.getConfigVarMask();
       BoolExpr lowerBitsMatch =
           firstBitsEqual(_symbolicPacket.getDstIp(), configVarIp, configVarMask, pfx, len);
-      if (lower == upper) {
-        ArithExpr configVarRangeStart = r.getConfigVarStart();
-        ArithExpr configVarRangeEnd = r.getConfigVarEnd();
-        BoolExpr equalLenStart = mkEq(prefixLen, configVarRangeStart);
-        BoolExpr equalLenEnd = mkEq(prefixLen, configVarRangeEnd);
-        return mkAnd(equalLenStart, equalLenEnd, lowerBitsMatch);
-      } else {
-        ArithExpr configVarRangeStart = r.getConfigVarStart();
-        ArithExpr configVarRangeEnd = r.getConfigVarEnd();
-        BoolExpr lengthLowerBound = mkGe(prefixLen, configVarRangeStart);
-        BoolExpr lengthUpperBound = mkLe(prefixLen, configVarRangeEnd);
-        return mkAnd(lengthLowerBound, lengthUpperBound, lowerBitsMatch);
-      }
+      // Configuration edits may turn an originally exact match into a length range.
+      // The comparison must depend on symbolic endpoints, never their original equality.
+      return mkAnd(
+          symbolicPrefixLengthRange(getCtx(), prefixLen, r.getConfigVarStart(), r.getConfigVarEnd()),
+          lowerBitsMatch);
     }
+  }
+
+  static BoolExpr symbolicPrefixLengthRange(
+      Context ctx, ArithExpr prefixLen, ArithExpr lower, ArithExpr upper) {
+    return ctx.mkAnd(ctx.mkGe(prefixLen, lower), ctx.mkLe(prefixLen, upper));
   }
 
   private BoolExpr firstBitsEqual(BitVecExpr x, long y, int n) {
@@ -1051,7 +1048,8 @@ class EncoderSlice {
    * admin distance:      [0,2^8)
    * BGP med, local-pref: [0,2^32)
    * metric cost:         [0,2^8) if environment
-   * metric cost:         [0,2^16) otherwise
+   * BGP path length:     nonnegative integers (also BEST on BGP-only routers)
+   * other metric cost:   [0,2^16), preserving existing IGP/mixed-record domains
    */
   private void addBoundConstraints() {
     ArithExpr upperBound4 = mkInt(1L << 4);
@@ -1094,11 +1092,7 @@ class EncoderSlice {
         add(mkLt(e.getLocalPref(), upperBound32));
       }
       if (e.getMetric() != null) {
-        add(mkGe(e.getMetric(), zero));
-        if (e.isEnv()) {
-          add(mkLt(e.getMetric(), upperBound8));
-        }
-        add(mkLt(e.getMetric(), upperBound16));
+        add(RouteMetricDomain.constraints(getCtx(), e.getMetric(), e.getMetricUpperBound()));
       }
       if (e.getIgpMetric() != null) {
         add(mkGe(e.getIgpMetric(), zero));

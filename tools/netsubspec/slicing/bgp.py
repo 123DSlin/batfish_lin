@@ -188,7 +188,7 @@ def _build_bgp_requirements(
         branch_count = 0
         for destination in destinations:
             try:
-                contexts = rib.forwarding_branch_contexts(
+                contexts = rib.forwarding_state_contexts(
                     router=router,
                     vrf=vrf,
                     destination=destination,
@@ -202,7 +202,7 @@ def _build_bgp_requirements(
                 ) from error
             if not contexts:
                 raise SymbolicSliceError(
-                    f"no k-feasible MAIN branch for {router}/{destination}"
+                    f"no k-feasible MAIN forwarding state for {router}/{destination}"
                 )
             branch_count += len(contexts)
 

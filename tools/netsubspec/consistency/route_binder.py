@@ -9,6 +9,7 @@ from typing import Mapping, Optional
 
 from .branch_loader import (
     BranchContext,
+    NoRouteState,
     RouteEntry,
     SymbolicRib,
     SymbolicRouteFormatError,
@@ -130,9 +131,19 @@ class RouteBinder:
         entry = context.current_entry
         branch_name = entry.candidate_id.removeprefix("candidate-v1-")[:12]
 
-        self._bind_current_best(entry, branch_name)
-        self._bind_current_import(entry, branch_name)
-        self._bind_selected_predecessor(context, branch_name)
+        if isinstance(entry, NoRouteState):
+            permitted = self._record_symbol(entry.router, "OVERALL_BEST_None", "permitted")
+            if self.symbols.sort(permitted) != "Bool":
+                self._error("MISSING_CURRENT_BEST", f"device slice does not declare {permitted}")
+            else:
+                self._add_constraint(
+                    f"branch_{branch_name}_current_best_permitted",
+                    f"(= {permitted} false)", "Current no-route state",
+                    "no selected route covers the property destination")
+        else:
+            self._bind_current_best(entry, branch_name)
+            self._bind_current_import(entry, branch_name)
+            self._bind_selected_predecessor(context, branch_name)
         self._bind_remaining_peer_ribs(context, branch_name)
         self._bind_selected_peer_link(context, branch_name)
         self._bind_control_forwarding(context, branch_name)
@@ -506,6 +517,12 @@ class RouteBinder:
         if entry.protocol in {"LOCAL", "CONNECTED"}:
             return None
         interface = entry.attributes.get("nextHopInterface")
+        # Minesweeper's CONTROL-FORWARDING marks selection of a static
+        # discard interface too. Its original DATA-FORWARDING equations still
+        # drop the packet; binding CF=false would contradict a selected Null0
+        # route and incorrectly reject an otherwise consistent static seed.
+        if entry.protocol == "STATIC" and interface == "null_interface":
+            return interface
         if isinstance(interface, str) and interface not in {
             "",
             "dynamic",

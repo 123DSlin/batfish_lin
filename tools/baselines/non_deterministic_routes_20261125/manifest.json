@@ -1,0 +1,876 @@
+{
+  "schema": "preserved-nondeterministic-route-baseline",
+  "version": 1,
+  "client_date": "2026-11-25",
+  "snapshot_basis": "current working tree, including pre-existing uncommitted changes; not git HEAD",
+  "git_head": "fa007e98f8cba3288d50a599ffc80f1536edadc4",
+  "methods": {
+    "symbolic_branches": {
+      "root": "tools/netsubspec",
+      "entrypoint": "tools/netsubspec/tools/run.py",
+      "stages": [
+        "1_smt_slicer.py",
+        "2_consistency_checker.py",
+        "3_branch_simplifier.py",
+        "4_branch_intersection.py"
+      ]
+    },
+    "concrete_failure_traverse": {
+      "root": "tools/auto-netsubspec-Traverse",
+      "entrypoint": "tools/auto-netsubspec-Traverse/run_traverse_baseline.py"
+    }
+  },
+  "roots": [
+    "tools/netsubspec",
+    "tools/auto-netsubspec-Traverse",
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute",
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt",
+    "projects/minesweeper/BUILD",
+    "projects/allinone/BUILD",
+    "projects/allinone/src/test/java/org/batfish/minesweeper/smt/SmtReachabilityTest.java"
+  ],
+  "files": {
+    "tools/netsubspec/1_smt_slicer.py": {
+      "sha256": "c38283bea23c808defca93c3abbbb0ad6f41120dd44718b57d261e77fa65e2eb",
+      "bytes": 42374
+    },
+    "tools/netsubspec/2_consistency_checker.py": {
+      "sha256": "c8cc1cd973fdd3bea0d32130b8aa27b1e68eab8638fce19b8ea85f5b05ceaf6e",
+      "bytes": 2222
+    },
+    "tools/netsubspec/3_branch_simplifier.py": {
+      "sha256": "549951eab4d7895e8215c82acd05ae33c1089d6c606490b992045b3089bbb1c1",
+      "bytes": 68563
+    },
+    "tools/netsubspec/4_branch_intersection.py": {
+      "sha256": "5af4190455060bbb5ddf6412c6f81cac0cb252b3f5b1d130ae1f1a666b7ec855",
+      "bytes": 27182
+    },
+    "tools/netsubspec/5_traffic_subspecification.py": {
+      "sha256": "7b95152ea3dc0d418fe6d495946db5648419b106246c5c7ad9b54027e0e6ab8b",
+      "bytes": 30862
+    },
+    "tools/netsubspec/README.md": {
+      "sha256": "be3a795ede6ae719c16e302d71a4ffb95bcae06535349a4429135effe3d0ffff",
+      "bytes": 15578
+    },
+    "tools/netsubspec/consistency/__init__.py": {
+      "sha256": "fe0cfd772aab813fedcf8348847a6fda652fc34613cb9088bb80d80d5bc50ace",
+      "bytes": 1186
+    },
+    "tools/netsubspec/consistency/branch_loader.py": {
+      "sha256": "bc800b440855e2c25bf935e5f5705be2fd1d3cd7ccf90715526f0a2ed07cb2bc",
+      "bytes": 41744
+    },
+    "tools/netsubspec/consistency/checker.py": {
+      "sha256": "c13f19fddf5faeced94f9c81baee8759ec06628038ab63668bc0ab3660a6ef04",
+      "bytes": 21787
+    },
+    "tools/netsubspec/consistency/guard_encoder.py": {
+      "sha256": "c64ce2e45427ff961699a1817de09aed758dc9251327be70ea269a8d1d56049b",
+      "bytes": 10817
+    },
+    "tools/netsubspec/consistency/report.py": {
+      "sha256": "5c81dce37e5c519bdcce69fa20c0efe6e44afeb0d3a5a46a5e871106a843cabe",
+      "bytes": 7742
+    },
+    "tools/netsubspec/consistency/route_binder.py": {
+      "sha256": "54cc7a7cee1f8dc2e15c058d65c1de4c3c377ed6500df484781e9b753606bbb4",
+      "bytes": 26824
+    },
+    "tools/netsubspec/consistency/seed_builder.py": {
+      "sha256": "3638cb181f73f17ffb8e776cf46d59c589fd382cecea32cdbc6aed756816f37e",
+      "bytes": 12099
+    },
+    "tools/netsubspec/slicing/__init__.py": {
+      "sha256": "6af6def37ad5ed2e6dc35afabd1ea79f1ea4573c88f55ba1c94f64033dabb35d",
+      "bytes": 291
+    },
+    "tools/netsubspec/slicing/base.py": {
+      "sha256": "2b2661ba6178f837dd0a4a313c03c0f1ac4cc5077f4e5c7c50ec299b9977c29d",
+      "bytes": 2169
+    },
+    "tools/netsubspec/slicing/bgp.py": {
+      "sha256": "0b2b8cf474ba757b7b2d2985f5f8b2ceb994be42a3aee0388a33ee415a043264",
+      "bytes": 17795
+    },
+    "tools/netsubspec/slicing/isis.py": {
+      "sha256": "ddf283caabcd3945e2f88c17f4343ab1acf6eb3912fceac584c3b07de66c4d61",
+      "bytes": 823
+    },
+    "tools/netsubspec/slicing/models.py": {
+      "sha256": "1e9688edb2c557d2c354aecc72e5d20f0a8981a2ae2d9b82f13d243049117a59",
+      "bytes": 1155
+    },
+    "tools/netsubspec/slicing/registry.py": {
+      "sha256": "da1a1c620e44ae2958f5e07d191fb0f1bbdef456b4b3847626545d5f816372b0",
+      "bytes": 761
+    },
+    "tools/netsubspec/slicing/symbols.py": {
+      "sha256": "ca19d040075f14c1f3efab6b2465d64adc87aa14f23a74da9e5adcc69d32c8aa",
+      "bytes": 4993
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_communities_index.txt": {
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_dst_ips.txt": {
+      "sha256": "31636e7cd7d81ab875564fdc73a22899cde021521d21fd62816860ebc149636b",
+      "bytes": 12
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_ebgp_neighbors.txt": {
+      "sha256": "29c4d58b3b4cd00e17bd342c21b5c9b2aa739334fa7ecf986b34f5891b4ba631",
+      "bytes": 430
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_hostnames.txt": {
+      "sha256": "04b9bd4fb678cff83d636df99c0dfb63a97c626cc9dcffe4366ab2f36bedad63",
+      "bytes": 12
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_interfaces.txt": {
+      "sha256": "c270fd3b1fa9288117354af3cfc2f781acb2dbdee728af973af4718401187936",
+      "bytes": 153
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_key_prefixlists.txt": {
+      "sha256": "e5c04c6021adc4acf4e9058f1f768acff91cc655925966db29181f20fff7bae0",
+      "bytes": 72
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_model_igp.txt": {
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_overall_history_enum.txt": {
+      "sha256": "4dc0591e7245b7b5fd2d2f7932f5b34a8e17949695dcb56e4f50b654f8736d2b",
+      "bytes": 213
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_properties_variables.txt": {
+      "sha256": "9f74154510e9cd50ab61d00508ec0709df5b946026b66f27a7549eaab585b002",
+      "bytes": 18
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_unmatched_communities.txt": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_unused_control_forwarding.txt": {
+      "sha256": "94a3efae96a3495dd02974be649819160347efd74ffc55df07465ab25d6d3d46",
+      "bytes": 72
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/0_used_overall_best.txt": {
+      "sha256": "7a803cee1b89ea0308c927876d9e9cccdd860b897c0b55270525d215b49f7b32",
+      "bytes": 707
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/1_sliced_device_smt_encoding/sliced_r1_smt_encoding.smt2": {
+      "sha256": "fd1ef6264b7bab7fea846a4c9ddb566d2d9b27b6831fff83be0d948e056bf26b",
+      "bytes": 23591
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/1_sliced_device_smt_encoding/sliced_r2_smt_encoding.smt2": {
+      "sha256": "364bf555befbb0a864c33c87a81d4f8f7fdcb91e18efe9334e8ca2fc58bd886c",
+      "bytes": 17340
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/1_sliced_device_smt_encoding/sliced_r3_smt_encoding.smt2": {
+      "sha256": "41e2c077a2242c48294633b9c5ee949dc06ec020226d1f8ad4c2bf5e13a2d2cb",
+      "bytes": 17340
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/1_sliced_device_smt_encoding/sliced_r4_smt_encoding.smt2": {
+      "sha256": "443e6175f1ec7917256c480a66724c8cbd559dd381e32fc4384abf60e522d614",
+      "bytes": 33724
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/1_sliced_device_smt_encoding/sliced_smt_encoding.smt2": {
+      "sha256": "d4d4faa34dc9405ed554234e006f7716f13dbbf2f07865d72e29ab3629c8576e",
+      "bytes": 79002
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/2_consistency_check/consistency_report.json": {
+      "sha256": "b5fd6b8f1710f9031aa063017cde75a0038f0dd39d37d309ca4ac105462217f4",
+      "bytes": 8856
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/2_consistency_check/seeds/r1/seed_r1.smt2": {
+      "sha256": "b664aa8fec93c91dd6399a0f7a20544b6001055b7e456822b98d1aad4ade6ac1",
+      "bytes": 36161
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/2_consistency_check/seeds/r2/seed_r2-r1.smt2": {
+      "sha256": "3346b955278a9ac152ebeb338e6216c17c4664266af5894fe1d71a80ce121fb9",
+      "bytes": 24508
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/2_consistency_check/seeds/r2/seed_r2-r4-r1.smt2": {
+      "sha256": "63e19bd1f307f80653eaccc76bfb96b7de0875c0249231f47f44b02610d91ef3",
+      "bytes": 22623
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/2_consistency_check/seeds/r3/seed_r3-r1.smt2": {
+      "sha256": "3268e41896a54fde7c0425367dd520fd6e2675f469eee834220c690a10b702c0",
+      "bytes": 23935
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/2_consistency_check/seeds/r3/seed_r3-r4-r2-r1.smt2": {
+      "sha256": "70a716eb088d55a89d6133b96f916cf3727e96c52fe0bd912ff71eca6551b3aa",
+      "bytes": 22408
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/2_consistency_check/seeds/r4/seed_r4-r1.smt2": {
+      "sha256": "2df8518874defbdd1b7e31d57d69b3fdcecc7b20bc4a3e8eced28b5222f06e75",
+      "bytes": 40250
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/2_consistency_check/seeds/r4/seed_r4-r2-r1.smt2": {
+      "sha256": "aa3b54310c6904a4f4e31deb2f6cb1478534c39932d629df019eed44ea7a07fe",
+      "bytes": 40195
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/3_branch_subspecs/branch_subspecs.json": {
+      "sha256": "e22c20c4cddc795735beb09eef2465980aa7e6882d0127979a1bcf12ee1dbeeb",
+      "bytes": 215716
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/smt_encoding.smt2": {
+      "sha256": "efdf06a4f19e293293c140ffe3e683c0857acbc655f929aed818c187ea40388c",
+      "bytes": 105390
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/symbolic_route.json": {
+      "sha256": "6d5bdde65e612317983081ae88fe4c8d4800aa4af7b272b5913112c23be3881c",
+      "bytes": 187389
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/symbolic_route.txt": {
+      "sha256": "4b46c870604e297422511cb426239550221d2fe23f146222acdefcb704c5e878",
+      "bytes": 9216
+    },
+    "tools/netsubspec/tests/fixtures/symbolic_output_0010/symbolic_route_k_pruned.txt": {
+      "sha256": "cb75a2ecc3d3dabf34bdcb029a3dde197b7123eaa4b6779f5ef88d863f3856f2",
+      "bytes": 7764
+    },
+    "tools/netsubspec/tests/test_branch_intersection.py": {
+      "sha256": "8db733f26463b6ac0b8248aa377fcb757ed2fbda9f3d2c11cb1028cf4f8b9548",
+      "bytes": 6592
+    },
+    "tools/netsubspec/tests/test_branch_simplifier.py": {
+      "sha256": "e84b4fcdaa25df91c935e5f11fe35c38b2967a41b58ca56aa4dea1b0b776a095",
+      "bytes": 19490
+    },
+    "tools/netsubspec/tests/test_consistency_seed_modules.py": {
+      "sha256": "32a4e45abfc3ec33233550dfc83849b32a35198f1b090767afe83a0a89f98e7b",
+      "bytes": 25318
+    },
+    "tools/netsubspec/tests/test_no_route_states.py": {
+      "sha256": "49df980290fae304959331eaf44a29ad523493af98552569255aa2e2deca3939",
+      "bytes": 12299
+    },
+    "tools/netsubspec/tests/test_pipeline_failure_check.py": {
+      "sha256": "91c08eaf565bff53338f78e81c30af7b5a4bcfb9c3b293448d7e4224df66fb9b",
+      "bytes": 3396
+    },
+    "tools/netsubspec/tests/test_projection_reuse.py": {
+      "sha256": "ab3ae3a215b03b7ab6c9754469abc7a7df59e6523b70254a4a5e5fb197b2c6ca",
+      "bytes": 7735
+    },
+    "tools/netsubspec/tests/test_protocol_slicing.py": {
+      "sha256": "84987fc2bd2a3d2b632c1c57488bc2bf680a782654a04ea2d5526377985381df",
+      "bytes": 6453
+    },
+    "tools/netsubspec/tests/test_reference_simplification.py": {
+      "sha256": "3ee00372636567fae7bffcbeedd93a544b11ee0b6288fb09445a28c7837ba672",
+      "bytes": 4907
+    },
+    "tools/netsubspec/tests/test_route_queries.py": {
+      "sha256": "6cde108d51cc5fc3be516385d5117e1620dbe507e3eeb7111fb51d930656d8a5",
+      "bytes": 7886
+    },
+    "tools/netsubspec/tests/test_runtime_profile.py": {
+      "sha256": "c6ba69e791dedfdf058beb1e1b97b8d7a06d68411256e81a9e5e128909d7bbc6",
+      "bytes": 3117
+    },
+    "tools/netsubspec/tests/test_seed_solver_profile.py": {
+      "sha256": "6c5453ded8af944bd4670da55b037150592cba54fb643723503dc012f467e3e4",
+      "bytes": 1829
+    },
+    "tools/netsubspec/tests/test_symbolic_smt_slicer.py": {
+      "sha256": "a3687659eb2fd6d9bcaedf0196b460f104ca7562cd03801bca78dd8d12fab446",
+      "bytes": 7952
+    },
+    "tools/netsubspec/tests/test_traffic_subspecification.py": {
+      "sha256": "13137e524c8c8cdbcbb95e3aa353492932097703564021cb6779e7c2784cf9bc",
+      "bytes": 6799
+    },
+    "tools/netsubspec/tests/test_traverse_baseline.py": {
+      "sha256": "85cf6fe38dcd18d83fbd9466db24e569324fe8f5b3a78225de70636ed15ecab5",
+      "bytes": 4090
+    },
+    "tools/netsubspec/tests/test_traverse_comparison.py": {
+      "sha256": "c1a17c6765a149e69658edc8652552cec05683f17d9d5158acc575062b4476bc",
+      "bytes": 4710
+    },
+    "tools/netsubspec/tests/test_traverse_main_community.py": {
+      "sha256": "c157120b52abdba3e71050644e8c498778d6877d2a8d72e37f487c65cfe96c78",
+      "bytes": 3898
+    },
+    "tools/netsubspec/tools/profile_runtime.py": {
+      "sha256": "4b5c3695d1d1ff67cae8a28dfa07d701019a707e906f0a632a5949bb0e08d48d",
+      "bytes": 14556
+    },
+    "tools/netsubspec/tools/profile_seed_solver.py": {
+      "sha256": "3a8e030c79848337e4cf9e29d2d87ad61610152e27ee8458089d8e6fd7bf7461",
+      "bytes": 13535
+    },
+    "tools/netsubspec/tools/run.py": {
+      "sha256": "bc57d5fdd1bae20a4f3b749f20a48f65961c131c8235127a332229e1629395ce",
+      "bytes": 9374
+    },
+    "tools/netsubspec/utils/__init__.py": {
+      "sha256": "cc8a923857f3bee70091f4e67e91334865e7326aad59a0106ccfb16481ee4932",
+      "bytes": 1391
+    },
+    "tools/netsubspec/utils/util_file.py": {
+      "sha256": "8c4e151c58a4f0edf25aa56c9eb1f77993be65d255741e71908490e11a89878c",
+      "bytes": 18494
+    },
+    "tools/netsubspec/utils/util_keyword.py": {
+      "sha256": "de628db309274d49ea5e91886b59c40bf494cd75591b6b7b4ad383531a8104e4",
+      "bytes": 615
+    },
+    "tools/netsubspec/utils/util_log.py": {
+      "sha256": "8f62c6361f2579c2534385052540a503eab179059bf9548a47b496b68873c246",
+      "bytes": 1962
+    },
+    "tools/netsubspec/utils/util_maxsmt.py": {
+      "sha256": "cb41efc03d9f807d81bfab01c968a224baa9fa2305b0095c2ae501df20ef57e4",
+      "bytes": 19567
+    },
+    "tools/netsubspec/utils/util_norm.py": {
+      "sha256": "f9b0f24876335e154cdad10646bf5804fd29ef0c8a80db2565936c181cbca9ff",
+      "bytes": 77400
+    },
+    "tools/netsubspec/utils/util_route_community_bitvec.py": {
+      "sha256": "b6231504968e9e2661d29dfa60d9499d0a74cc06673ad37ebdc52821b550ddc4",
+      "bytes": 6225
+    },
+    "tools/netsubspec/utils/util_route_community_bool.py": {
+      "sha256": "e1892032f8ecf038fe6c304f21bd2d9d7b703237986e849e77732dd9ca294b9a",
+      "bytes": 29629
+    },
+    "tools/netsubspec/utils/util_smt.py": {
+      "sha256": "b64793bf84c7ae08c96c7c95edd8743224b1e6f0a7549813e1872f5b7a2c178a",
+      "bytes": 39917
+    },
+    "tools/netsubspec/utils/util_subspec.py": {
+      "sha256": "59d671a6da15383379ea02d97733fa069f00db0b83538cd0784a66da932b9995",
+      "bytes": 14291
+    },
+    "tools/netsubspec/utils/util_subspec_community.py": {
+      "sha256": "8140511c2a30010cf36bf84e2418ec9517a10c8c4b757b5bde667b54930ef502",
+      "bytes": 19996
+    },
+    "tools/netsubspec/utils/util_subspec_joint.py": {
+      "sha256": "49a5a3be0e26aa60e02b4ac5cfa7a7f5b4b49c8cd67a756f78d85590b85cd93a",
+      "bytes": 33171
+    },
+    "tools/netsubspec/utils/util_subspec_routemap.py": {
+      "sha256": "f41caea08af7ff3a74d969892cbb6a99873263207775448157d0a9df260655eb",
+      "bytes": 16397
+    },
+    "tools/netsubspec/utils/util_symbolic.py": {
+      "sha256": "d128410f1eeef008a7ea004eb4e993d6b6c74e103d9b24bca2d79813ecea46b8",
+      "bytes": 30386
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/.gitignore": {
+      "sha256": "773047589e16389e13e5ac9cbda18881736dfc0056bb5fc8d15f23ea07f3ff32",
+      "bytes": 79
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/1_route_analyzer.py": {
+      "sha256": "cd6896f6d0c8299e2e84f40d2dfca24478c3b6ac0e87c0e16bc09a96d15b8992",
+      "bytes": 81990
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/2_smt_slicer.py": {
+      "sha256": "351c98d6d76715cdf6a68c5477cc3d58170cbeaf1160f4d68a4cd45f1c0a530f",
+      "bytes": 44142
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/3_assume_guarantee_tester.py": {
+      "sha256": "69dbd1190f379317f4241722147ada01d29905de17371dc044e5ec275813b5ef",
+      "bytes": 78482
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/3_internet2_refiner.py": {
+      "sha256": "c4266e8dcdfac8207f8909f1948aeebe6152865eb4d0e0df701688a1dcac9cc3",
+      "bytes": 31485
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/4_subspec_simplifier.py": {
+      "sha256": "6ae394213d300bfa1def0d6b5fd48f5c953faa79fc446eca566f2995ef199173",
+      "bytes": 166553
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/5_subspec_simplifier_original.py": {
+      "sha256": "78c3d8045bdb373228b244e59037bb6fd986eba2300b102e6877d4ff9ab0a71b",
+      "bytes": 96751
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/6_subspec_simplifier_fullsym.py": {
+      "sha256": "a143d31cdca135ef166fe98b82fee9d28caa659ee2ea6922da99895ed51ebed0",
+      "bytes": 94552
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/7_fix_subspec_simplifier_original.py": {
+      "sha256": "63f755463e1340cfab092cadd9ba3a68b50fb40e2762b255ad106c5c15fbc638",
+      "bytes": 97032
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/8_fix_subspec_simplifier_fullsym.py": {
+      "sha256": "e659dae97ca4dec5c1b6c69b2dbf1c547d2fa1863f282e3d36fecf13cbd2b6d3",
+      "bytes": 73878
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/README.md": {
+      "sha256": "69c1683c79965ee297ff86dbddbf234cb0ec0066bc0ea4df4ace966b97fbd40e",
+      "bytes": 2342
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/tools/clean.py": {
+      "sha256": "e9ef2bd983619bc479add212501acc78d54314f6d62a46762acfb0e061596add",
+      "bytes": 3819
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/tools/count.py": {
+      "sha256": "af11e20520de602b93ac8d729d61be74cff3fbf93d258c0bc94ce0a462c72430",
+      "bytes": 11042
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/tools/graph.py": {
+      "sha256": "292faacc72c5b1dcc8240e78c9be8afc8da571d645a8bfc11b5b422a84d01730",
+      "bytes": 10157
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/tools/run.py": {
+      "sha256": "fc1556f92b98180a2bc3c9df913705997f53352346166ec8ba62c3b03b911ef2",
+      "bytes": 32618
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/__init__.py": {
+      "sha256": "7d7341f4cda7bc41bcd3056f2c13cea2054d64455446f24e7cd34ef89b4d2f6a",
+      "bytes": 1311
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_file.py": {
+      "sha256": "80158cf348cd66294112c323250e112d7efec25fa3cb3c07484fb13f744dfcd1",
+      "bytes": 18494
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_keyword.py": {
+      "sha256": "de628db309274d49ea5e91886b59c40bf494cd75591b6b7b4ad383531a8104e4",
+      "bytes": 615
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_log.py": {
+      "sha256": "8f62c6361f2579c2534385052540a503eab179059bf9548a47b496b68873c246",
+      "bytes": 1962
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_maxsmt.py": {
+      "sha256": "cb41efc03d9f807d81bfab01c968a224baa9fa2305b0095c2ae501df20ef57e4",
+      "bytes": 19567
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_norm.py": {
+      "sha256": "f9b0f24876335e154cdad10646bf5804fd29ef0c8a80db2565936c181cbca9ff",
+      "bytes": 77400
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_route_community_bitvec.py": {
+      "sha256": "9d1c40a6b5319a5581f42fceeda44c201193c3241a8a6e02cd65a40932e4fef0",
+      "bytes": 6591
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_route_community_bool.py": {
+      "sha256": "e1892032f8ecf038fe6c304f21bd2d9d7b703237986e849e77732dd9ca294b9a",
+      "bytes": 29629
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_smt.py": {
+      "sha256": "20ef94972c03a7869e6dae5be9660973e6fa65616d141cecd39022cfe2dd119e",
+      "bytes": 39111
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_subspec.py": {
+      "sha256": "59d671a6da15383379ea02d97733fa069f00db0b83538cd0784a66da932b9995",
+      "bytes": 14291
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_subspec_community.py": {
+      "sha256": "8140511c2a30010cf36bf84e2418ec9517a10c8c4b757b5bde667b54930ef502",
+      "bytes": 19996
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_subspec_joint.py": {
+      "sha256": "d82878627e0c94045dab2adf1342ffb5d3296a008f6f5b1f54a6e7859c7394f3",
+      "bytes": 33169
+    },
+    "tools/auto-netsubspec-Traverse/0_auto-netsubspec/utils/util_subspec_routemap.py": {
+      "sha256": "f41caea08af7ff3a74d969892cbb6a99873263207775448157d0a9df260655eb",
+      "bytes": 16397
+    },
+    "tools/auto-netsubspec-Traverse/compare_traverse_results.py": {
+      "sha256": "7e0486f2caa5c34365f5d583cf050f9761ddb656b40f16ce995bef3353f25826",
+      "bytes": 14454
+    },
+    "tools/auto-netsubspec-Traverse/intersect_failure_subspecs.py": {
+      "sha256": "d3bd5a4bddbbb4b850a47c87c5b34096a3efd50fd71d3886497981a1408b8692",
+      "bytes": 8504
+    },
+    "tools/auto-netsubspec-Traverse/run_traverse_baseline.py": {
+      "sha256": "04e5fadca241d62f6a63f90b3cdbaace204fbf9baafe94b0fae56117e455437b",
+      "bytes": 17642
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/AstRouteGuard.java": {
+      "sha256": "ea5bfea4e8043ec1826e59e55dc5ea22f42edca49accaf7d1d3393bd4d8ac14f",
+      "bytes": 1712
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishBgpEdge.java": {
+      "sha256": "da5128962f40e70a51e3bde3554bb29903b5f2398d28442072a1c7dd18d89b51",
+      "bytes": 4239
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishBgpProtocolAdapter.java": {
+      "sha256": "c0d908cf0e915db5aa04440fbf690d7acae2b960742dc77d403e62560ae0ac60",
+      "bytes": 9592
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishBgpRedistribution.java": {
+      "sha256": "0970cf854a31a05fe293a549118756c5e58b9e1063f51e89079457993ed0bb55",
+      "bytes": 2283
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishBgpRedistributionReconciler.java": {
+      "sha256": "ae0557f3837dec2cf5054f57a062ee6a59436bdf50192842581264c067161be8",
+      "bytes": 8865
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishBgpRedistributionRule.java": {
+      "sha256": "52bbee9ff9cf72d5ba0551a4561960973fd05b211a45eef2e7975d9648fc9c1d",
+      "bytes": 1852
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishBgpRedistributionRuleExtractor.java": {
+      "sha256": "470f65f10489ee03c7d31f0edc24f68f3f9ac015308c8a093d3dba950f1aa13a",
+      "bytes": 2580
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishInterfaceRouteInitializer.java": {
+      "sha256": "f8b23338f2c991eb331cda790fc4b1fb674c3abca20be524e56619b2dd8609a2",
+      "bytes": 6046
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishIsisEdge.java": {
+      "sha256": "0c9cb5a7d01252f9f2ce114a117d0d03a133cd91e7a65d4acdeb834ba073da68",
+      "bytes": 2428
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishIsisLevelTransitionReconciler.java": {
+      "sha256": "2e14e8aa42df7f9f57ccdb708f4527232e927e08110fc82c2ccdd192732663b7",
+      "bytes": 9527
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishIsisProtocolAdapter.java": {
+      "sha256": "67715d12cd934072dd1e4929e9b53beceb7a319be1115197ec2803b1bd41cca8",
+      "bytes": 7778
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishIsisTopologyAdapter.java": {
+      "sha256": "318adb6630a3df5898a5bcfd7930ee36cde0dab27e7499338bc8600386722986",
+      "bytes": 12737
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishMainRibReconciler.java": {
+      "sha256": "6212d8f141628cd97f533a588b06bdf4d08f75fa67d85ffbc3f4667b9753f918",
+      "bytes": 8786
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishMainRibRouteAdapter.java": {
+      "sha256": "6bcb997d4ec30c5728932f984f469a6c77159f93c732466e74830bfae124c600",
+      "bytes": 2545
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishParsedSnapshotPipelineInputBuilder.java": {
+      "sha256": "f0e68a7c4e0f95cdf98d26ae434e4ffffd892900b0d09eb670310985ec55932b",
+      "bytes": 14826
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishRedistributionKey.java": {
+      "sha256": "5f89ac918d0f1cf8b8dde3f2d80f82f67e32e1ec29320236be8fda2c4926e6b8",
+      "bytes": 2850
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishRedistributionReconciler.java": {
+      "sha256": "eb9f370d1d221a596764a906f62f673039bcb178263e1afdab86e462bb26016b",
+      "bytes": 4936
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishRoutingPolicyProcessor.java": {
+      "sha256": "66d8e63df751a06a2badf2af860f95e3f3454c4a34731d94c1f72d39d9ac25ce",
+      "bytes": 2156
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishRoutingPolicyResult.java": {
+      "sha256": "5cd34640ce3901036ff7c53ccf00adfa128794c00453d8a54d82f8686f267d41",
+      "bytes": 1633
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishStaticRouteReconciler.java": {
+      "sha256": "33b5bfd9f7fe772d411adb671a860e3beac2cd45f4d301d144fb59309cbad64a",
+      "bytes": 7779
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishStaticRouteResolver.java": {
+      "sha256": "14fa8a10e4a7f9423517bb9cbac9137f77693eb6f416412bd805d47a7282b724",
+      "bytes": 10811
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishSymbolicRoutePipeline.java": {
+      "sha256": "86c821b7ccb7db100314df322cff9d2837bd9e873405c6eccc3b36bad3a7cb56",
+      "bytes": 14325
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishSymbolicRoutePipelineInput.java": {
+      "sha256": "ee080faa0627d05db8d6c0b7089dfc6ecc89d6f9e5080fa5d72eafcb49727e29",
+      "bytes": 7556
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishSymbolicRoutePipelineResult.java": {
+      "sha256": "ec2c727efbcd4ea5cfe9fad31345656e569cea5ec1ac4e7644f0d8c34e13fc6e",
+      "bytes": 28431
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BatfishTopologyGuardInitializer.java": {
+      "sha256": "528f948fcb73f0710cdf7d8b94c713409e3b9683e12351b16e28bec916fa90aa",
+      "bytes": 4042
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/BooleanGuardAst.java": {
+      "sha256": "ffbc30953f2f36f59d480b276a274710f1b028e3292ca2a048562bf207b1ec5e",
+      "bytes": 6484
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/GuardedRib.java": {
+      "sha256": "ed9587b4b24e5ff60e6e1f4da372fa4d6620f2ee5b8c27dfddf116ca0a43b159",
+      "bytes": 10300
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/GuardedRibDelta.java": {
+      "sha256": "2f1e03562901cee7de1a33e25c5b2c9b03a86bc6e665961575b80440d5d6ff27",
+      "bytes": 682
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/GuardedRibEntry.java": {
+      "sha256": "c3421e8e3549d4de5d13b133fcc81847ad80e2c7e73c01089b31b5762690518b",
+      "bytes": 991
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/GuardedRibUpdate.java": {
+      "sha256": "30da01f926474e42f00bd25f44b27d1c43b69d24e0d84055ad2c036899efbc6d",
+      "bytes": 1636
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/GuardedRibUpdateType.java": {
+      "sha256": "39b837f90b8df78c192a36d82343c432396942ac15b77af62a8d96bc389f6089",
+      "bytes": 182
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/LinkAvailabilityAssignment.java": {
+      "sha256": "4a14c02277093aa36f7580dff626e466c04259da09e8ee6616bc65b918de405a",
+      "bytes": 1236
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/LinkFailureKey.java": {
+      "sha256": "698163e6e226921784cf125fc6536811628fd11a2e78375d9adfc196a3e4cd2b",
+      "bytes": 2433
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/RouteGuard.java": {
+      "sha256": "c628f682c48d7946fa1b95859438cdaca2c59786203558e61024361e587468fb",
+      "bytes": 1132
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicControlPlaneExport.java": {
+      "sha256": "a8bcd79866f03aa4490c7e24ddfd0b0c0dc854a68641d348c9a7e849fc1e75ae",
+      "bytes": 24545
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicIsisSpfSolver.java": {
+      "sha256": "5afca11eed77786d3a8b1345abbb44f0cd6bafe8cea2e8f5fa4067f3dc59a284",
+      "bytes": 35090
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRibRecord.java": {
+      "sha256": "1ae67f0667617da4d12f4d5ad3845fd13d94cd6352c364bc189772bde45a9bcf",
+      "bytes": 8990
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRoute.java": {
+      "sha256": "b1c50f0da42a8326db5b9d00f4aa35eee218ce697345df8c2e90288a1681fa27",
+      "bytes": 2154
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteContributionId.java": {
+      "sha256": "8364bf5a7a5350b6c1d92bdff7e76bb1dafb3d6ef7e59f7b04ef877d557b4df3",
+      "bytes": 1384
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteConvergenceEngine.java": {
+      "sha256": "d2086452ea3b94be1c27d967bfec2873e80cc470d24b62e1d46f4432ce995486",
+      "bytes": 15195
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteConvergenceResult.java": {
+      "sha256": "1d6ad98be619c3e820b53ee0d9985614c09c4f8a09d171c616c21610a2a4efd3",
+      "bytes": 735
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteEgressPolicy.java": {
+      "sha256": "8718126a1a4b9703c5053c5ee8515eb1d189c78b3bc6001e17495d159a5a2ec0",
+      "bytes": 482
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteExporter.java": {
+      "sha256": "63c11180cff8334be47f4483e24aeb46c21978bab7e2397b9bd2ad10601588cb",
+      "bytes": 5035
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteIngressPolicy.java": {
+      "sha256": "7fed83718751aa6dc676b59a190faa7e2fb3522a338454dc1fab5ebe2ea5070b",
+      "bytes": 479
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteIngressProcessor.java": {
+      "sha256": "64cdeda7094ce1f43eb723259b025c55859c8990d372156836312a411f1ad4c6",
+      "bytes": 4362
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteIngressResult.java": {
+      "sha256": "c2312f9d2164ba9dd4bfc880c85e50d6b429286121a51024a135fe3de75c2e84",
+      "bytes": 811
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteKey.java": {
+      "sha256": "66d5298bceff884947da30bf2d5a38725b5cdf4b4f4864fbc4a69ebe14ea80ed",
+      "bytes": 1753
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteKeyFactory.java": {
+      "sha256": "ddb4642ffa8d04de5d6fb3004b3e0249b35aa5c7cc82e3a29280d5cb1d19f999",
+      "bytes": 353
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteMessage.java": {
+      "sha256": "41772369ae12b3bd26b47b9a542acc1dca97977924a58c4415e48bfa26b89808",
+      "bytes": 2453
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteMessageIdFactory.java": {
+      "sha256": "4384403d703ea085d50725ad148c083f8dee6fe7a59f39709c79fcdaa1d56048",
+      "bytes": 384
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteNetwork.java": {
+      "sha256": "4eb0a661c6237911ec4a14f997b239245e0c1a6d6faa5f2859ad2594ba7d6a88",
+      "bytes": 2115
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteNetworkFactory.java": {
+      "sha256": "045832f5f29f7eca3f30078b2d1fb8318ccab68c84e6fabcc1b2f2fde0c5d9d4",
+      "bytes": 4500
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRoutePropagationDependencies.java": {
+      "sha256": "d7a2b92eb61bbb3e9c75ea3ee7db85cd3bef29eadfa69835588692aaa408b7bd",
+      "bytes": 2548
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteProtocolAdapter.java": {
+      "sha256": "fe05f7775ae2b081b44a2b7284d87351ff58c93b0297cff811bb55a4410af59b",
+      "bytes": 1239
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteProvenance.java": {
+      "sha256": "9ba978780e14d934aebc487534288f6fecfccd9d795d46a4b416b9503b65a028",
+      "bytes": 2968
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteSeed.java": {
+      "sha256": "2c89ac00059de9ea7edc4308062519309d59209827c592fc4d5a9c37b0d7b78b",
+      "bytes": 2857
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicRouteSession.java": {
+      "sha256": "f8c11499a1df248bb4b524616bc53ed9f9c825db41e1c28b003fd3b7efebaf7d",
+      "bytes": 2086
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/SymbolicStaticRoute.java": {
+      "sha256": "1931a8396c3f05c1c3d61e1827ab9ded2784ff936de1c19aff7b837be81fb66d",
+      "bytes": 1598
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/TopologyLinkGuards.java": {
+      "sha256": "7e469f699ea12218a62c6afeb5966a946be449afab4689f828cb2a2a39c18fc0",
+      "bytes": 1458
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/Z3RouteGuard.java": {
+      "sha256": "3e6d250befac9cc2f0686d3afc7d9ab6a1439ada6d262a050c349d36b48fff68",
+      "bytes": 11854
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/symbolicroute/Z3RouteGuardFactory.java": {
+      "sha256": "4249caa82b76854f3efdf82eaedfdc9a2244d33105ccd6ed03c77a0d4c2d77e5",
+      "bytes": 1972
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/BoolExprOps.java": {
+      "sha256": "9027f4216ec32ded94e0d143a8cf02d9b201f770c34ec4667418e9b8eec247ed",
+      "bytes": 872
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/CounterExample.java": {
+      "sha256": "c61b095de06a1f0470a024ef8367abc02b61c04b9bdf0c83f3d7045b49438033",
+      "bytes": 20019
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/EdgeType.java": {
+      "sha256": "2fc915882869cbf9d7a26677fa29f45425d8535799f6b1ac047da0613d6387f7",
+      "bytes": 82
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/Encoder.java": {
+      "sha256": "8d8475089995bb04ad61d06e83509e3dce82dfae0e0f41f31edff0d4ba2b0c5e",
+      "bytes": 86742
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/EncoderSlice.java": {
+      "sha256": "5283ca54ed02387c75526cf8887756ab5e408ab322554140a1874c477e40f229",
+      "bytes": 107532
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/IpAccessListToBoolExpr.java": {
+      "sha256": "80b0cee2088f36d5b679ef3f2cbcab1b76593296a185461d53aa23a5ceb882da",
+      "bytes": 8959
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/IpSpaceToBoolExpr.java": {
+      "sha256": "713bb353be3e564b6508a024651aff29179def958ceaf23b8a1a87d1bbbd1e37",
+      "bytes": 3304
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/IsisSpfSmtEncoder.java": {
+      "sha256": "f8692a47a134da40fe6d83043b8f8c4d46dfa460921bf011af2f69e29b53a27d",
+      "bytes": 25212
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/LogicalEdge.java": {
+      "sha256": "b8575cfaf53c4304e4b633d07a8cdb37187c30f25877af22632bd189aa1c8ab7",
+      "bytes": 1570
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/LogicalGraph.java": {
+      "sha256": "f5e62688743282bc3e5064987673a1063ef4738a0bf53fcda5816ab0a6742491",
+      "bytes": 2077
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/MinesweeperLinkFailureKeys.java": {
+      "sha256": "e69bc20fa05682b0934ac7891bd8be9f695f7a4cbb56bd5c916745dfe7aaed57",
+      "bytes": 749
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/Optimizations.java": {
+      "sha256": "0d1539950adb07c1b7482b50e9e7832e8b985491b1a675290f18db4341122aa2",
+      "bytes": 26173
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/PropertyAdder.java": {
+      "sha256": "033d37da9f0a51535a244feab14c094feba6417d5e48691cb9677eedfa4641a3",
+      "bytes": 20816
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/PropertyChecker.java": {
+      "sha256": "2097b928ef5b623ef687016d60c2296821bf58711dadd3fd8cc2b57e3908fd93",
+      "bytes": 55343
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/RouteMetricDomain.java": {
+      "sha256": "bca8877aedd948fbd2b29e77ff4d2cae330923ff28fe8c6bd4b2a7407242e9a5",
+      "bytes": 1952
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SmtProtocolSelection.java": {
+      "sha256": "f45aa7f1d429e8393e8387c7c2db76e892b29d70ebd126634dc12cfcf4e28387",
+      "bytes": 2473
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SrPolicySmtEncoder.java": {
+      "sha256": "7b42329f939195b4fe0d4e6117d8958f2005263acdf067d6c03f2f0f48efd743",
+      "bytes": 13607
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicDecisions.java": {
+      "sha256": "efb95049c1124faa75affd71fcf48980728bda4702766c88bb6c48b890a51544",
+      "bytes": 2487
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicEnum.java": {
+      "sha256": "55627fd66c25346a53b56c4a13e60785d6507ed9150afeb9037e4d759c3bcf57",
+      "bytes": 3697
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicFailures.java": {
+      "sha256": "317dfeddb6a6e34e7208241586417c2f2a8535a9efb2916c671198c6d53245e5",
+      "bytes": 1766
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicOriginatorId.java": {
+      "sha256": "6347af2fe492395512057eaadcddbd2b0faca06ca4f42907d88557b380143a1b",
+      "bytes": 955
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicOspfType.java": {
+      "sha256": "9ac032053d70bb953e3b7eb96cf7a5503441e77146bfa27a62b35540f98cd634",
+      "bytes": 711
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicPacket.java": {
+      "sha256": "023b771c3d4218b70395361c095ea500b18ed8d36373dc47d598b93b92c08601",
+      "bytes": 3588
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicRoute.java": {
+      "sha256": "3af9126233f9d5dd17a1b8585ccbe7feaf39c68273a4de579d7af913adfcbf00",
+      "bytes": 2806
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicRouteBV.java": {
+      "sha256": "cc31c072c9ddd8e1ba2b0de2ad51883cc8aa26c8e7d9a0c16d529e5e33ca4cd0",
+      "bytes": 5546
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicRouteBase.java": {
+      "sha256": "8230add6eabeae2ad8097ac5938aa5a2c479f7dfa2f584263e46dcaba92f1df2",
+      "bytes": 12195
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/SymbolicRouteNew.java": {
+      "sha256": "d822ae7f560ce8acfa7f782af6b66d4acf9cd7aab9132aaa56ad574a69a220a2",
+      "bytes": 3058
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/TransferSSA.java": {
+      "sha256": "dc27b4b31ab501dd919f4f42ac48b2aadc52e98a8383f31045e401d7541da63a",
+      "bytes": 91653
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/UnsatCore.java": {
+      "sha256": "f4cec3c3a0494d760842be179f4ed15852d96a6d1bdedb47db1caeb9a346e8b0",
+      "bytes": 1158
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/VerificationResult.java": {
+      "sha256": "74aa80c7e526041410486e7eb533f20af170267ee3b86b65657b51e7dab9c0f9",
+      "bytes": 4605
+    },
+    "projects/minesweeper/src/main/java/org/batfish/minesweeper/smt/VerificationStats.java": {
+      "sha256": "e7109476435cd6fa026ebcf759ec89538e935e38c922b9a96523d8742e9b5dcb",
+      "bytes": 11248
+    },
+    "projects/minesweeper/BUILD": {
+      "sha256": "7de08de852cb1967aafec040675380dc292a2933d3339891a58597de4a2e0b6a",
+      "bytes": 2510
+    },
+    "projects/allinone/BUILD": {
+      "sha256": "7c294b5a6a0710ec3e54ab8f73a978a082688430c3ebd6c5c9faba63c8d994aa",
+      "bytes": 8285
+    },
+    "projects/allinone/src/test/java/org/batfish/minesweeper/smt/SmtReachabilityTest.java": {
+      "sha256": "39e2dcd5e0e73b33fe17a35674b3f0a9b276e952eade6777d52a8c268a0e733f",
+      "bytes": 41365
+    }
+  },
+  "archive": {
+    "file": "original_sources.tar.gz",
+    "sha256": "15676417272279f478ce72209674b78521a882a8ade4a0bf07cbecd417ccb0fa"
+  },
+  "python": "3.14.7",
+  "z3": "Z3 version 4.14.1 - 64 bit"
+}

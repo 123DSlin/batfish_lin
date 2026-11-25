@@ -1,0 +1,13 @@
+Line-Level Subspecs
+==================
+
+Line Group: Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2
+Subspecs (1):
+  1. (= Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_enable true) AND (<= 1 Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost) AND (<= Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost 3)
+--------------------------------------------------
+
+Line Group: Config_x_RoutingPolicy_FROM_T__Seq20__Line1
+Subspecs (1):
+  1. (<= 0 Config_x_RoutingPolicy_FROM_T__Seq20__Line1__prepend_aspath_cost) AND (<= Config_x_RoutingPolicy_FROM_T__Seq20__Line1__prepend_aspath_cost 3)
+--------------------------------------------------
+

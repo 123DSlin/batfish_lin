@@ -115,7 +115,10 @@ public class SmtReachabilityTest {
     String defaultNetwork =
         SYMBOLIC ? "tolerance-symbolic-route" : "tolerance-symbolic-route_1_r3_r4";
     String network = System.getenv().getOrDefault("SMT_NETWORK", defaultNetwork);
-    String configPath = runfiles.rlocation("batfish/networks/" + network);
+    String configPath = System.getenv("SMT_CONFIG_DIRECTORY");
+    if (configPath == null) {
+      configPath = runfiles.rlocation("batfish/networks/" + network);
+    }
     // : "batfish/networks/tolerance_sr_te_demo_1_d_x");
     // String configPath = runfiles.rlocation("batfish/networks/tolerance-symbolic-route");
     // String configPath =

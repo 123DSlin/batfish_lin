@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from typing import Optional
 
-from .branch_loader import BranchContext, RouteEntry, SymbolicRib, SymbolicRouteFormatError
+from .branch_loader import BranchContext, NoRouteState, RouteEntry, SymbolicRib, SymbolicRouteFormatError
 from .guard_encoder import GuardEncoder
 from .route_binder import BindingDiagnostic, NamedConstraint, RouteBinder, SmtSymbolTable
 
@@ -49,6 +49,7 @@ class SeedBuilder:
         "Remaining peer candidate routes",
         "Selected-peer link state",
         "Device control-forwarding state",
+        "Current no-route state",
     )
 
     def __init__(self, rib: SymbolicRib, strict: bool = True) -> None:
@@ -134,6 +135,7 @@ class SeedBuilder:
         lines.append(f"; Property destination: {destination or entry.prefix}")
         lines.append(f"; Selected route prefix: {entry.prefix}")
         lines.append(f"; Protocol: {entry.protocol}")
+        lines.append(f"; Branch kind: {entry.branch_kind}")
         lines.append(f"; Selected peer: {entry.selected_peer or 'local'}")
         lines.append(f"; Failure budget: at most {k}")
         lines.append(f"; Device encoding: {device_smt_path.name}")
@@ -165,7 +167,7 @@ class SeedBuilder:
         )
 
     def _prepare_device_encoding(
-        self, text: str, entry: RouteEntry
+        self, text: str, entry: RouteEntry | NoRouteState
     ) -> tuple[str, tuple[BindingDiagnostic, ...]]:
         """Remove query commands and only the justified concrete pins.
 

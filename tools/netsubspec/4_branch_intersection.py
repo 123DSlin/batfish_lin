@@ -74,6 +74,7 @@ class FinalSubspec:
     constraint_ids: tuple[str, ...]
     constraint_provenance: tuple[dict[str, Any], ...]
     equivalence_check: str = "UNSAT"
+    source_command: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
@@ -352,6 +353,8 @@ class SymbolicIntersection:
                         f"malformed released configs for {level} target {target}"
                     )
                 owners = {self._config_owner(name) for name in configs}
+                if not configs and level == 'line' and item.get('projection', {}).get('granularity') == 'source-commands' and item['projection'].get('source_fields') == []:
+                    owners = {self._config_owner(target)}
                 if len(owners) != 1:
                     raise IntersectionError(
                         f"{level} target {target} crosses configuration-owner scopes"
@@ -393,7 +396,11 @@ class SymbolicIntersection:
                 f"{level} target {target} has inconsistent released config sets"
             )
         configs = next(iter(config_shapes))
-        if not configs or any(not isinstance(name, str) for name in configs):
+        fixed_source_line = level == 'line' and all(
+            occurrence.item.get('projection', {}).get('granularity') == 'source-commands'
+            and occurrence.item['projection'].get('source_fields') == []
+            for occurrence in occurrences)
+        if (not configs and not fixed_source_line) or any(not isinstance(name, str) for name in configs):
             raise IntersectionError(f"{level} target {target} has no valid configs")
         if any(self._config_owner(name) != config_owner for name in configs):
             raise IntersectionError(
@@ -508,6 +515,15 @@ class SymbolicIntersection:
             tuple(sources),
             final_constraint_ids,
         )
+        source_metadata = []
+        for occurrence in occurrences:
+            projection = occurrence.item.get('projection', {})
+            if projection.get('granularity') == 'source-commands':
+                source_metadata.append({key: projection[key] for key in
+                    ('source', 'source_fields', 'compilation', 'limitations')})
+        if source_metadata and (len(source_metadata) != len(occurrences) or
+                                any(item != source_metadata[0] for item in source_metadata)):
+            raise IntersectionError(f'{level} target {target} has inconsistent source command mappings')
         return FinalSubspec(
             level=level,
             router=config_owner,
@@ -521,6 +537,7 @@ class SymbolicIntersection:
             sources=tuple(sorted(sources, key=lambda item: item.branch_name)),
             constraint_ids=final_constraint_ids,
             constraint_provenance=provenance,
+            source_command=source_metadata[0] if source_metadata else None,
         )
 
     def _simplify_intersection(

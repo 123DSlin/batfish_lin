@@ -1,0 +1,48 @@
+Field-Level Subspecs
+====================
+
+Config Variable: Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__action
+Subspecs (1):
+  1. (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__action true)
+--------------------------------------------------
+
+Config Variable: Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__enable
+Subspecs (1):
+  1. (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__enable true)
+--------------------------------------------------
+
+Config Variable: Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__ip
+Subspecs (1):
+  1. (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__ip #x05050505)
+--------------------------------------------------
+
+Config Variable: Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__length
+Subspecs (1):
+  1. (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__length 32)
+--------------------------------------------------
+
+Config Variable: Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__mask
+Subspecs (1):
+  1. (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__mask #xffffffff)
+--------------------------------------------------
+
+Config Variable: Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__prefix_range_end
+Subspecs (1):
+  1. (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__prefix_range_end 32)
+--------------------------------------------------
+
+Config Variable: Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__prefix_range_start
+Subspecs (1):
+  1. (= Config_c_RouteFilterList_TARGET__Line1__5_5_5_5__prefix_range_start 32)
+--------------------------------------------------
+
+Config Variable: Config_c_RoutingPolicy_BLOCK_REIMPORT__Seq10__Line1__match_prefixlist_enable
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Config Variable: Config_c_RoutingPolicy_ORIGINATE__Seq10__Line1__match_prefixlist_enable
+Subspecs (1):
+  1. (= Config_c_RoutingPolicy_ORIGINATE__Seq10__Line1__match_prefixlist_enable true)
+--------------------------------------------------
+

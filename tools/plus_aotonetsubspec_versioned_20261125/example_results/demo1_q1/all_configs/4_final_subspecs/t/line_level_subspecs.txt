@@ -1,0 +1,33 @@
+Line-Level Subspecs
+==================
+
+Line Group: Config_t_CommunityList_LOWTRUST__Line1
+Subspecs (1):
+  1. (or (and (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x1) (= Config_t_CommunityList_LOWTRUST__Line1__action false) (= Config_t_CommunityList_LOWTRUST__Line1__enable false)) (and (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x1) (= Config_t_CommunityList_LOWTRUST__Line1__action false) (= Config_t_CommunityList_LOWTRUST__Line1__enable true)) (and (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x1) (= Config_t_CommunityList_LOWTRUST__Line1__action true) (= Config_t_CommunityList_LOWTRUST__Line1__enable false)) (and (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x1) (= Config_t_CommunityList_LOWTRUST__Line1__action true) (= Config_t_CommunityList_LOWTRUST__Line1__enable true)) (and (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x2) (= Config_t_CommunityList_LOWTRUST__Line1__action false) (= Config_t_CommunityList_LOWTRUST__Line1__enable false)) (and (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x2) (= Config_t_CommunityList_LOWTRUST__Line1__action false) (= Config_t_CommunityList_LOWTRUST__Line1__enable true)) (and (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x2) (= Config_t_CommunityList_LOWTRUST__Line1__action true) (= Config_t_CommunityList_LOWTRUST__Line1__enable false)) (and (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x2) (= Config_t_CommunityList_LOWTRUST__Line1__action true) (= Config_t_CommunityList_LOWTRUST__Line1__enable true)))
+--------------------------------------------------
+
+Line Group: Config_t_CommunityList_QUARANTINE__Line1
+Subspecs (1):
+  1. (or (and (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x1) (= Config_t_CommunityList_QUARANTINE__Line1__action false) (= Config_t_CommunityList_QUARANTINE__Line1__enable false)) (and (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x1) (= Config_t_CommunityList_QUARANTINE__Line1__action false) (= Config_t_CommunityList_QUARANTINE__Line1__enable true)) (and (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x1) (= Config_t_CommunityList_QUARANTINE__Line1__action true) (= Config_t_CommunityList_QUARANTINE__Line1__enable false)) (and (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x1) (= Config_t_CommunityList_QUARANTINE__Line1__action true) (= Config_t_CommunityList_QUARANTINE__Line1__enable true)) (and (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x2) (= Config_t_CommunityList_QUARANTINE__Line1__action false) (= Config_t_CommunityList_QUARANTINE__Line1__enable false)) (and (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x2) (= Config_t_CommunityList_QUARANTINE__Line1__action false) (= Config_t_CommunityList_QUARANTINE__Line1__enable true)) (and (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x2) (= Config_t_CommunityList_QUARANTINE__Line1__action true) (= Config_t_CommunityList_QUARANTINE__Line1__enable false)) (and (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x2) (= Config_t_CommunityList_QUARANTINE__Line1__action true) (= Config_t_CommunityList_QUARANTINE__Line1__enable true)))
+--------------------------------------------------
+
+Line Group: Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1
+Subspecs (1):
+  1. (or (and (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10 0) (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10enable true)) (and (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10 9) (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10enable true)) (and (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10 10) (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10enable true)) (and (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10 11) (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10enable true)) (and (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10 4294967295) (= Config_t_RoutingPolicy_FROM_CUSTOMER__Seq10__Line1__set_metric_10enable true)))
+--------------------------------------------------
+
+Line Group: Config_t_RoutingPolicy_FROM_ISP__Seq10__Line1
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Line Group: Config_t_RoutingPolicy_FROM_ISP__Seq20__Line1
+Subspecs (1):
+  1. empty
+--------------------------------------------------
+
+Line Group: Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2
+Subspecs (1):
+  1. (<= 0 Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost) AND (<= Config_t_RoutingPolicy_FROM_ISP__Seq20__Line2__prepend_aspath_cost 3)
+--------------------------------------------------
+

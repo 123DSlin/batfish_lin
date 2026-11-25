@@ -1299,9 +1299,35 @@ public class Encoder {
     File outputUnmatchedCommunitiesFile = new File(outputUnmatchedCommunitiesFileName);
 
     try {
+      try (PrintWriter semanticsWriter =
+          new PrintWriter(new FileWriter(_outputDirectoryName + "/0_encoding_semantics.json", false))) {
+        semanticsWriter.println("{");
+        semanticsWriter.println("  \"schema\": \"batfish-smt-encoding-semantics\",");
+        semanticsWriter.println("  \"version\": 1,");
+        semanticsWriter.println("  \"symbolic_prefix_length_ranges\": \"variable-inclusive-bounds\"");
+        semanticsWriter.println("}");
+      }
       try (PrintWriter protocolWriter =
           new PrintWriter(new FileWriter(outputProtocolsFileName, false), true)) {
         protocolWriter.println(SmtProtocolSelection.format(_protocolSelection));
+      }
+      try (PrintWriter metricWriter =
+          new PrintWriter(new FileWriter(_outputDirectoryName + "/0_metric_domains.json", false))) {
+        metricWriter.println("{");
+        metricWriter.println("  \"schema\": \"batfish-smt-metric-domains\",");
+        metricWriter.println("  \"version\": 1,");
+        metricWriter.println("  \"bgp_as_path_length\": \"" + RouteMetricDomain.BGP_DOMAIN + "\",");
+        metricWriter.println("  \"bgp_only_best\": \"" + RouteMetricDomain.BGP_DOMAIN + "\",");
+        metricWriter.println(
+            "  \"environment_exclusive_upper_bound\": "
+                + RouteMetricDomain.ENVIRONMENT_EXCLUSIVE_UPPER_BOUND
+                + ",");
+        metricWriter.println(
+            "  \"other_metric_exclusive_upper_bound\": "
+                + RouteMetricDomain.LEGACY_EXCLUSIVE_UPPER_BOUND
+                + ",");
+        metricWriter.println("  \"model_overflow\": " + _question.getModelOverflow());
+        metricWriter.println("}");
       }
       _smtWriter = new PrintWriter(new FileWriter(outputSmtFile, true), true);
       _modelIgpWriter = new PrintWriter(new FileWriter(outputModelIgpFile, true), true);

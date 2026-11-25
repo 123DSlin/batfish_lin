@@ -9,6 +9,7 @@ import csv
 from functools import wraps
 from importlib import import_module
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -63,6 +64,7 @@ def worker(stage, output, arguments):
                 context.identity = previous
                 context.kind = parent_kind
         setattr(owner,name,measured)
+        return measured
     if stage == 1:
         cls = module.SmtSlicer
         init = cls.__init__
@@ -82,6 +84,25 @@ def worker(stage, output, arguments):
         cls = module.SymbolicSubspecifier
         wrap(cls,'_project_branch','symbolic_seed',lambda a,k:dict(device=a[2]['router'],seed=Path(a[2]['seed_file']).stem,candidate_id=a[2]['candidate_id'],destination=a[2]['destination']))
         wrap(cls,'_project','direct_projection',lambda a,k:dict(level=k['level'],target=k['identifier']))
+    if os.environ.get("NETSUBSPEC_SCALE_PROFILE") == "1":
+        if stage == 2:
+            from consistency.seed_builder import SeedBuilder
+            wrap(SeedBuilder, "build", "seed_construction")
+        if stage in (3, 4):
+            from utils.util_symbolic import SmtSolver
+            wrap(SmtSolver, "project", "symbolic_scope_reduction")
+            wrap(SmtSolver, "_reference_simplify", "reference_simplification")
+            if stage == 3:
+                wrap(SmtSolver, "simplify", "field_simplification")
+            else:
+                wrap(module.SymbolicIntersection, "_simplify_intersection", "intersection_simplification")
+        if stage in (2, 3, 4):
+            original_run = subprocess.run
+            timed_z3 = wrap(subprocess, "run", "z3_process")
+            subprocess.run = lambda command, *a, **k: (
+                timed_z3 if isinstance(command, (list, tuple)) and "-smt2" in command
+                else original_run
+            )(command, *a, **k)
     if stage == 6:
         wrap(module,'compare_target','traverse_equivalence_target',lambda a,k:dict(level=a[0][0],target=a[0][1],device=a[0][1].split('_')[1]))
         wrap(module,'render_report','traverse_comparison_report')
