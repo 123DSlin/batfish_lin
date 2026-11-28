@@ -1,8 +1,0 @@
-Line-Level Subspecs
-==================
-
-Line Group: Config_i_RoutingPolicy_ORIGINATE__Seq10__Line2
-Subspecs (1):
-  1. (= Config_i_RoutingPolicy_ORIGINATE__Seq10__Line2__set_community_65050_10__community #x1) AND (= Config_i_RoutingPolicy_ORIGINATE__Seq10__Line2__set_community_enable true)
---------------------------------------------------
-

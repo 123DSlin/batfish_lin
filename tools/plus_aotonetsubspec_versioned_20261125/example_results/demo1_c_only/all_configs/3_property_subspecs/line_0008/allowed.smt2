@@ -1,5 +1,0 @@
-(declare-const Config_t_CommunityList_LOWTRUST__Line1__65050_10__community (_ BitVec 4))
-(declare-const Config_t_CommunityList_LOWTRUST__Line1__action Bool)
-(declare-const Config_t_CommunityList_LOWTRUST__Line1__enable Bool)
-(assert (and (= Config_t_CommunityList_LOWTRUST__Line1__65050_10__community #x1) (= Config_t_CommunityList_LOWTRUST__Line1__action true) (= Config_t_CommunityList_LOWTRUST__Line1__enable true)))
-(check-sat)

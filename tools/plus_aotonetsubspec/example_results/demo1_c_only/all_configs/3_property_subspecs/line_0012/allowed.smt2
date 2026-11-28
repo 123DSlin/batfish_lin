@@ -1,3 +1,0 @@
-(declare-const Config_t_RoutingPolicy_FROM_ISP__Seq20__Line1__match_community_list_enable Bool)
-(assert (= Config_t_RoutingPolicy_FROM_ISP__Seq20__Line1__match_community_list_enable true))
-(check-sat)

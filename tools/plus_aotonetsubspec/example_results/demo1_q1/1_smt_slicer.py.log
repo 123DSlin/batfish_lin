@@ -1,2 +1,0 @@
-✓ Symbolic device slicing PASS | devices=6 | required-symbols=201
-Output: /Users/linyaxuan/codes/Traffic/batfish_read/batfish/tools/plus_aotonetsubspec/example_results/demo1_q1/input/1_sliced_device_smt_encoding

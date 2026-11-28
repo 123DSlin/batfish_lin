@@ -1,8 +1,0 @@
-Field-Level Subspecs
-====================
-
-Config Variable: Config_t_CommunityList_QUARANTINE__Line1__65050_99__community
-Subspecs (1):
-  1. (= Config_t_CommunityList_QUARANTINE__Line1__65050_99__community #x1)
---------------------------------------------------
-
